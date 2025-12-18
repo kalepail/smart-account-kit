@@ -1,0 +1,67 @@
+# Goldsky Pipeline for Smart Account Kit Event Indexing - MAINNET
+#
+# This pipeline indexes all smart account events from Stellar to enable
+# reverse lookups from signer public keys to contract IDs and full state tracking.
+#
+# Events indexed:
+# - context_rule_added: When a new context rule is created with signers
+# - context_rule_updated: When a context rule's metadata is updated
+# - context_rule_removed: When a context rule is deleted
+# - signer_added: When a signer is added to a context rule
+# - signer_removed: When a signer is removed from a context rule
+# - policy_added: When a policy is added to a context rule
+# - policy_removed: When a policy is removed from a context rule
+#
+# Deployment:
+#   goldsky pipeline apply ./pipeline-mainnet.yaml --status ACTIVE
+
+name: smart-account-signers-mainnet
+resource_size: m
+apiVersion: 3
+
+sources:
+  stellar_events:
+    type: dataset
+    dataset_name: stellar.events
+    version: 3.2.0
+    start_at: earliest
+
+transforms:
+  signer_events:
+    type: sql
+    sql: |
+      SELECT
+        id,
+        ledger_sequence,
+        contract_id,
+        topics,
+        data,
+        CASE
+          WHEN topics LIKE '%context_rule_added%' THEN 'context_rule_added'
+          WHEN topics LIKE '%context_rule_updated%' THEN 'context_rule_updated'
+          WHEN topics LIKE '%context_rule_removed%' THEN 'context_rule_removed'
+          WHEN topics LIKE '%signer_added%' THEN 'signer_added'
+          WHEN topics LIKE '%signer_removed%' THEN 'signer_removed'
+          WHEN topics LIKE '%policy_added%' THEN 'policy_added'
+          WHEN topics LIKE '%policy_removed%' THEN 'policy_removed'
+          ELSE 'unknown'
+        END AS event_type,
+        transaction_hash
+      FROM stellar_events
+      WHERE
+        topics LIKE '%context_rule_added%'
+        OR topics LIKE '%context_rule_updated%'
+        OR topics LIKE '%context_rule_removed%'
+        OR topics LIKE '%signer_added%'
+        OR topics LIKE '%signer_removed%'
+        OR topics LIKE '%policy_added%'
+        OR topics LIKE '%policy_removed%'
+    primary_key: id
+
+sinks:
+  postgres_signers:
+    type: postgres
+    secret_name: HOSTED_POSTGRES_CMJ8PRAHZ0
+    from: signer_events
+    table: smart_account_signer_events
+    schema: public

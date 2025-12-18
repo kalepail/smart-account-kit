@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Account Indexer Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+    }
+    .section {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    button {
+      background: #0066cc;
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    button:hover {
+      background: #0055aa;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .contract-card {
+      border: 1px solid #ddd;
+      padding: 1rem;
+      border-radius: 4px;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .contract-card:hover {
+      background: #f0f8ff;
+    }
+    .contract-card.selected {
+      border-color: #0066cc;
+      background: #e6f2ff;
+    }
+    .contract-id {
+      font-family: monospace;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+    .balance {
+      color: #28a745;
+      font-weight: bold;
+    }
+    .activity {
+      color: #666;
+      font-size: 0.85rem;
+    }
+    #status {
+      padding: 0.5rem;
+      margin: 1rem 0;
+      border-radius: 4px;
+    }
+    #status.success {
+      background: #d4edda;
+      color: #155724;
+    }
+    #status.error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+    #status.info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+    .input-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 500;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.9rem;
+    }
+    #contracts-list {
+      min-height: 100px;
+    }
+    .empty-state {
+      color: #666;
+      text-align: center;
+      padding: 2rem;
+    }
+    .context-rule {
+      border: 1px solid #e0e0e0;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+    .context-rule h4 {
+      margin: 0 0 0.75rem 0;
+      color: #333;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 0.5rem;
+    }
+    .signer-group {
+      margin-bottom: 1rem;
+    }
+    .signer-group-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .signer-group-items {
+      margin-left: 0.5rem;
+      border-left: 2px solid #e0e0e0;
+      padding-left: 0.75rem;
+    }
+    .credential-item {
+      padding: 0.5rem;
+      margin: 0.25rem 0;
+      background: white;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+    .credential-item.highlight {
+      border: 2px solid #0066cc;
+      background: #e6f2ff;
+    }
+    .signer-type {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .signer-type.External { background: #e3f2fd; color: #1565c0; }
+    .signer-type.Delegated { background: #f3e5f5; color: #7b1fa2; }
+    .signer-type.Native { background: #e8f5e9; color: #2e7d32; }
+    .signer-type.Policy { background: #fff3e0; color: #e65100; }
+    .verifier-label {
+      font-size: 0.75rem;
+      color: #666;
+    }
+    .address-full {
+      font-family: monospace;
+      font-size: 0.75rem;
+      word-break: break-all;
+    }
+    .you-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      background: #0066cc;
+      color: white;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .policy-params {
+      display: block;
+      font-size: 0.7rem;
+      color: #666;
+      margin-top: 0.25rem;
+    }
+    .contract-full-id {
+      font-family: monospace;
+      font-size: 0.8rem;
+      word-break: break-all;
+      background: #f0f0f0;
+      padding: 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Smart Account Indexer Demo</h1>
+  <p>Test reverse lookup from passkey to smart account contracts.</p>
+
+  <div class="section">
+    <h2>1. Login with Passkey</h2>
+    <p>Sign in with your passkey to automatically discover all smart accounts you have access to.</p>
+    <button id="auth-btn">Login with Passkey</button>
+    <div id="status" style="display: none;"></div>
+  </div>
+
+  <div class="section">
+    <h2>2. Your Smart Accounts</h2>
+    <p>Select which smart account to connect to:</p>
+    <div id="contracts-list">
+      <div class="empty-state">No contracts found yet. Login with your passkey above.</div>
+    </div>
+  </div>
+
+  <div class="section" id="contract-details-section" style="display: none;">
+    <h2>3. Contract Details</h2>
+    <div id="contract-details"></div>
+    <button id="back-btn">Back to Account List</button>
+  </div>
+
+  <div class="section" style="background: #f8f9fa;">
+    <h2>Manual Lookup (Debug)</h2>
+    <p>Enter a credential ID or Stellar address to look up contracts.</p>
+    <div class="input-group">
+      <label for="public-key">Credential ID (Hex):</label>
+      <input type="text" id="public-key" placeholder="3f8bd02ac47ad80f224404269c00133ec64c1e4b45b0b7ef1e20f3bd0d6a40a1">
+    </div>
+    <button id="lookup-btn">Lookup by Credential ID</button>
+    <hr style="margin: 1rem 0; border: none; border-top: 1px solid #ddd;">
+    <div class="input-group">
+      <label for="stellar-address">Stellar Address (G... or C...):</label>
+      <input type="text" id="stellar-address" placeholder="GABCD...">
+    </div>
+    <button id="address-lookup-btn">Lookup by Address</button>
+  </div>
+
+  <div class="section">
+    <h2>Configuration</h2>
+    <div class="input-group">
+      <label for="indexer-url">Indexer URL:</label>
+      <input type="text" id="indexer-url" value="https://smart-account-indexer.sdf-ecosystem.workers.dev">
+    </div>
+    <div class="input-group">
+      <label for="rpc-url">Stellar RPC URL:</label>
+      <input type="text" id="rpc-url" value="https://soroban-testnet.stellar.org">
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

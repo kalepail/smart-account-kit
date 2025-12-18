@@ -1,0 +1,83 @@
+{
+  "name": "smart-account-kit",
+  "version": "0.2.3",
+  "description": "TypeScript SDK for deploying and managing OpenZeppelin Smart Account contracts on Stellar/Soroban with WebAuthn passkey authentication",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/storage/index.js",
+      "types": "./dist/storage/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:all": "./scripts/build.sh",
+    "build:bindings": "pnpm --filter smart-account-kit-bindings build",
+    "build:demo": "pnpm build:all && pnpm --filter smart-account-kit-demo build",
+    "build:watch": "tsc --watch",
+    "clean": "rm -rf dist packages/smart-account-kit-bindings/dist",
+    "test": "vitest",
+    "prepublishOnly": "pnpm run build:all"
+  },
+  "keywords": [
+    "stellar",
+    "soroban",
+    "smart-account",
+    "webauthn",
+    "passkey",
+    "wallet",
+    "multisig",
+    "openzeppelin"
+  ],
+  "author": "Tyler van der Hoeven <tyler@stellar.org>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kalepail/smart-account-kit"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
+    "@stellar/stellar-sdk": ">=14.4.2",
+    "base64url": "^3.0.1",
+    "smart-account-kit-bindings": "workspace:*"
+  },
+  "devDependencies": {
+    "@creit-tech/stellar-wallets-kit": "jsr:2.0.0-beta.9",
+    "@types/node": "^25.0.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "peerDependencies": {
+    "@creit-tech/stellar-wallets-kit": ">=2.0.0",
+    "@stellar/stellar-sdk": ">=14.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@creit-tech/stellar-wallets-kit": {
+      "optional": true
+    }
+  },
+  "pnpm": {
+    "overrides": {
+      "@stellar/stellar-sdk": "$@stellar/stellar-sdk"
+    }
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  }
+}

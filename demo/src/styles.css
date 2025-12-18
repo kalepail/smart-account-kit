@@ -1,0 +1,1701 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background: #0a0a0a;
+  color: #fafafa;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+h1 {
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+}
+
+h2 {
+  font-size: 1.2rem;
+  color: #888;
+  font-weight: normal;
+  margin-top: 0;
+}
+
+.card {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.card h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+button {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+button:disabled {
+  background: #333;
+  color: #666;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: #27272a;
+  border: 1px solid #3f3f46;
+}
+
+button.secondary:hover:not(:disabled) {
+  background: #3f3f46;
+}
+
+button.danger {
+  background: #dc2626;
+}
+
+button.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.info-box {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.info-box .label {
+  color: #71717a;
+  margin-bottom: 4px;
+  font-family: -apple-system, sans-serif;
+}
+
+.info-box .value {
+  color: #a1a1aa;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+}
+
+.status.connected {
+  background: #052e16;
+  color: #4ade80;
+}
+
+.status.disconnected {
+  background: #27272a;
+  color: #71717a;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  color: #a1a1aa;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  background: #18181b;
+  color: #fafafa;
+  font-size: 0.9rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.log-box {
+  background: #0a0a0a;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.log-entry {
+  padding: 4px 0;
+  border-bottom: 1px solid #27272a;
+  color: #71717a;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-entry.success {
+  color: #4ade80;
+}
+
+.log-entry.error {
+  color: #f87171;
+}
+
+.log-entry.info {
+  color: #60a5fa;
+}
+
+.credentials-list {
+  margin-top: 12px;
+}
+
+.credential-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.credential-info {
+  flex: 1;
+}
+
+.credential-info .nickname {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.credential-info .id {
+  font-size: 0.75rem;
+  color: #71717a;
+  font-family: monospace;
+}
+
+.credential-item .primary-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+
+.credential-item .status-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+
+.credential-item .status-badge.deployed {
+  background: #052e16;
+  color: #4ade80;
+}
+
+.credential-item .status-badge.pending {
+  background: #422006;
+  color: #fbbf24;
+}
+
+.credential-item .status-badge.failed {
+  background: #450a0a;
+  color: #f87171;
+}
+
+.credential-item.pending {
+  border-color: #422006;
+  opacity: 0.8;
+}
+
+.credential-info .error-text {
+  font-size: 0.75rem;
+  color: #f87171;
+  margin-top: 4px;
+}
+
+.credential-details {
+  margin-top: 12px;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+  border-top: 1px solid #27272a;
+}
+
+.detail-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.detail-label {
+  font-size: 0.75rem;
+  color: #71717a;
+  margin-bottom: 4px;
+}
+
+.detail-value {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #a1a1aa;
+  word-break: break-all;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tabs {
+  display: flex;
+  border-bottom: 1px solid #27272a;
+  margin-bottom: 16px;
+}
+
+.tab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab.active {
+  color: #fafafa;
+  border-bottom-color: #3b82f6;
+}
+
+.network-badge {
+  background: #27272a;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  color: #a1a1aa;
+}
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #3f3f46;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Pending Credentials Section */
+.pending-credentials-card {
+  border-color: #422006;
+}
+
+.pending-description {
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.credential-date {
+  font-size: 0.75rem;
+  color: #71717a;
+  margin-top: 4px;
+}
+
+.credential-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+button.small {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+button.small .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+/* Wallet Info */
+.wallet-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wallet-info .info-box {
+  margin-top: 0;
+}
+
+.wallet-info-row {
+  display: flex;
+  gap: 12px;
+}
+
+.balance-display {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 16px 24px;
+  text-align: center;
+  flex: 0 0 auto;
+}
+
+.balance-label {
+  color: #71717a;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.balance-value {
+  color: #4ade80;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+/* Panel descriptions */
+.panel-description {
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+/* Loading and empty states */
+.loading-state,
+.empty-state {
+  padding: 24px;
+  text-align: center;
+  color: #71717a;
+  font-size: 0.9rem;
+}
+
+.loading-state .spinner {
+  margin-right: 8px;
+}
+
+/* Active Signer Display */
+.active-signer-display {
+  margin-top: 16px;
+  padding: 12px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+}
+
+.active-signer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.active-signer-label {
+  font-size: 0.85rem;
+  color: #71717a;
+}
+
+.active-signer-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: #22c55e20;
+  color: #22c55e;
+  border-radius: 4px;
+}
+
+.active-signer-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.active-signer-details .detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.active-signer-details .detail-label {
+  font-size: 0.8rem;
+  color: #71717a;
+}
+
+.active-signer-details .detail-value {
+  font-size: 0.8rem;
+  color: #a1a1aa;
+}
+
+.active-signer-details .detail-value.monospace {
+  font-family: monospace;
+}
+
+/* Active badge in signer list */
+.signer-item.active {
+  border-color: #22c55e;
+  background: #22c55e10;
+}
+
+.active-badge {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  margin-left: 6px;
+  background: #22c55e20;
+  color: #22c55e;
+  border-radius: 3px;
+}
+
+/* Connected badge for delegated signers with wallet connected */
+.signer-item.connected {
+  border-color: #3b82f6;
+  background: #3b82f610;
+}
+
+.connected-badge {
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  margin-left: 6px;
+  background: #3b82f620;
+  color: #3b82f6;
+  border-radius: 3px;
+}
+
+/* Connected wallet info in ContextRuleBuilder */
+.connected-wallet-row {
+  align-items: center;
+}
+
+.connected-wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.wallet-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.wallet-address {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #a1a1aa;
+}
+
+/* Context Rules Panel */
+.context-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.context-rule-item {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.context-rule-item.expanded {
+  border-color: #3b82f6;
+}
+
+.rule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rule-header:hover {
+  background: #1f1f23;
+}
+
+.rule-main {
+  flex: 1;
+}
+
+.rule-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.rule-id {
+  color: #3b82f6;
+  margin-right: 8px;
+  font-size: 0.85rem;
+}
+
+.rule-type {
+  font-size: 0.8rem;
+  color: #71717a;
+}
+
+.rule-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-badge {
+  background: #27272a;
+  color: #a1a1aa;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.summary-badge.expiry {
+  background: #422006;
+  color: #fbbf24;
+}
+
+.expand-icon {
+  color: #71717a;
+  font-size: 1.2rem;
+  width: 20px;
+  text-align: center;
+}
+
+.rule-details {
+  border-top: 1px solid #27272a;
+  padding: 12px;
+  background: #0f0f11;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section-header {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #71717a;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+.detail-empty {
+  font-size: 0.85rem;
+  color: #52525b;
+  font-style: italic;
+}
+
+.signers-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.signer-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #27272a;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.signer-type {
+  color: #3b82f6;
+}
+
+.signer-id {
+  color: #a1a1aa;
+  font-family: monospace;
+}
+
+.signer-chip.connected {
+  border: 1px solid #3b82f6;
+  background: #3b82f610;
+}
+
+.signer-connected-badge {
+  font-size: 0.65rem;
+  padding: 1px 5px;
+  background: #3b82f620;
+  color: #3b82f6;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+
+.policies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.policy-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #27272a;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.policy-icon {
+  background: #3b82f6;
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.policy-address {
+  color: #a1a1aa;
+  font-family: monospace;
+}
+
+.rule-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #27272a;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #27272a;
+  flex-shrink: 0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #71717a;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  color: #fafafa;
+}
+
+.modal-body {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #27272a;
+  background: #1a1a1a;
+  flex-shrink: 0;
+}
+
+/* Error banner */
+.error-banner {
+  background: #450a0a;
+  border: 1px solid #dc2626;
+  color: #f87171;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+/* Form hints */
+.form-hint {
+  font-size: 0.8rem;
+  color: #71717a;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+/* Radio and checkbox groups */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-label,
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.radio-label input,
+.checkbox-label input {
+  width: auto;
+  margin: 0;
+  margin-right: 8px;
+}
+
+/* Signer list in builder */
+.signer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.signer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #27272a;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.signer-type-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.signer-value {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #a1a1aa;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #f87171;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.remove-btn:hover {
+  color: #dc2626;
+}
+
+/* Add signer row */
+.add-signer-row {
+  display: flex;
+  gap: 8px;
+}
+
+.add-signer-row select {
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: #fafafa;
+  font-size: 0.9rem;
+}
+
+.add-signer-row input {
+  flex: 1;
+}
+
+/* Policy config */
+.policy-config {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.policy-params {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #27272a;
+}
+
+.policy-params label {
+  display: flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: #a1a1aa;
+}
+
+.policy-params input {
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: #fafafa;
+  font-size: 0.85rem;
+}
+
+/* Signer mode tabs */
+.add-signer-section {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.signer-mode-tabs {
+  display: flex;
+  border-bottom: 1px solid #27272a;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #71717a;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-tab:hover:not(:disabled) {
+  color: #a1a1aa;
+  background: #1f1f23;
+}
+
+.mode-tab.active {
+  color: #fafafa;
+  border-bottom-color: #3b82f6;
+}
+
+.mode-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.signer-mode-content {
+  padding: 12px;
+}
+
+.no-credentials {
+  color: #71717a;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.discover-hint {
+  color: #a1a1aa;
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+/* Policy configuration in App.tsx */
+.policy-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.policy-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.policy-checkbox:hover {
+  border-color: #3f3f46;
+}
+
+.policy-checkbox.custom {
+  cursor: default;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.policy-checkbox input[type="checkbox"] {
+  width: auto;
+  margin-top: 2px;
+}
+
+.policy-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.policy-name {
+  font-weight: 500;
+  color: #fafafa;
+}
+
+.policy-description {
+  font-size: 0.85rem;
+  color: #71717a;
+}
+
+.policy-address {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #52525b;
+  word-break: break-all;
+}
+
+.add-custom-policy {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #27272a;
+}
+
+/* Selected policies in ContextRuleBuilder */
+.selected-policies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.selected-policy-item {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.selected-policy-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.policy-type-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.policy-type-badge:has(+ .policy-name:contains("custom")) {
+  background: #8b5cf6;
+}
+
+.selected-policy-header .policy-name {
+  flex: 1;
+  font-weight: 500;
+  color: #fafafa;
+}
+
+.policy-address-small {
+  display: block;
+  font-family: monospace;
+  font-size: 0.7rem;
+  color: #52525b;
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+
+.add-policy-section {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+/* Active signer highlighting */
+.signer-item.active {
+  border: 1px solid #22c55e;
+  background: #14532d20;
+}
+
+.active-badge {
+  background: #22c55e;
+  color: #052e16;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+/* Active Signer Display */
+.active-signer-display {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 16px;
+  flex: 1;
+  margin-top: 0;
+}
+
+.active-signer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #27272a;
+}
+
+.active-signer-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: #71717a;
+  letter-spacing: 0.05em;
+}
+
+.active-signer-badge {
+  background: #22c55e;
+  color: #052e16;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.active-signer-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-label {
+  color: #71717a;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.detail-value {
+  color: #fafafa;
+  font-size: 0.9rem;
+}
+
+.detail-value.monospace {
+  font-family: monospace;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+/* ===== Signer Picker Modal ===== */
+.signer-picker .modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.signer-picker .description {
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.signer-picker .signer-section {
+  margin-bottom: 20px;
+}
+
+.signer-picker .signer-section h4 {
+  color: #fafafa;
+  font-size: 0.95rem;
+  margin: 0 0 12px 0;
+  font-weight: 500;
+}
+
+.signer-picker .signer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signer-picker .signer-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.signer-picker .signer-item:hover {
+  border-color: #52525b;
+}
+
+.signer-picker .signer-item.selected {
+  border-color: #3b82f6;
+  background: #1e3a5f;
+}
+
+.signer-picker .signer-item.active {
+  border-color: #22c55e;
+}
+
+.signer-picker .signer-item.disabled {
+  cursor: not-allowed;
+}
+
+.signer-picker .signer-item.disabled > input[type="checkbox"],
+.signer-picker .signer-item.disabled > .signer-info {
+  opacity: 0.5;
+}
+
+.signer-picker .signer-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.signer-picker .signer-item.disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.signer-picker .signer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.signer-picker .signer-label {
+  color: #fafafa;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.signer-picker .signer-type {
+  color: #71717a;
+  font-size: 0.8rem;
+}
+
+.signer-picker .badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.signer-picker .badge.active {
+  background: #22c55e;
+  color: #052e16;
+}
+
+.signer-picker .badge.connected {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.signer-picker .connect-wallet-section {
+  margin-top: 12px;
+  padding: 12px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.signer-picker .connect-wallet-section .hint {
+  color: #71717a;
+  font-size: 0.85rem;
+  margin: 0 0 12px 0;
+}
+
+.signer-picker .no-signers {
+  color: #71717a;
+  text-align: center;
+  padding: 24px;
+}
+
+/* Secret Key Input for Delegated Signers */
+.signer-picker .delegated-signer-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signer-picker .secret-key-btn {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.signer-picker .secret-key-input-form {
+  background: #18181b;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 4px;
+}
+
+.signer-picker .secret-key-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #a1a1aa;
+  font-size: 0.85rem;
+}
+
+.signer-picker .secret-key-header .close-btn {
+  padding: 2px 6px;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+
+.signer-picker .secret-key-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  border-radius: 6px;
+  color: #fafafa;
+  font-family: monospace;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.signer-picker .secret-key-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.signer-picker .secret-key-input::placeholder {
+  color: #52525b;
+}
+
+.signer-picker .secret-key-error {
+  color: #ef4444;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+}
+
+.signer-picker .secret-key-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.signer-picker .secret-key-warning {
+  color: #f59e0b;
+  font-size: 0.75rem;
+  margin: 8px 0 0 0;
+  padding: 6px 8px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 4px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: #71717a;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.close-button:hover {
+  color: #fafafa;
+}
+
+/* ===== Connected Wallet Display ===== */
+.connected-wallet-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.connected-wallet-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wallet-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.wallet-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wallet-name {
+  color: #fafafa;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.wallet-address {
+  color: #71717a;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
+.disconnect-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+/* Connected Wallets List (External Wallets section in App.tsx) */
+.connected-wallets-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.connected-wallets-list-section .connected-wallet-banner {
+  margin-bottom: 0;
+}
+
+.connected-wallets-list-section .disconnect-btn.small {
+  padding: 4px 10px;
+  font-size: 1rem;
+  min-width: 32px;
+}
+
+/* Connected Wallet Items (used in SignerPicker and ContextRuleBuilder) */
+.connected-wallets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connected-wallet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 10px 12px;
+  gap: 12px;
+}
+
+.connected-wallet-item .wallet-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.connected-wallet-item .wallet-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.connected-wallet-item .wallet-name {
+  color: #fafafa;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.connected-wallet-item .wallet-address {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #a1a1aa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.connected-wallet-item .badge {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.connected-wallet-item .badge.signer-match {
+  background: #22c55e20;
+  color: #22c55e;
+}
+
+.connected-wallet-item .badge.no-match {
+  background: #71717a20;
+  color: #71717a;
+}
+
+.connected-wallet-item.matches-signer {
+  border-color: #22c55e40;
+}
+
+.connected-wallet-item button.remove-wallet,
+.connected-wallet-item button.small {
+  flex-shrink: 0;
+}
+
+/* Connected Wallets Section in SignerPicker */
+.connected-wallets-section {
+  border-top: 1px solid #27272a;
+  padding-top: 16px;
+  margin-top: 8px;
+}
+
+.connected-wallets-section h4 {
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+  color: #a1a1aa;
+}
+
+/* Connected Wallet Add Section in ContextRuleBuilder */
+.connected-wallets-add-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connected-wallets-add-section .no-wallets-message {
+  padding: 16px;
+  text-align: center;
+  color: #71717a;
+}
+
+.connected-wallets-add-section .connect-more-btn {
+  align-self: flex-start;
+}
+
+/* Ensure Stellar Wallets Kit modal appears above our modals */
+.stellar-wallets-kit {
+  z-index: 2000 !important;
+}
+
+/* Contract Picker Modal */
+.contract-picker-modal {
+  max-width: 500px;
+  width: 90%;
+}
+
+.contract-picker-modal .modal-header p {
+  color: #a1a1aa;
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+
+.contract-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.contract-option {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.contract-option:hover {
+  border-color: #3b82f6;
+  background: #1f1f23;
+}
+
+.contract-option-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.contract-option-header code {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #e4e4e7;
+  word-break: break-all;
+}
+
+.contract-option-header .contract-label {
+  font-size: 0.75rem;
+  color: #71717a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.contract-option-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.contract-option-stats .stat {
+  background: #27272a;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #a1a1aa;
+}
+
+.contract-option-stats .stat strong {
+  color: #e4e4e7;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.contract-option-stats .stat.ledger {
+  background: transparent;
+  border: 1px solid #27272a;
+}
+
+.contract-picker-modal .modal-footer {
+  border-top: 1px solid #27272a;
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.contract-picker-modal .modal-footer button {
+  width: 100%;
+}

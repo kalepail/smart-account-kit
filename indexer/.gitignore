@@ -1,0 +1,17 @@
+# Environment files (secrets)
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Wrangler local state
+.wrangler/
+
+# Node modules
+node_modules/
+
+# Build outputs
+dist/
+
+# Local development
+*.local

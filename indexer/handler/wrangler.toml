@@ -1,0 +1,21 @@
+name = "smart-account-indexer"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Default environment (testnet)
+# DATABASE_URL secret points to testnet database
+# Run: wrangler secret put DATABASE_URL
+
+# Hyperdrive for faster Postgres connections (optional)
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<hyperdrive-id>"
+
+# ============================================================================
+# Production environment (mainnet)
+# ============================================================================
+# Deploy: wrangler deploy --env production
+# Set secret: wrangler secret put DATABASE_URL --env production
+[env.production]
+name = "smart-account-indexer-mainnet"

@@ -825,6 +825,24 @@ The Smart Account Kit uses contracts from [OpenZeppelin's stellar-contracts](htt
 | `pnpm run test` | Run tests |
 | `pnpm run clean` | Remove build artifacts |
 
+### Publishing
+
+```bash
+# Ensure you're logged in to npm
+npm login
+
+# Bump version (updates package.json)
+pnpm version patch  # or minor, major
+
+# Publish (runs build:all automatically via prepublishOnly)
+pnpm publish
+
+# Or publish with specific tag
+pnpm publish --tag beta
+```
+
+**Note:** The `prepublishOnly` script automatically runs `pnpm run build:all` before publishing.
+
 ## Related
 
 - [OpenZeppelin stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts) - Smart account contracts this SDK interacts with

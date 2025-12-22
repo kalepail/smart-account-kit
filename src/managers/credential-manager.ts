@@ -43,7 +43,6 @@ export interface CredentialManagerDeps {
   }>;
   /** Build a deploy transaction */
   buildDeployTransaction: (
-    contractId: string,
     credentialIdBuffer: Buffer,
     publicKey: Uint8Array
   ) => Promise<{ built?: { toXDR: () => string }; signed?: { toXDR: () => string } }>;
@@ -163,7 +162,6 @@ export class CredentialManager {
     const contractId = this.deps.deriveContractAddress(credentialIdBuffer);
 
     const deployTx = await this.deps.buildDeployTransaction(
-      contractId,
       credentialIdBuffer,
       credential.publicKey
     );

@@ -94,7 +94,10 @@ export class RelayerClient {
   private readonly url: string;
   private readonly timeout: number;
 
-  constructor(url: string, timeout = 30000) {
+  // Default timeout of 6 minutes to accommodate testnet retries (up to 5 min)
+  // when Relayer channel accounts need funding after testnet reset.
+  // Mainnet requests return quickly; this only affects max wait time.
+  constructor(url: string, timeout = 360000) {
     if (!url) {
       throw new Error("Relayer URL is required");
     }

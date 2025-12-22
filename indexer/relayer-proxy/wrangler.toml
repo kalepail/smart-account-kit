@@ -12,6 +12,14 @@ id = "6d548e99f4e14aeb93c25c7d2c0928b5"
 # For preview/dev:
 # preview_id = "<your-preview-kv-namespace-id>"
 
+# Increase CPU limit for long-running retries on testnet.
+# On testnet, if Relayer channel accounts are missing (after testnet reset),
+# we fund them via friendbot and retry for up to 5 minutes.
+# Network wait time (fetch calls) doesn't count toward CPU time.
+# Mainnet uses default limit since no retries occur there.
+[limits]
+cpu_ms = 300_000
+
 [vars]
 # Network this instance serves
 NETWORK = "testnet"

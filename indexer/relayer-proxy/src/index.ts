@@ -143,6 +143,30 @@ function createClient(env: Env, apiKey: string): ChannelsClient {
   });
 }
 
+/**
+ * Extract account address from "Account not found" error message
+ */
+function extractMissingAccount(errorMessage: string): string | null {
+  // Pattern: "Account not found: GXXXX..."
+  const match = errorMessage.match(/Account not found:\s*(G[A-Z0-9]{55})/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Fund an account via Friendbot (testnet only)
+ */
+async function fundWithFriendbot(account: string): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `https://friendbot.stellar.org?addr=${encodeURIComponent(account)}`
+    );
+    return response.ok;
+  } catch (error) {
+    console.error("Friendbot funding failed:", error);
+    return false;
+  }
+}
+
 // ============================================================================
 // API Endpoints
 // ============================================================================
@@ -166,6 +190,9 @@ app.get("/", (c) => {
  *
  * Use func+auth for Address credentials (transfers, wallet operations).
  * Use xdr for source_account auth (deployment) - tx must be signed.
+ *
+ * On testnet, if channel accounts are missing (after testnet reset),
+ * we'll fund them via friendbot and retry for up to 5 minutes.
  */
 app.post("/", async (c) => {
   const ip = getClientIP(c.req.raw);
@@ -207,33 +234,72 @@ app.post("/", async (c) => {
     }
 
     const client = createClient(c.env, apiKeyResult.apiKey);
+    const isTestnet = c.env.NETWORK === "testnet";
 
-    // Submit using the appropriate method
-    if (hasXdr) {
-      // Fee-bump a signed transaction
-      const result = await client.submitTransaction({ xdr: body.xdr! });
-      return c.json({
-        success: true,
-        data: {
-          transactionId: result.transactionId,
-          hash: result.hash,
-          status: result.status,
-        },
-      });
-    } else {
-      // Build tx with channel accounts
-      const result = await client.submitSorobanTransaction({
-        func: body.func!,
-        auth: body.auth!,
-      });
-      return c.json({
-        success: true,
-        data: {
-          transactionId: result.transactionId,
-          hash: result.hash,
-          status: result.status,
-        },
-      });
+    // On testnet, retry for up to 5 minutes to handle channel accounts needing funding
+    // On mainnet, only try once (no friendbot available)
+    const TESTNET_RETRY_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+    const deadline = isTestnet ? Date.now() + TESTNET_RETRY_DURATION_MS : 0;
+    const fundedAccounts = new Set<string>(); // Track accounts we've already funded
+
+    // Submit with retry logic for missing accounts (testnet only)
+    while (true) {
+      try {
+        if (hasXdr) {
+          // Fee-bump a signed transaction
+          const result = await client.submitTransaction({ xdr: body.xdr! });
+          return c.json({
+            success: true,
+            data: {
+              transactionId: result.transactionId,
+              hash: result.hash,
+              status: result.status,
+            },
+          });
+        } else {
+          // Build tx with channel accounts
+          const result = await client.submitSorobanTransaction({
+            func: body.func!,
+            auth: body.auth!,
+          });
+          return c.json({
+            success: true,
+            data: {
+              transactionId: result.transactionId,
+              hash: result.hash,
+              status: result.status,
+            },
+          });
+        }
+      } catch (submitError) {
+        const errorMessage = submitError instanceof Error ? submitError.message : String(submitError);
+
+        // Check if this is a "missing account" error (testnet reset scenario)
+        const missingAccount = extractMissingAccount(errorMessage);
+        const timeRemaining = deadline - Date.now();
+
+        if (missingAccount && isTestnet && timeRemaining > 0) {
+          // Only fund each account once per request
+          if (!fundedAccounts.has(missingAccount)) {
+            console.log(`Account ${missingAccount} not found. Funding via friendbot (${Math.round(timeRemaining / 1000)}s remaining)...`);
+
+            const funded = await fundWithFriendbot(missingAccount);
+            if (funded) {
+              console.log(`Successfully funded ${missingAccount}. Retrying submission...`);
+              fundedAccounts.add(missingAccount);
+            } else {
+              console.error(`Failed to fund ${missingAccount}`);
+            }
+          } else {
+            console.log(`Account ${missingAccount} already funded, retrying...`);
+          }
+
+          continue; // Retry immediately
+        }
+
+        // Not a recoverable error or deadline exceeded - throw to outer handler
+        throw submitError;
+      }
     }
   } catch (error) {
     console.error("Relayer submission error:", error);

@@ -12,29 +12,23 @@ import {
 import type {
   AuthenticationResponseJSON,
   RegistrationResponseJSON,
-  PublicKeyCredentialCreationOptionsJSON,
-  PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import {
   hash,
   xdr,
   Keypair,
-  Address,
   TransactionBuilder,
-  Operation,
   Transaction,
   rpc,
   contract,
 } from "@stellar/stellar-sdk";
-import base64url from "base64url";
 
-const { Server: RpcServer, assembleTransaction } = rpc;
+const { Server: RpcServer } = rpc;
 const { AssembledTransaction } = contract;
 
 import type {
   SmartAccountConfig,
   StorageAdapter,
-  StoredCredential,
   CreateWalletResult,
   ConnectWalletResult,
   TransactionResult,
@@ -42,24 +36,14 @@ import type {
   SubmissionMethod,
   ExternalWalletAdapter,
   SelectedSigner,
-  ConnectedWallet,
 } from "./types";
 import { MemoryStorage } from "./storage/memory";
 import {
   Client as SmartAccountClient,
-  Signer as ContractSigner,
-  ContextRuleType,
-  WebAuthnSigData,
 } from "smart-account-kit-bindings";
 
 // Constants
-import {
-  WEBAUTHN_TIMEOUT_MS,
-  BASE_FEE,
-  FRIENDBOT_RESERVE_XLM,
-  DEFAULT_SESSION_EXPIRY_MS,
-  SECP256R1_PUBLIC_KEY_SIZE,
-} from "./constants";
+import { DEFAULT_SESSION_EXPIRY_MS } from "./constants";
 
 // Error classes
 import {
@@ -68,17 +52,7 @@ import {
 } from "./errors";
 
 // Utility functions
-import {
-  validateAddress,
-  validateAmount,
-  xlmToStroops,
-  stroopsToXlm,
-  buildKeyData,
-  deriveContractAddress,
-  extractPublicKeyFromAttestation,
-  compactSignature,
-  generateChallenge,
-} from "./utils";
+import { deriveContractAddress } from "./utils";
 
 // Event emitter
 import { SmartAccountEventEmitter } from "./events";
@@ -106,270 +80,50 @@ import {
   MultiSignerManager as MultiSignerManagerClass,
 } from "./managers";
 
-// SignerId is the same type as Signer - used for signature map keys
-type ContractSignerId = ContractSigner;
+import type { MultiSignerOptions } from "./kit/public-types";
+export type {
+  SignerManager,
+  ContextRuleManager,
+  PolicyManager,
+  CredentialManager,
+  MultiSignerManager,
+  MultiSignerOptions,
+} from "./kit/public-types";
 
-// ==========================================================================
-// Sub-manager Type Definitions
-// ==========================================================================
-
-/** Signer management interface */
-export interface SignerManager {
-  /** Add a new passkey signer to a context rule */
-  addPasskey(
-    contextRuleId: number,
-    appName: string,
-    userName: string,
-    options?: { nickname?: string }
-  ): Promise<{
-    credentialId: string;
-    publicKey: Uint8Array;
-    transaction: Awaited<ReturnType<SmartAccountClient["add_signer"]>>;
-  }>;
-
-  /** Add a delegated signer (Stellar account) to a context rule */
-  addDelegated(
-    contextRuleId: number,
-    publicKey: string
-  ): ReturnType<SmartAccountClient["add_signer"]>;
-
-  /** Remove a signer from a context rule */
-  remove(
-    contextRuleId: number,
-    signer: ContractSigner
-  ): ReturnType<SmartAccountClient["remove_signer"]>;
-
-  /** Remove a passkey signer by credential ID */
-  removePasskey(
-    contextRuleId: number,
-    credentialId: string
-  ): ReturnType<SmartAccountClient["remove_signer"]>;
-}
-
-/** Context rule management interface */
-export interface ContextRuleManager {
-  /** Add a new context rule */
-  add(
-    contextType: ContextRuleType,
-    name: string,
-    signers: ContractSigner[],
-    policies: Map<string, unknown>,
-    validUntil?: number
-  ): ReturnType<SmartAccountClient["add_context_rule"]>;
-
-  /** Get a context rule by ID */
-  get(contextRuleId: number): ReturnType<SmartAccountClient["get_context_rule"]>;
-
-  /** Get all context rules of a specific type */
-  getAll(contextRuleType: ContextRuleType): ReturnType<SmartAccountClient["get_context_rules"]>;
-
-  /** Remove a context rule */
-  remove(contextRuleId: number): ReturnType<SmartAccountClient["remove_context_rule"]>;
-
-  /** Update the name of a context rule */
-  updateName(
-    contextRuleId: number,
-    name: string
-  ): ReturnType<SmartAccountClient["update_context_rule_name"]>;
-
-  /** Update the expiration of a context rule */
-  updateExpiration(
-    contextRuleId: number,
-    validUntil?: number
-  ): ReturnType<SmartAccountClient["update_context_rule_valid_until"]>;
-}
-
-/** Policy management interface */
-export interface PolicyManager {
-  /** Add a policy to a context rule */
-  add(
-    contextRuleId: number,
-    policyAddress: string,
-    installParams: unknown
-  ): ReturnType<SmartAccountClient["add_policy"]>;
-
-  /** Remove a policy from a context rule */
-  remove(
-    contextRuleId: number,
-    policyAddress: string
-  ): ReturnType<SmartAccountClient["remove_policy"]>;
-}
-
-/** Credential storage management interface */
-export interface CredentialManager {
-  /** Get all stored credentials */
-  getAll(): Promise<StoredCredential[]>;
-
-  /** Get credentials for the current wallet */
-  getForWallet(): Promise<StoredCredential[]>;
-
-  /** Get credentials that are pending deployment */
-  getPending(): Promise<StoredCredential[]>;
-
-  /**
-   * Create a new passkey and save it to storage.
-   * This handles the full WebAuthn registration flow internally.
-   *
-   * Use this to create passkeys for context rules without deploying a new wallet.
-   * The passkey can later be added to a context rule as a signer.
-   *
-   * @param options - Creation options
-   * @param options.nickname - Display name for the credential
-   * @param options.appName - App name shown in authenticator (defaults to hostname)
-   * @returns The created and stored credential
-   *
-   * @example
-   * ```typescript
-   * // Create a new passkey for adding to a context rule
-   * const credential = await kit.credentials.create({ nickname: "Recovery Key" });
-   *
-   * // Later, add it as a signer to a context rule
-   * const signer = createWebAuthnSigner(
-   *   webauthnVerifierAddress,
-   *   credential.publicKey,
-   *   credential.credentialId
-   * );
-   * ```
-   */
-  create(options?: {
-    nickname?: string;
-    appName?: string;
-  }): Promise<StoredCredential>;
-
-  /**
-   * Save a credential to storage.
-   * Use this to import credentials created externally (e.g., passkeys created
-   * for context rules that haven't been deployed yet).
-   *
-   * @param credential - The credential to save. At minimum requires:
-   *   - credentialId: Base64URL encoded credential ID
-   *   - publicKey: 65-byte secp256r1 public key
-   * @param credential.credentialId - Base64URL encoded credential ID (required)
-   * @param credential.publicKey - 65-byte secp256r1 public key (required)
-   * @param credential.nickname - Optional display name
-   * @param credential.verifierAddress - Optional verifier contract address
-   * @param credential.contractId - Optional contract ID (empty string if not deployed)
-   */
-  save(credential: {
-    credentialId: string;
-    publicKey: Uint8Array;
-    nickname?: string;
-    verifierAddress?: string;
-    contractId?: string;
-  }): Promise<StoredCredential>;
-
-  /** Deploy a wallet using an existing pending credential */
-  deploy(
-    credentialId: string,
-    options?: { autoSubmit?: boolean }
-  ): Promise<{
-    contractId: string;
-    signedTransaction: string;
-    submitResult?: TransactionResult;
-  }>;
-
-  /** Clean up a credential from storage after successful deployment */
-  markDeployed(credentialId: string): Promise<void>;
-
-  /** Manually mark a credential as failed */
-  markFailed(credentialId: string, error?: string): Promise<void>;
-
-  /** Check if a credential's contract exists on-chain */
-  sync(credentialId: string): Promise<boolean>;
-
-  /** Sync all stored credentials with on-chain state */
-  syncAll(): Promise<{ deployed: number; pending: number; failed: number }>;
-
-  /** Delete a pending credential that was never deployed */
-  delete(credentialId: string): Promise<void>;
-}
-
-/** Options for multi-signer operations */
-export interface MultiSignerOptions {
-  /** Logger function */
-  onLog?: (message: string, type?: "info" | "success" | "error") => void;
-}
-
-/** Multi-signer management interface */
-export interface MultiSignerManager {
-  /**
-   * Execute a generic smart account operation with multiple signers.
-   * Takes a pre-built AssembledTransaction and handles the multi-signer flow.
-   *
-   * External signers must be registered via kit.externalSigners before calling.
-   *
-   * @param assembledTx - The AssembledTransaction from kit operations
-   * @param selectedSigners - Array of signers to use for signing
-   * @param options - Additional options (onLog)
-   */
-  operation<T>(
-    assembledTx: contract.AssembledTransaction<T>,
-    selectedSigners: SelectedSigner[],
-    options?: MultiSignerOptions
-  ): Promise<TransactionResult>;
-
-  /**
-   * Execute a transfer with multiple signers.
-   *
-   * External signers must be registered via kit.externalSigners before calling.
-   *
-   * @param tokenContract - Token contract address
-   * @param recipient - Recipient address
-   * @param amount - Amount to transfer (in token units)
-   * @param selectedSigners - Array of signers to use
-   * @param options - Additional options (onLog)
-   */
-  transfer(
-    tokenContract: string,
-    recipient: string,
-    amount: number,
-    selectedSigners: SelectedSigner[],
-    options?: MultiSignerOptions
-  ): Promise<TransactionResult>;
-
-  /**
-   * Get all available signers from on-chain context rules.
-   */
-  getAvailableSigners(): Promise<ContractSigner[]>;
-
-  /**
-   * Extract credential ID from an External signer's key_data.
-   */
-  extractCredentialId(signer: ContractSigner): string | null;
-
-  /**
-   * Check if a signer matches a given credential ID.
-   */
-  signerMatchesCredential(signer: ContractSigner, credentialId: string): boolean;
-
-  /**
-   * Check if a signer is a delegated signer for a given address.
-   */
-  signerMatchesAddress(signer: ContractSigner, address: string): boolean;
-
-  /**
-   * Check if multi-signer flow is needed for a set of signers.
-   *
-   * Returns true if:
-   * - There are delegated signers (need external wallet signature)
-   * - There are multiple signers (user may need to select which to use)
-   *
-   * @param signers - Array of signers to check
-   */
-  needsMultiSigner(signers: ContractSigner[]): boolean;
-
-  /**
-   * Build SelectedSigner array from signers for multi-signer operations.
-   *
-   * Determines which signers to use based on their type:
-   * - Delegated signers → wallet signature needed
-   * - External signers with credential ID → passkey signature needed
-   *
-   * @param signers - Array of signers
-   * @param activeCredentialId - Optional active credential ID to prioritize
-   */
-  buildSelectedSigners(signers: ContractSigner[], activeCredentialId?: string | null): SelectedSigner[];
-}
+import {
+  discoverContractsByCredential,
+  discoverContractsByAddress,
+  getContractDetailsFromIndexer,
+} from "./kit/indexer-ops";
+import {
+  createPasskey,
+  authenticatePasskey,
+  signAuthEntry,
+} from "./kit/webauthn-ops";
+import {
+  createWallet,
+  connectWallet,
+  connectWithCredentials,
+  disconnect,
+} from "./kit/wallet-ops";
+import {
+  buildDeployTransaction,
+  submitDeploymentTx,
+} from "./kit/deploy-ops";
+import {
+  sign,
+  signAndSubmit,
+  fundWallet,
+  transfer,
+  hasSourceAccountAuth,
+  simulateHostFunction,
+  signResimulateAndPrepare,
+  getSubmissionMethod,
+  shouldUseFeeSponsoring,
+  sendAndPoll,
+} from "./kit/tx-ops";
+import { multiSignersTransfer } from "./kit/multi-signer-ops";
+import { convertPolicyParams, buildPoliciesScVal } from "./kit/policies-ops";
 
 
 /**
@@ -697,8 +451,8 @@ export class SmartAccountKit {
       },
       initializeWallet: (contractId) => this.initializeWallet(contractId),
       createPasskey: (appName, userName) => this.createPasskey(appName, userName),
-      buildDeployTransaction: (contractId, credentialIdBuffer, publicKey) =>
-        this.buildDeployTransaction(contractId, credentialIdBuffer, publicKey),
+        buildDeployTransaction: (credentialIdBuffer, publicKey) =>
+          this.buildDeployTransaction(credentialIdBuffer, publicKey),
       signWithDeployer: (tx) => this.signWithDeployer(tx as contract.AssembledTransaction<null>),
       submitDeploymentTx: (tx, credentialId, options) =>
         this.submitDeploymentTx(tx as contract.AssembledTransaction<null>, credentialId, options),
@@ -781,13 +535,7 @@ export class SmartAccountKit {
   async discoverContractsByCredential(
     credentialId: string
   ): Promise<IndexedContractSummary[] | null> {
-    if (!this.indexer) return null;
-
-    // Convert base64url to hex if needed
-    const hexCredentialId = this.normalizeCredentialIdToHex(credentialId);
-
-    const result = await this.indexer.lookupByCredentialId(hexCredentialId);
-    return result.contracts;
+    return discoverContractsByCredential(this.indexer, credentialId);
   }
 
   /**
@@ -808,10 +556,7 @@ export class SmartAccountKit {
   async discoverContractsByAddress(
     address: string
   ): Promise<IndexedContractSummary[] | null> {
-    if (!this.indexer) return null;
-
-    const result = await this.indexer.lookupByAddress(address);
-    return result.contracts;
+    return discoverContractsByAddress(this.indexer, address);
   }
 
   /**
@@ -828,29 +573,7 @@ export class SmartAccountKit {
   async getContractDetailsFromIndexer(
     contractId: string
   ): Promise<ContractDetailsResponse | null> {
-    if (!this.indexer) return null;
-    return this.indexer.getContractDetails(contractId);
-  }
-
-  /**
-   * Convert a credential ID to hex format.
-   * Handles both base64url and hex inputs.
-   * @internal
-   */
-  private normalizeCredentialIdToHex(credentialId: string): string {
-    // If it looks like hex (only hex chars), return as-is
-    if (/^[0-9a-fA-F]+$/.test(credentialId)) {
-      return credentialId.toLowerCase();
-    }
-
-    // Otherwise, assume base64url and convert to hex
-    try {
-      const bytes = base64url.toBuffer(credentialId);
-      return bytes.toString("hex");
-    } catch {
-      // If conversion fails, return original (let the API handle validation)
-      return credentialId.toLowerCase();
-    }
+    return getContractDetailsFromIndexer(this.indexer, contractId);
   }
 
   // ==========================================================================
@@ -879,6 +602,26 @@ export class SmartAccountKit {
       networkPassphrase: this.networkPassphrase,
       rpcUrl: this.rpcUrl,
     });
+  }
+
+  /**
+   * Update connection state and initialize wallet client.
+   * @internal
+   */
+  private setConnectedState(contractId: string, credentialId: string): void {
+    this._contractId = contractId;
+    this._credentialId = credentialId;
+    this.initializeWallet(contractId);
+  }
+
+  /**
+   * Clear connection state.
+   * @internal
+   */
+  private clearConnectedState(): void {
+    this._contractId = undefined;
+    this._credentialId = undefined;
+    this.wallet = undefined;
   }
 
   /**
@@ -924,59 +667,12 @@ export class SmartAccountKit {
     credentialId: string,
     options?: SubmissionOptions
   ): Promise<TransactionResult> {
-    try {
-      let hash: string;
-      let ledger: number | undefined;
-
-      const method = this.getSubmissionMethod(options);
-
-      if (method === "relayer" && tx.signed && this.relayer) {
-        // Use Relayer - send signed XDR for fee-bumping
-        // Deployment uses source_account auth, so we send the signed transaction
-        // and the Relayer fee-bumps it (preserving inner signature)
-        const relayerResult = await this.relayer.sendXdr(tx.signed);
-
-        if (!relayerResult.success) {
-          throw new Error(relayerResult.error ?? "Relayer submission failed");
-        }
-
-        hash = relayerResult.hash ?? "";
-
-        // Poll for confirmation
-        const txResult = await this.rpc.pollTransaction(hash, { attempts: 10 });
-        if (txResult.status === "SUCCESS") {
-          ledger = txResult.ledger;
-        } else if (txResult.status === "FAILED") {
-          throw new Error("Transaction failed on-chain");
-        }
-      } else {
-        // Use RPC directly
-        const sentTx = await tx.send();
-        const txResponse = sentTx.getTransactionResponse;
-        hash = sentTx.sendTransactionResponse?.hash ?? "";
-        ledger = txResponse?.status === "SUCCESS" ? txResponse.ledger : undefined;
-      }
-
-      // Success - delete credential from storage
-      await this.storage.delete(credentialId);
-      return {
-        success: true,
-        hash,
-        ledger,
-      };
-    } catch (err) {
-      const error = err instanceof Error ? err.message : "Transaction failed";
-      // Failed - mark for retry
-      await this.storage.update(credentialId, {
-        deploymentStatus: "failed",
-        deploymentError: error,
-      });
-      return {
-        success: false,
-        hash: "",
-        error,
-      };
-    }
+    return submitDeploymentTx(
+      { storage: this.storage, rpc: this.rpc, relayer: this.relayer },
+      tx,
+      credentialId,
+      options
+    );
   }
 
   // ==========================================================================
@@ -1011,93 +707,28 @@ export class SmartAccountKit {
       forceMethod?: SubmissionMethod;
     }
   ): Promise<CreateWalletResult & { submitResult?: TransactionResult; fundResult?: TransactionResult & { amount?: number } }> {
-    // Step 1: Create a new passkey
-    const { rawResponse, credentialId, publicKey } = await this.createPasskey(
+    return createWallet(
+      {
+        storage: this.storage,
+        events: this.events,
+        deployerKeypair: this.deployerKeypair,
+        networkPassphrase: this.networkPassphrase,
+        sessionExpiryMs: this.sessionExpiryMs,
+        createPasskey: (name, user, selection) => this.createPasskey(name, user, selection),
+        buildDeployTransaction: (credentialIdBuffer, publicKey) =>
+          this.buildDeployTransaction(credentialIdBuffer, publicKey),
+        signWithDeployer: (tx) => this.signWithDeployer(tx),
+        submitDeploymentTx: (tx, credentialId, submissionOptions) =>
+          this.submitDeploymentTx(tx, credentialId, submissionOptions),
+        fundWallet: (nativeTokenContract, fundOptions) =>
+          this.fundWallet(nativeTokenContract, fundOptions),
+        setConnectedState: (contractId, credentialId) =>
+          this.setConnectedState(contractId, credentialId),
+      },
       appName,
       userName,
-      options?.authenticatorSelection
+      options
     );
-
-    // Store credential as "pending" immediately after creation
-    const storedCredential: StoredCredential = {
-      credentialId,
-      publicKey,
-      contractId: deriveContractAddress(base64url.toBuffer(credentialId), this.deployerKeypair.publicKey(), this.networkPassphrase),
-      nickname: options?.nickname ?? `${userName} - ${new Date().toLocaleDateString()}`,
-      createdAt: Date.now(),
-      transports: rawResponse?.response?.transports,
-      isPrimary: true,
-      deploymentStatus: "pending",
-    };
-
-    await this.storage.save(storedCredential);
-
-    // Emit credential created event
-    this.events.emit("credentialCreated", { credential: storedCredential });
-
-    // Step 2: Derive contract address from credential ID
-    const credentialIdBuffer = base64url.toBuffer(credentialId);
-    const contractId = deriveContractAddress(credentialIdBuffer, this.deployerKeypair.publicKey(), this.networkPassphrase);
-
-    // Step 3: Build and sign the deployment transaction
-    const deployTx = await this.buildDeployTransaction(
-      contractId,
-      credentialIdBuffer,
-      publicKey
-    );
-
-    // Sign the deployment transaction with the deployer keypair
-    // Deployment uses source_account auth which requires envelope signature
-    // When using Relayer, the signed XDR is fee-bumped (inner signature preserved)
-    const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-    await this.signWithDeployer(deployTx);
-    if (!deployTx.signed) {
-      throw new Error("Failed to sign deployment transaction");
-    }
-    const signedTransaction = deployTx.signed.toXDR();
-
-    // Step 4: Update state
-    this._credentialId = credentialId;
-    this._contractId = contractId;
-    this.initializeWallet(contractId);
-
-    // Emit wallet connected event
-    this.events.emit("walletConnected", { contractId, credentialId });
-
-    // Save session for future auto-connect
-    const now = Date.now();
-    await this.storage.saveSession({
-      contractId,
-      credentialId,
-      connectedAt: now,
-      expiresAt: now + this.sessionExpiryMs,
-    });
-
-    // Step 5: Optionally auto-submit using SDK's send() with exponential backoff
-    const submitResult = options?.autoSubmit
-      ? await this.submitDeploymentTx(deployTx, credentialId, submissionOpts)
-      : undefined;
-
-    // Step 6: Optionally fund the wallet on testnet (only if deployment succeeded)
-    // Funding can use Relayer since it's a transfer operation with Address auth
-    let fundResult: (TransactionResult & { amount?: number }) | undefined;
-    if (options?.autoFund && submitResult?.success) {
-      if (!options.nativeTokenContract) {
-        fundResult = { success: false, hash: "", error: "nativeTokenContract is required for autoFund" };
-      } else {
-        fundResult = await this.fundWallet(options.nativeTokenContract, { forceMethod: options?.forceMethod });
-      }
-    }
-
-    return {
-      rawResponse,
-      credentialId,
-      publicKey,
-      contractId,
-      signedTransaction,
-      submitResult,
-      fundResult,
-    };
   }
 
   /**
@@ -1119,37 +750,16 @@ export class SmartAccountKit {
     credentialId: string;
     publicKey: Uint8Array;
   }> {
-    const now = new Date();
-    const displayName = `${userName} — ${now.toLocaleString()}`;
-
-    const options: PublicKeyCredentialCreationOptionsJSON = {
-      challenge: generateChallenge(),
-      rp: {
-        id: this.rpId,
-        name: appName || this.rpName,
+    return createPasskey(
+      {
+        rpId: this.rpId,
+        rpName: this.rpName,
+        webAuthn: this.webAuthn,
       },
-      user: {
-        id: base64url(`${userName}:${now.getTime()}:${Math.random()}`),
-        name: displayName,
-        displayName,
-      },
-      authenticatorSelection: {
-        residentKey: authenticatorSelection?.residentKey ?? "preferred",
-        userVerification: authenticatorSelection?.userVerification ?? "preferred",
-        authenticatorAttachment: authenticatorSelection?.authenticatorAttachment,
-      },
-      pubKeyCredParams: [{ alg: -7, type: "public-key" }], // ES256 (P-256)
-      timeout: WEBAUTHN_TIMEOUT_MS,
-    };
-
-    const rawResponse = await this.webAuthn.startRegistration({ optionsJSON: options });
-    const publicKey = await extractPublicKeyFromAttestation(rawResponse.response);
-
-    return {
-      rawResponse,
-      credentialId: rawResponse.id,
-      publicKey,
-    };
+      appName,
+      userName,
+      authenticatorSelection
+    );
   }
 
   // ==========================================================================
@@ -1184,19 +794,11 @@ export class SmartAccountKit {
    * ```
    */
   async authenticatePasskey(): Promise<{ credentialId: string; rawResponse: AuthenticationResponseJSON }> {
-    const authOptions: PublicKeyCredentialRequestOptionsJSON = {
-      challenge: generateChallenge(),
+    return authenticatePasskey({
       rpId: this.rpId,
-      userVerification: "preferred",
-      timeout: WEBAUTHN_TIMEOUT_MS,
-    };
-
-    const rawResponse = await this.webAuthn.startAuthentication({ optionsJSON: authOptions });
-
-    return {
-      credentialId: rawResponse.id,
-      rawResponse,
-    };
+      rpName: this.rpName,
+      webAuthn: this.webAuthn,
+    });
   }
 
   /**
@@ -1235,56 +837,17 @@ export class SmartAccountKit {
     /** Prompt user if no stored session (default: false) */
     prompt?: boolean;
   }): Promise<ConnectWalletResult | null> {
-    let credentialId = options?.credentialId;
-    let contractId = options?.contractId;
-    let rawResponse: AuthenticationResponseJSON | undefined;
-
-    // If explicit credential or contract provided, use those
-    if (credentialId || contractId) {
-      return this.connectWithCredentials(credentialId, contractId);
-    }
-
-    // Check for stored session (unless fresh is requested)
-    if (!options?.fresh) {
-      const session = await this.storage.getSession();
-      if (session) {
-        // Check if session has expired
-        if (session.expiresAt && Date.now() > session.expiresAt) {
-          // Session expired - clear it and continue as if no session
-          this.events.emit("sessionExpired", {
-            contractId: session.contractId,
-            credentialId: session.credentialId,
-          });
-          await this.storage.clearSession();
-        } else {
-          return this.connectWithCredentials(session.credentialId, session.contractId);
-        }
-      }
-    }
-
-    // No stored session - should we prompt?
-    if (!options?.prompt && !options?.fresh) {
-      // Silent mode with no session - return null
-      return null;
-    }
-
-    // Prompt user to select a passkey
-    const authOptions: PublicKeyCredentialRequestOptionsJSON = {
-      challenge: generateChallenge(),
-      rpId: this.rpId,
-      userVerification: "preferred",
-      timeout: WEBAUTHN_TIMEOUT_MS,
-    };
-
-    rawResponse = await this.webAuthn.startAuthentication({ optionsJSON: authOptions });
-    credentialId = rawResponse.id;
-
-    // Connect with the selected credential
-    const result = await this.connectWithCredentials(credentialId);
-    return {
-      ...result,
-      rawResponse,
-    };
+    return connectWallet(
+      {
+        storage: this.storage,
+        events: this.events,
+        rpId: this.rpId,
+        webAuthn: this.webAuthn,
+        connectWithCredentials: (credentialId, contractId) =>
+          this.connectWithCredentials(credentialId, contractId),
+      },
+      options
+    );
   }
 
   /**
@@ -1294,91 +857,32 @@ export class SmartAccountKit {
     credentialId?: string,
     contractId?: string
   ): Promise<ConnectWalletResult> {
-    // Try to find the credential in storage
-    let credential: StoredCredential | null = null;
-    if (credentialId) {
-      credential = await this.storage.get(credentialId);
-      if (credential) {
-        contractId = credential.contractId;
-      }
-    }
-
-    // If no contract ID yet, try to derive it from credential ID
-    if (!contractId && credentialId) {
-      const credentialIdBuffer = base64url.toBuffer(credentialId);
-      contractId = deriveContractAddress(credentialIdBuffer, this.deployerKeypair.publicKey(), this.networkPassphrase);
-    }
-
-    if (!contractId) {
-      throw new Error("Could not determine contract ID");
-    }
-
-    if (!credentialId) {
-      throw new Error("Could not determine credential ID");
-    }
-
-    // Verify the contract exists on-chain
-    try {
-      await this.rpc.getContractData(
-        contractId,
-        xdr.ScVal.scvLedgerKeyContractInstance()
-      );
-    } catch {
-      // Update credential status if we have it in storage
-      if (credential && credential.deploymentStatus !== "failed") {
-        await this.storage.update(credentialId, {
-          deploymentStatus: "pending",
-        });
-      }
-      throw new Error(
-        `Smart account contract not found on-chain for credential ${credentialId}. ` +
-        "The wallet may not have been deployed yet."
-      );
-    }
-
-    // Contract exists - clean up pending credential from storage if present
-    if (credential) {
-      await this.storage.delete(credentialId);
-    }
-
-    // Update state
-    this._credentialId = credentialId;
-    this._contractId = contractId;
-    this.initializeWallet(contractId);
-
-    // Emit wallet connected event
-    this.events.emit("walletConnected", { contractId, credentialId });
-
-    // Save session for future auto-connect
-    const now = Date.now();
-    await this.storage.saveSession({
-      contractId,
+    return connectWithCredentials(
+      {
+        storage: this.storage,
+        rpc: this.rpc,
+        deployerKeypair: this.deployerKeypair,
+        networkPassphrase: this.networkPassphrase,
+        sessionExpiryMs: this.sessionExpiryMs,
+        events: this.events,
+        setConnectedState: (nextContractId, nextCredentialId) =>
+          this.setConnectedState(nextContractId, nextCredentialId),
+      },
       credentialId,
-      connectedAt: now,
-      expiresAt: now + this.sessionExpiryMs,
-    });
-
-    return {
-      credentialId,
-      contractId,
-      credential: credential ?? undefined,
-    };
+      contractId
+    );
   }
 
   /**
    * Disconnect from the current wallet and clear stored session
    */
   async disconnect(): Promise<void> {
-    const contractId = this._contractId;
-    this._credentialId = undefined;
-    this._contractId = undefined;
-    this.wallet = undefined;
-    await this.storage.clearSession();
-
-    // Emit wallet disconnected event
-    if (contractId) {
-      this.events.emit("walletDisconnected", { contractId });
-    }
+    return disconnect({
+      storage: this.storage,
+      events: this.events,
+      clearConnectedState: () => this.clearConnectedState(),
+      getContractId: () => this._contractId,
+    });
   }
 
   // ==========================================================================
@@ -1407,25 +911,18 @@ export class SmartAccountKit {
       expiration?: number;
     }
   ): Promise<contract.AssembledTransaction<T>> {
-    if (!this._contractId) {
-      throw new Error("Not connected to a wallet. Call connectWallet() first.");
-    }
-
-    const credentialId = options?.credentialId ?? this._credentialId;
-
-    // Get expiration ledger
-    const expiration = options?.expiration ?? await this.calculateExpiration();
-
-    // Sign each authorization entry for this contract
-    await transaction.signAuthEntries({
-      address: this._contractId,
-      authorizeEntry: async (entry: xdr.SorobanAuthorizationEntry) => {
-        const clone = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-        return this.signAuthEntry(clone, { credentialId, expiration });
+    const signed = await sign(
+      {
+        getContractId: () => this._contractId,
+        getCredentialId: () => this._credentialId,
+        calculateExpiration: () => this.calculateExpiration(),
+        signAuthEntry: (entry, signOptions) => this.signAuthEntry(entry, signOptions),
       },
-    });
+      transaction,
+      options
+    );
 
-    return transaction;
+    return signed as contract.AssembledTransaction<T>;
   }
 
   /**
@@ -1451,59 +948,21 @@ export class SmartAccountKit {
       forceMethod?: SubmissionMethod;
     }
   ): Promise<TransactionResult> {
-    if (!this._contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet. Call connectWallet() first." };
-    }
-
-    try {
-      // Extract the operation from the transaction
-      const builtTx = transaction.built;
-      if (!builtTx) {
-        return { success: false, hash: "", error: "Transaction has no built transaction" };
-      }
-
-      const operations = builtTx.operations;
-      if (operations.length !== 1) {
-        return { success: false, hash: "", error: "Expected exactly one operation" };
-      }
-
-      const operation = operations[0];
-      if (operation.type !== "invokeHostFunction") {
-        return { success: false, hash: "", error: "Expected invokeHostFunction operation" };
-      }
-
-      // Cast to the proper type after the type guard
-      const invokeOp = operation as Operation.InvokeHostFunction;
-
-      // Get auth entries from the transaction's simulation
-      const simData = transaction.simulationData;
-      if (!simData?.result?.auth) {
-        return { success: false, hash: "", error: "No simulation data or auth entries" };
-      }
-
-      // Sign and re-simulate
-      const preparedTx = await this.signResimulateAndPrepare(
-        invokeOp.func,
-        simData.result.auth,
-        { credentialId: options?.credentialId, expiration: options?.expiration }
-      );
-
-      // Sign with deployer keypair if not using fee sponsoring, or if tx has source_account auth
-      // (source_account auth requires envelope signature; Address auth has signature in entry)
-      const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-      if (!this.shouldUseFeeSponsoring(submissionOpts) || this.hasSourceAccountAuth(preparedTx)) {
-        preparedTx.sign(this.deployerKeypair);
-      }
-
-      // Submit and poll
-      return this.sendAndPoll(preparedTx, submissionOpts);
-    } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
-    }
+    return signAndSubmit(
+      {
+        getContractId: () => this._contractId,
+        signResimulateAndPrepare: (hostFunc, authEntries, signOptions) =>
+          this.signResimulateAndPrepare(hostFunc, authEntries, signOptions),
+        shouldUseFeeSponsoring: (submissionOptions) =>
+          this.shouldUseFeeSponsoring(submissionOptions),
+        hasSourceAccountAuth: (preparedTx) => this.hasSourceAccountAuth(preparedTx),
+        sendAndPoll: (preparedTx, submissionOptions) =>
+          this.sendAndPoll(preparedTx, submissionOptions),
+        deployerKeypair: this.deployerKeypair,
+      },
+      transaction,
+      options
+    );
   }
 
   /**
@@ -1526,102 +985,21 @@ export class SmartAccountKit {
       expiration?: number;
     }
   ): Promise<xdr.SorobanAuthorizationEntry> {
-    // Convert the entry to our own XDR types by round-tripping through XDR bytes.
-    // This is necessary because the entry may come from a different stellar-sdk
-    // module instance (e.g., full SDK vs minimal SDK, or Vite module duplication),
-    // which causes instanceof checks and XDR type constructors to fail.
-    const entryXdrBytes = entry.toXDR();
-    const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entryXdrBytes);
-
-    const credentials = normalizedEntry.credentials().address();
-
-    // Set expiration - always calculate if not provided
-    const expiration = options?.expiration ?? await this.calculateExpiration();
-    credentials.signatureExpirationLedger(expiration);
-
-    // Calculate signature payload
-    const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-      new xdr.HashIdPreimageSorobanAuthorization({
-        networkId: hash(Buffer.from(this.networkPassphrase)),
-        nonce: credentials.nonce(),
-        signatureExpirationLedger: credentials.signatureExpirationLedger(),
-        invocation: normalizedEntry.rootInvocation(),
-      })
+    return signAuthEntry(
+      {
+        rpId: this.rpId,
+        rpName: this.rpName,
+        webAuthn: this.webAuthn,
+        networkPassphrase: this.networkPassphrase,
+        storage: this.storage,
+        webauthnVerifierAddress: this.webauthnVerifierAddress,
+        calculateExpiration: () => this.calculateExpiration(),
+        getCredentialId: () => this._credentialId,
+        requireWallet: () => this.requireWallet(),
+      },
+      entry,
+      options
     );
-    const payload = hash(preimage.toXDR());
-
-    // Get the credential ID to use
-    const credentialId = options?.credentialId ?? this._credentialId;
-
-    // Authenticate with WebAuthn
-    const authOptions: PublicKeyCredentialRequestOptionsJSON = {
-      challenge: base64url(payload),
-      rpId: this.rpId,
-      userVerification: "preferred",
-      timeout: WEBAUTHN_TIMEOUT_MS,
-      ...(credentialId && {
-        allowCredentials: [{ id: credentialId, type: "public-key" }],
-      }),
-    };
-
-    const authResponse = await this.webAuthn.startAuthentication({
-      optionsJSON: authOptions,
-    });
-
-    // Process the signature
-    const rawSignature = base64url.toBuffer(authResponse.response.signature);
-    const compactedSignature = compactSignature(rawSignature);
-
-    // Look up the full key_data from on-chain signers by matching credential ID suffix
-    const credentialIdBuffer = base64url.toBuffer(authResponse.id);
-    const keyData = await this.findKeyDataByCredentialId(credentialIdBuffer);
-
-    // Build the SignerId for the contract
-    // External signers use (verifier_address, key_data)
-    // key_data = pubkey (65 bytes) + credentialId (variable bytes)
-    const signerId: ContractSignerId = {
-      tag: "External",
-      values: [
-        this.webauthnVerifierAddress, // verifier address
-        keyData, // full key_data (pubkey + credentialId)
-      ],
-    };
-
-    // Build the WebAuthn signature data
-    const webAuthnSigData = {
-      authenticator_data: base64url.toBuffer(authResponse.response.authenticatorData),
-      client_data: base64url.toBuffer(authResponse.response.clientDataJSON),
-      signature: Buffer.from(compactedSignature),
-    };
-
-    // Encode the signature using the wallet client's spec
-    const scMapEntry = this.buildSignatureMapEntry(signerId, webAuthnSigData);
-
-    // Add signature to credentials
-    const currentSig = credentials.signature();
-    if (currentSig.switch().name === "scvVoid") {
-      credentials.signature(xdr.ScVal.scvVec([xdr.ScVal.scvMap([scMapEntry])]));
-    } else {
-      currentSig.vec()?.[0].map()?.push(scMapEntry);
-    }
-
-    // Sort the signature map entries by key (required for Soroban maps)
-    // Soroban maps must be sorted by key XDR bytes
-    const sigMap = credentials.signature().vec()?.[0].map();
-    if (sigMap && sigMap.length > 1) {
-      sigMap.sort((a, b) => {
-        const aKeyXdr = a.key().toXDR("hex");
-        const bKeyXdr = b.key().toXDR("hex");
-        return aKeyXdr.localeCompare(bKeyXdr);
-      });
-    }
-
-    // Update last used time
-    if (credentialId) {
-      await this.storage.update(credentialId, { lastUsedAt: Date.now() });
-    }
-
-    return normalizedEntry;
   }
 
   // ==========================================================================
@@ -1646,214 +1024,21 @@ export class SmartAccountKit {
       forceMethod?: SubmissionMethod;
     }
   ): Promise<TransactionResult & { amount?: number }> {
-    if (!this._contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet" };
-    }
-
-    // Check if we're on testnet
-    if (!this.networkPassphrase.includes("Test")) {
-      return {
-        success: false,
-        hash: "",
-        error: "fundWallet() only works on testnet",
-      };
-    }
-
-    try {
-      // Step 1: Create a temporary keypair
-      const tempKeypair = Keypair.random();
-
-      // Step 2: Fund it with Friendbot
-      const friendbotResponse = await fetch(
-        `https://friendbot.stellar.org?addr=${tempKeypair.publicKey()}`
-      );
-
-      if (!friendbotResponse.ok) {
-        const text = await friendbotResponse.text();
-        return { success: false, hash: "", error: `Friendbot error: ${text}` };
-      }
-
-      // Step 3: Get the account balance via token contract and calculate transfer amount
-      // Keep 5 XLM for fees and minimum balance
-      const RESERVE_XLM = FRIENDBOT_RESERVE_XLM;
-      let sourceAccount = await this.rpc.getAccount(tempKeypair.publicKey());
-
-      // Query token contract for balance
-      const tokenAddress = Address.fromString(nativeTokenContract);
-      const fromAddress = Address.fromString(tempKeypair.publicKey());
-
-      const balanceKey = xdr.ScVal.scvVec([
-        xdr.ScVal.scvSymbol("Balance"),
-        xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-      ]);
-
-      let balanceXlm: number;
-      try {
-        const balanceData = await this.rpc.getContractData(
-          nativeTokenContract,
-          balanceKey
-        );
-        // Balance is stored as i128 in the contract data
-        const val = balanceData.val.contractData().val();
-        if (val.switch().name === "scvI128") {
-          const i128 = val.i128();
-          const lo = BigInt(i128.lo().toString());
-          const hi = BigInt(i128.hi().toString());
-          const balanceStroops = (hi << BigInt(64)) | lo;
-          balanceXlm = stroopsToXlm(balanceStroops);
-        } else {
-          // Friendbot gives 10,000 XLM, fallback to that
-          balanceXlm = 10_000;
-        }
-      } catch (error) {
-        // If balance query fails, assume Friendbot default of 10,000 XLM
-        console.warn("[SmartAccountKit] Failed to fetch temp account balance, using default:", error);
-        balanceXlm = 10_000;
-      }
-
-      const transferAmount = balanceXlm - RESERVE_XLM;
-
-      if (transferAmount <= 0) {
-        return { success: false, hash: "", error: "Insufficient balance after reserve" };
-      }
-
-      // Step 4: Build a transfer transaction from temp account to smart wallet
-      const amountInStroops = xlmToStroops(transferAmount);
-
-      // Build the transfer call
-      const toAddress = Address.fromString(this._contractId);
-
-      // Create the transfer operation
-      const transferOp = Operation.invokeHostFunction({
-        func: xdr.HostFunction.hostFunctionTypeInvokeContract(
-          new xdr.InvokeContractArgs({
-            contractAddress: tokenAddress.toScAddress(),
-            functionName: "transfer",
-            args: [
-              xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-              xdr.ScVal.scvAddress(toAddress.toScAddress()),
-              xdr.ScVal.scvI128(
-                new xdr.Int128Parts({
-                  lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
-                  hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-                })
-              ),
-            ],
-          })
-        ),
-        auth: [],
-      });
-
-      // Build transaction for simulation
-      const simulationTx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_FEE,
+    return fundWallet(
+      {
+        getContractId: () => this._contractId,
+        rpc: this.rpc,
         networkPassphrase: this.networkPassphrase,
-      })
-        .addOperation(transferOp)
-        .setTimeout(30)
-        .build();
-
-      // Simulate
-      const simResult = await this.rpc.simulateTransaction(simulationTx);
-
-      if ("error" in simResult) {
-        return { success: false, hash: "", error: `Simulation failed: ${simResult.error}` };
-      }
-
-      // Get auth entries and sign them with temp keypair
-      const authEntries = simResult.result?.auth || [];
-      const signedAuthEntries: xdr.SorobanAuthorizationEntry[] = [];
-
-      for (const entry of authEntries) {
-        if (entry.credentials().switch().name !== "sorobanCredentialsAddress") {
-          signedAuthEntries.push(entry);
-          continue;
-        }
-
-        const credentials = entry.credentials().address();
-        const currentLedger = simResult.latestLedger;
-        credentials.signatureExpirationLedger(currentLedger + 100);
-
-        // Calculate signature payload
-        const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-          new xdr.HashIdPreimageSorobanAuthorization({
-            networkId: hash(Buffer.from(this.networkPassphrase)),
-            nonce: credentials.nonce(),
-            signatureExpirationLedger: credentials.signatureExpirationLedger(),
-            invocation: entry.rootInvocation(),
-          })
-        );
-        const payload = hash(preimage.toXDR());
-
-        // Sign with temp keypair
-        const signature = tempKeypair.sign(payload);
-
-        // Build Ed25519 signature format
-        const sigEntry = new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("public_key"),
-          val: xdr.ScVal.scvBytes(tempKeypair.rawPublicKey()),
-        });
-        const sigEntrySignature = new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("signature"),
-          val: xdr.ScVal.scvBytes(signature),
-        });
-
-        credentials.signature(
-          xdr.ScVal.scvVec([xdr.ScVal.scvMap([sigEntry, sigEntrySignature])])
-        );
-
-        signedAuthEntries.push(entry);
-      }
-
-      // Get fresh account
-      sourceAccount = await this.rpc.getAccount(tempKeypair.publicKey());
-
-      // Get the invoke host function from simulation
-      const invokeHostFn = simulationTx.operations[0] as Operation.InvokeHostFunction;
-
-      // Build transaction with signed auth entries
-      const txWithAuth = new TransactionBuilder(sourceAccount, {
-        fee: BASE_FEE,
-        networkPassphrase: this.networkPassphrase,
-      })
-        .addOperation(
-          Operation.invokeHostFunction({
-            func: invokeHostFn.func,
-            auth: signedAuthEntries,
-          })
-        )
-        .setTimeout(30)
-        .build();
-
-      // Convert to XDR and back to normalize the Transaction type
-      // This is needed because bundlers (Vite) may create multiple SDK instances
-      const txWithAuthXdr = txWithAuth.toXDR();
-      const normalizedTxWithAuth = TransactionBuilder.fromXDR(txWithAuthXdr, this.networkPassphrase);
-
-      // Use SDK's assembleTransaction to apply fees and soroban data
-      const preparedTx = assembleTransaction(normalizedTxWithAuth as Transaction, simResult).build();
-
-      // Sign with temp keypair if not using fee sponsoring, or if tx has source_account auth
-      // (source_account auth requires envelope signature; Address auth has signature in entry)
-      const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-      if (!this.shouldUseFeeSponsoring(submissionOpts) || this.hasSourceAccountAuth(preparedTx)) {
-        preparedTx.sign(tempKeypair);
-      }
-
-      // Submit and poll for confirmation
-      const txResult = await this.sendAndPoll(preparedTx, submissionOpts);
-
-      return {
-        ...txResult,
-        amount: txResult.success ? transferAmount : undefined,
-      };
-    } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
-    }
+        timeoutInSeconds: this.timeoutInSeconds,
+        shouldUseFeeSponsoring: (submissionOptions) =>
+          this.shouldUseFeeSponsoring(submissionOptions),
+        hasSourceAccountAuth: (preparedTx) => this.hasSourceAccountAuth(preparedTx),
+        sendAndPoll: (preparedTx, submissionOptions) =>
+          this.sendAndPoll(preparedTx, submissionOptions),
+      },
+      nativeTokenContract,
+      options
+    );
   }
 
   /**
@@ -1881,84 +1066,26 @@ export class SmartAccountKit {
       forceMethod?: SubmissionMethod;
     }
   ): Promise<TransactionResult> {
-    if (!this._contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet" };
-    }
-
-    // Validate inputs
-    try {
-      validateAddress(tokenContract, "tokenContract");
-      validateAddress(recipient, "recipient");
-      validateAmount(amount, "amount");
-    } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Validation failed",
-      };
-    }
-
-    // Prevent self-transfer
-    if (recipient === this._contractId) {
-      return {
-        success: false,
-        hash: "",
-        error: "Cannot transfer to self",
-      };
-    }
-
-    try {
-      // Convert amount to stroops (7 decimal places for XLM/SAC tokens)
-      const amountInStroops = xlmToStroops(amount);
-
-      // Build the transfer host function
-      const tokenAddress = Address.fromString(tokenContract);
-      const fromAddress = Address.fromString(this._contractId);
-      const toAddress = Address.fromString(recipient);
-
-      const hostFunc = xdr.HostFunction.hostFunctionTypeInvokeContract(
-        new xdr.InvokeContractArgs({
-          contractAddress: tokenAddress.toScAddress(),
-          functionName: "transfer",
-          args: [
-            xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-            xdr.ScVal.scvAddress(toAddress.toScAddress()),
-            xdr.ScVal.scvI128(
-              new xdr.Int128Parts({
-                lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
-                hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-              })
-            ),
-          ],
-        })
-      );
-
-      // Initial simulation to get auth entries
-      const { authEntries } = await this.simulateHostFunction(hostFunc);
-
-      // Sign, re-simulate, and prepare the transaction
-      const preparedTx = await this.signResimulateAndPrepare(
-        hostFunc,
-        authEntries,
-        { credentialId: options?.credentialId }
-      );
-
-      // Sign with deployer keypair if not using fee sponsoring, or if tx has source_account auth
-      // (source_account auth requires envelope signature; Address auth has signature in entry)
-      const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-      if (!this.shouldUseFeeSponsoring(submissionOpts) || this.hasSourceAccountAuth(preparedTx)) {
-        preparedTx.sign(this.deployerKeypair);
-      }
-
-      // Submit and poll for confirmation
-      return this.sendAndPoll(preparedTx, submissionOpts);
-    } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
-    }
+    return transfer(
+      {
+        getContractId: () => this._contractId,
+        rpc: this.rpc,
+        networkPassphrase: this.networkPassphrase,
+        timeoutInSeconds: this.timeoutInSeconds,
+        deployerKeypair: this.deployerKeypair,
+        shouldUseFeeSponsoring: (submissionOptions) =>
+          this.shouldUseFeeSponsoring(submissionOptions),
+        hasSourceAccountAuth: (preparedTx) => this.hasSourceAccountAuth(preparedTx),
+        sendAndPoll: (preparedTx, submissionOptions) =>
+          this.sendAndPoll(preparedTx, submissionOptions),
+        signResimulateAndPrepare: (hostFunc, authEntries, signOptions) =>
+          this.signResimulateAndPrepare(hostFunc, authEntries, signOptions),
+      },
+      tokenContract,
+      recipient,
+      amount,
+      options
+    );
   }
 
   // ==========================================================================
@@ -1977,62 +1104,7 @@ export class SmartAccountKit {
    * @internal
    */
   private hasSourceAccountAuth(transaction: Transaction): boolean {
-    for (const op of transaction.operations) {
-      if (op.type !== "invokeHostFunction") continue;
-
-      const invokeOp = op as Operation.InvokeHostFunction;
-      if (!invokeOp.auth) continue;
-
-      for (const entry of invokeOp.auth) {
-        if (entry.credentials().switch().name === "sorobanCredentialsSourceAccount") {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Find the full key_data for an External signer by matching credential ID suffix.
-   *
-   * This method looks up on-chain context rules to find a signer whose key_data
-   * ends with the given credential ID. The key_data format is:
-   * pubkey (65 bytes) + credentialId (variable bytes)
-   *
-   * @param credentialId - The credential ID to search for
-   * @returns The full key_data buffer (pubkey + credentialId)
-   * @throws If no matching signer is found
-   * @internal
-   */
-  private async findKeyDataByCredentialId(credentialId: Buffer): Promise<Buffer> {
-    const { wallet } = this.requireWallet();
-
-    // Get default context rules (most common case for primary signers)
-    const rulesResult = await wallet.get_context_rules({
-      context_rule_type: { tag: "Default", values: undefined },
-    });
-    const rules = rulesResult.result;
-
-    // Iterate through all rules and signers to find matching credential ID suffix
-    for (const rule of rules) {
-      for (const signer of rule.signers) {
-        if (signer.tag === "External") {
-          // External signer has 2 values: [verifierAddress, keyData]
-          const keyData = signer.values[1] as Buffer;
-          if (keyData.length > SECP256R1_PUBLIC_KEY_SIZE) {
-            // key_data format: pubkey (65 bytes) + credentialId (variable bytes)
-            const suffix = keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
-            if (suffix.equals(credentialId)) {
-              return keyData;
-            }
-          }
-        }
-      }
-    }
-
-    throw new Error(
-      `No signer found for credential ID: ${credentialId.toString("base64")}`
-    );
+    return hasSourceAccountAuth(transaction);
   }
 
   /**
@@ -2041,30 +1113,15 @@ export class SmartAccountKit {
   private async simulateHostFunction(
     hostFunc: xdr.HostFunction
   ): Promise<{ authEntries: xdr.SorobanAuthorizationEntry[] }> {
-    const sourceAccount = await this.rpc.getAccount(this.deployerKeypair.publicKey());
-
-    const simulationTx = new TransactionBuilder(sourceAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        Operation.invokeHostFunction({
-          func: hostFunc,
-          auth: [],
-        })
-      )
-      .setTimeout(this.timeoutInSeconds)
-      .build();
-
-    const simResult = await this.rpc.simulateTransaction(simulationTx);
-
-    if ("error" in simResult) {
-      throw new Error(`Simulation failed: ${simResult.error}`);
-    }
-
-    return {
-      authEntries: simResult.result?.auth || [],
-    };
+    return simulateHostFunction(
+      {
+        rpc: this.rpc,
+        networkPassphrase: this.networkPassphrase,
+        timeoutInSeconds: this.timeoutInSeconds,
+        deployerKeypair: this.deployerKeypair,
+      },
+      hostFunc
+    );
   }
 
   /**
@@ -2086,48 +1143,18 @@ export class SmartAccountKit {
       expiration?: number;
     }
   ): Promise<Transaction> {
-    // Sign all auth entries with passkey
-    const signedAuthEntries: xdr.SorobanAuthorizationEntry[] = [];
-    for (const authEntry of authEntries) {
-      const signedEntry = await this.signAuthEntry(authEntry, {
-        credentialId: options?.credentialId,
-        expiration: options?.expiration,
-      });
-      signedAuthEntries.push(signedEntry);
-    }
-
-    // Re-simulate with signed auth entries to get accurate resource requirements
-    // WebAuthn signatures include authenticator_data, client_data, and signature
-    // which are much larger than the empty placeholders from initial simulation
-    const sourceAccount = await this.rpc.getAccount(this.deployerKeypair.publicKey());
-
-    const resimTx = new TransactionBuilder(sourceAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: this.networkPassphrase,
-    })
-      .addOperation(
-        Operation.invokeHostFunction({
-          func: hostFunc,
-          auth: signedAuthEntries,
-        })
-      )
-      .setTimeout(this.timeoutInSeconds)
-      .build();
-
-    const resimResult = await this.rpc.simulateTransaction(resimTx);
-
-    if ("error" in resimResult) {
-      throw new Error(`Re-simulation failed: ${resimResult.error}`);
-    }
-
-    // Convert to XDR and back to normalize the Transaction type
-    // This is needed because bundlers (Vite) may create multiple SDK instances
-    const resimTxXdr = resimTx.toXDR();
-    const normalizedTx = TransactionBuilder.fromXDR(resimTxXdr, this.networkPassphrase);
-
-    // Use SDK's assembleTransaction to apply fees and soroban data
-    const assembled = assembleTransaction(normalizedTx as Transaction, resimResult);
-    return assembled.build() as Transaction;
+    return signResimulateAndPrepare(
+      {
+        rpc: this.rpc,
+        networkPassphrase: this.networkPassphrase,
+        timeoutInSeconds: this.timeoutInSeconds,
+        deployerKeypair: this.deployerKeypair,
+        signAuthEntry: (entry, signOptions) => this.signAuthEntry(entry, signOptions),
+      },
+      hostFunc,
+      authEntries,
+      options
+    );
   }
 
   /**
@@ -2141,17 +1168,7 @@ export class SmartAccountKit {
    * @returns The submission method to use
    */
   private getSubmissionMethod(options?: SubmissionOptions): SubmissionMethod {
-    // Handle forced method
-    if (options?.forceMethod) {
-      return options.forceMethod;
-    }
-
-    // Priority order: Relayer → RPC
-    if (this.relayer) {
-      return "relayer";
-    }
-
-    return "rpc";
+    return getSubmissionMethod(this.relayer, options);
   }
 
   /**
@@ -2160,16 +1177,7 @@ export class SmartAccountKit {
    * envelope signature is generally not required (unless source_account auth is present).
    */
   private shouldUseFeeSponsoring(options?: SubmissionOptions): boolean {
-    const method = this.getSubmissionMethod(options);
-    return method === "relayer";
-  }
-
-  /**
-   * Check if Relayer should be used for this submission.
-   */
-  private shouldUseRelayer(options?: SubmissionOptions): boolean {
-    const method = this.getSubmissionMethod(options);
-    return method === "relayer";
+    return shouldUseFeeSponsoring(this.relayer, options);
   }
 
   /**
@@ -2187,105 +1195,11 @@ export class SmartAccountKit {
     transaction: Transaction,
     options?: SubmissionOptions
   ): Promise<TransactionResult> {
-    const method = this.getSubmissionMethod(options);
-    let hash: string;
-
-    // Submit using the appropriate method
-    switch (method) {
-      case "relayer": {
-        if (!this.relayer) {
-          return {
-            success: false,
-            hash: "",
-            error: "Relayer is not configured",
-          };
-        }
-
-        // Extract func and auth from the transaction
-        // Relayer always uses func + auth format, never full XDR
-        const operations = transaction.operations;
-        if (operations.length !== 1) {
-          return {
-            success: false,
-            hash: "",
-            error: "Relayer requires exactly one invokeHostFunction operation",
-          };
-        }
-
-        const op = operations[0];
-        if (op.type !== "invokeHostFunction") {
-          return {
-            success: false,
-            hash: "",
-            error: "Relayer only supports invokeHostFunction operations",
-          };
-        }
-
-        const invokeOp = op as Operation.InvokeHostFunction;
-
-        // Convert func and auth to base64 XDR
-        const funcXdr = invokeOp.func.toXDR("base64");
-        const authXdrs = (invokeOp.auth ?? []).map((entry) => entry.toXDR("base64"));
-
-        const relayerResult = await this.relayer.send(funcXdr, authXdrs);
-
-        if (!relayerResult.success) {
-          return {
-            success: false,
-            hash: "",
-            error: relayerResult.error ?? "Relayer submission failed",
-          };
-        }
-
-        hash = relayerResult.hash ?? "";
-        break;
-      }
-
-      case "rpc":
-      default: {
-        // Submit directly via RPC
-        const sendResult = await this.rpc.sendTransaction(transaction);
-
-        if (sendResult.status === "ERROR") {
-          return {
-            success: false,
-            hash: sendResult.hash,
-            error: sendResult.errorResult?.toXDR("base64") ?? "Transaction submission failed",
-          };
-        }
-
-        hash = sendResult.hash;
-        break;
-      }
-    }
-
-    // Use SDK's built-in pollTransaction with linear backoff
-    const txResult = await this.rpc.pollTransaction(hash, {
-      attempts: 10,
-    });
-
-    if (txResult.status === "SUCCESS") {
-      return {
-        success: true,
-        hash,
-        ledger: txResult.ledger,
-      };
-    }
-
-    if (txResult.status === "FAILED") {
-      return {
-        success: false,
-        hash,
-        error: "Transaction failed on-chain",
-      };
-    }
-
-    // Still NOT_FOUND after polling
-    return {
-      success: false,
-      hash,
-      error: "Transaction confirmation timed out",
-    };
+    return sendAndPoll(
+      { rpc: this.rpc, relayer: this.relayer },
+      transaction,
+      options
+    );
   }
 
   /**
@@ -2293,94 +1207,23 @@ export class SmartAccountKit {
    * Returns an AssembledTransaction that can be signed and sent
    */
   private async buildDeployTransaction(
-    contractId: string,
     credentialId: Buffer,
     publicKey: Uint8Array
   ) {
-    // Build the signer for the contract
-    // External signer: (verifier_address, key_data)
-    // key_data = pubkey (65 bytes) + credentialId (variable bytes)
-    const keyData = buildKeyData(publicKey, credentialId);
-    const signer: ContractSigner = {
-      tag: "External",
-      values: [
-        this.webauthnVerifierAddress, // verifier address
-        keyData, // key_data (65-byte public key + credential ID)
-      ],
-    };
-
-    // Deploy the contract using the generated bindings
-    return SmartAccountClient.deploy(
+    return buildDeployTransaction(
       {
-        signers: [signer],
-        policies: new Map(), // No default policies
-      },
-      {
+        accountWasmHash: this.accountWasmHash,
+        webauthnVerifierAddress: this.webauthnVerifierAddress,
         networkPassphrase: this.networkPassphrase,
         rpcUrl: this.rpcUrl,
-        wasmHash: this.accountWasmHash,
-        publicKey: this.deployerKeypair.publicKey(),
-        salt: hash(credentialId), // Deterministic salt from credential ID
+        deployerKeypair: this.deployerKeypair,
         timeoutInSeconds: this.timeoutInSeconds,
-      }
+      },
+      credentialId,
+      publicKey
     );
   }
 
-  /**
-   * Build a signature map entry for the contract
-   *
-   * Encodes a SignerId and WebAuthn signature data into an XDR ScMapEntry
-   * that can be added to the authorization signature map.
-   */
-  private buildSignatureMapEntry(
-    signerId: ContractSignerId,
-    sigData: WebAuthnSigData
-  ): xdr.ScMapEntry {
-    // Encode the SignerId as the key
-    let keyVal: xdr.ScVal;
-    if (signerId.tag === "Delegated") {
-      // Delegated(Address)
-      keyVal = xdr.ScVal.scvVec([
-        xdr.ScVal.scvSymbol("Delegated"),
-        xdr.ScVal.scvAddress(Address.fromString(signerId.values[0]).toScAddress()),
-      ]);
-    } else {
-      // External(Address, Bytes) = (verifier, key_data)
-      // key_data = pubkey (65 bytes) + credentialId (variable bytes)
-      keyVal = xdr.ScVal.scvVec([
-        xdr.ScVal.scvSymbol("External"),
-        xdr.ScVal.scvAddress(Address.fromString(signerId.values[0]).toScAddress()),
-        xdr.ScVal.scvBytes(signerId.values[1]),
-      ]);
-    }
-
-    // Encode the WebAuthnSigData struct as XDR bytes.
-    // The verifier contract expects sig_data as Bytes containing XDR-encoded WebAuthnSigData.
-    // Soroban structs are encoded as ScVal::Map with alphabetically sorted symbol keys.
-    const sigDataScVal = xdr.ScVal.scvMap([
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("authenticator_data"),
-        val: xdr.ScVal.scvBytes(sigData.authenticator_data),
-      }),
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("client_data"),
-        val: xdr.ScVal.scvBytes(sigData.client_data),
-      }),
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("signature"),
-        val: xdr.ScVal.scvBytes(sigData.signature),
-      }),
-    ]);
-
-    // XDR-encode the ScVal and wrap in scvBytes for the signature map value
-    const sigDataXdrBytes = sigDataScVal.toXDR();
-    const sigVal = xdr.ScVal.scvBytes(sigDataXdrBytes);
-
-    return new xdr.ScMapEntry({
-      key: keyVal,
-      val: sigVal,
-    });
-  }
 
   // ==========================================================================
   // Multi-Signer Operations (private - access via kit.multiSigners.*)
@@ -2397,325 +1240,28 @@ export class SmartAccountKit {
     selectedSigners: SelectedSigner[],
     options?: MultiSignerOptions & { forceMethod?: SubmissionMethod }
   ): Promise<TransactionResult> {
-    const onLog = options?.onLog ?? (() => {});
-
-    if (!this._contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet" };
-    }
-
-    // Separate passkey and wallet signers
-    const passkeySigners = selectedSigners.filter((s) => s.type === "passkey");
-    const walletSigners = selectedSigners.filter((s) => s.type === "wallet");
-
-    onLog(`Signing with ${passkeySigners.length} passkey(s) and ${walletSigners.length} wallet(s)`);
-
-    // Validate that we can sign for all required wallet addresses
-    for (const walletSigner of walletSigners) {
-      if (!walletSigner.walletAddress) continue;
-      if (!this.externalSigners.canSignFor(walletSigner.walletAddress)) {
-        return {
-          success: false,
-          hash: "",
-          error: `No signer available for address: ${walletSigner.walletAddress}. ` +
-            `Use kit.externalSigners.addFromSecret() or kit.externalSigners.addFromWallet() to add a signer.`,
-        };
-      }
-    }
-
-    try {
-      // Convert amount to stroops (7 decimal places)
-      const amountInStroops = BigInt(Math.round(amount * 10_000_000));
-
-      // Build the transfer host function
-      const tokenAddress = Address.fromString(tokenContract);
-      const fromAddress = Address.fromString(this._contractId);
-      const toAddress = Address.fromString(recipient);
-
-      const hostFunc = xdr.HostFunction.hostFunctionTypeInvokeContract(
-        new xdr.InvokeContractArgs({
-          contractAddress: tokenAddress.toScAddress(),
-          functionName: "transfer",
-          args: [
-            xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-            xdr.ScVal.scvAddress(toAddress.toScAddress()),
-            xdr.ScVal.scvI128(
-              new xdr.Int128Parts({
-                lo: xdr.Uint64.fromString(
-                  (amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()
-                ),
-                hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-              })
-            ),
-          ],
-        })
-      );
-
-      // Initial simulation
-      onLog("Simulating transaction...");
-      const sourceAccount = await this.rpc.getAccount(this.deployerPublicKey);
-
-      const simulationTx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_FEE,
+    return multiSignersTransfer(
+      {
+        getContractId: () => this._contractId,
+        externalSigners: this.externalSigners,
+        rpc: this.rpc,
         networkPassphrase: this.networkPassphrase,
-      })
-        .addOperation(
-          Operation.invokeHostFunction({
-            func: hostFunc,
-            auth: [],
-          })
-        )
-        .setTimeout(this.timeoutInSeconds)
-        .build();
-
-      const simResult = await this.rpc.simulateTransaction(simulationTx);
-
-      if ("error" in simResult) {
-        return { success: false, hash: "", error: `Simulation failed: ${simResult.error}` };
-      }
-
-      const authEntries = simResult.result?.auth || [];
-      onLog(`Found ${authEntries.length} auth entries to sign`);
-
-      // Process each auth entry
-      const signedAuthEntries: xdr.SorobanAuthorizationEntry[] = [];
-      const { sequence } = await this.rpc.getLatestLedger();
-      const expiration = sequence + 100;
-
-      for (const entry of authEntries) {
-        // Check if this is for the smart account or a delegated signer
-        const credentials = entry.credentials();
-
-        if (credentials.switch().name !== "sorobanCredentialsAddress") {
-          // Not an address credential, pass through
-          signedAuthEntries.push(entry);
-          continue;
-        }
-
-        const addressCreds = credentials.address();
-        const authAddress = Address.fromScAddress(addressCreds.address()).toString();
-
-        if (authAddress === this._contractId) {
-          // This is the smart account's auth entry - sign with ALL selected signers
-          let signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-          signedEntry.credentials().address().signatureExpirationLedger(expiration);
-
-          // Sign with ALL selected passkeys
-          for (let i = 0; i < passkeySigners.length; i++) {
-            const passkeySigner = passkeySigners[i];
-            onLog(`Signing smart account auth entry with passkey ${i + 1}/${passkeySigners.length}...`);
-            const credentialId = passkeySigner?.credentialId;
-            signedEntry = await this.signAuthEntry(signedEntry, { credentialId, expiration });
-          }
-
-          // Add the delegated signers to the smart account's signature map
-          for (const walletSigner of walletSigners) {
-            if (!walletSigner.walletAddress) continue;
-
-            const delegatedSignerKey = xdr.ScVal.scvVec([
-              xdr.ScVal.scvSymbol("Delegated"),
-              xdr.ScVal.scvAddress(Address.fromString(walletSigner.walletAddress).toScAddress()),
-            ]);
-
-            const ourSig = signedEntry.credentials().address().signature();
-            const emptyBytes = xdr.ScVal.scvBytes(Buffer.alloc(0));
-
-            if (ourSig.switch().name === "scvVoid") {
-              signedEntry.credentials().address().signature(
-                xdr.ScVal.scvVec([
-                  xdr.ScVal.scvMap([
-                    new xdr.ScMapEntry({ key: delegatedSignerKey, val: emptyBytes }),
-                  ]),
-                ])
-              );
-            } else {
-              const sigMap = ourSig.vec()?.[0].map();
-              if (sigMap) {
-                sigMap.push(new xdr.ScMapEntry({ key: delegatedSignerKey, val: emptyBytes }));
-                sigMap.sort((a, b) => a.key().toXDR("hex").localeCompare(b.key().toXDR("hex")));
-              }
-            }
-          }
-
-          signedAuthEntries.push(signedEntry);
-
-          // Create SEPARATE auth entries for each delegated signer
-          const smartAccountPreimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-            new xdr.HashIdPreimageSorobanAuthorization({
-              networkId: hash(Buffer.from(this.networkPassphrase)),
-              nonce: signedEntry.credentials().address().nonce(),
-              signatureExpirationLedger: expiration,
-              invocation: signedEntry.rootInvocation(),
-            })
-          );
-          const signaturePayload = hash(smartAccountPreimage.toXDR());
-
-          for (const walletSigner of walletSigners) {
-            if (!walletSigner.walletAddress) continue;
-
-            onLog(`Getting delegated auth from ${walletSigner.walletAddress.slice(0, 8)}...`);
-
-            const delegatedNonce = xdr.Int64.fromString(Date.now().toString());
-
-            const delegatedInvocation = new xdr.SorobanAuthorizedInvocation({
-              function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(
-                new xdr.InvokeContractArgs({
-                  contractAddress: Address.fromString(this._contractId!).toScAddress(),
-                  functionName: "__check_auth",
-                  args: [xdr.ScVal.scvBytes(signaturePayload)],
-                })
-              ),
-              subInvocations: [],
-            });
-
-            const delegatedPreimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-              new xdr.HashIdPreimageSorobanAuthorization({
-                networkId: hash(Buffer.from(this.networkPassphrase)),
-                nonce: delegatedNonce,
-                signatureExpirationLedger: expiration,
-                invocation: delegatedInvocation,
-              })
-            );
-            const delegatedPreimageXdr = delegatedPreimage.toXDR("base64");
-
-            // Sign with the internal external signer manager
-            const { signedAuthEntry: walletSignatureBase64 } = await this.externalSigners.signAuthEntry(
-              delegatedPreimageXdr,
-              walletSigner.walletAddress!
-            );
-
-            const signatureBytes = Buffer.from(walletSignatureBase64, "base64");
-            const walletPublicKeyBytes = Address.fromString(walletSigner.walletAddress)
-              .toScAddress()
-              .accountId()
-              .ed25519();
-
-            const signatureScVal = xdr.ScVal.scvVec([
-              xdr.ScVal.scvMap([
-                new xdr.ScMapEntry({
-                  key: xdr.ScVal.scvSymbol("public_key"),
-                  val: xdr.ScVal.scvBytes(walletPublicKeyBytes),
-                }),
-                new xdr.ScMapEntry({
-                  key: xdr.ScVal.scvSymbol("signature"),
-                  val: xdr.ScVal.scvBytes(signatureBytes),
-                }),
-              ]),
-            ]);
-
-            const walletSignedEntry = new xdr.SorobanAuthorizationEntry({
-              credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(
-                new xdr.SorobanAddressCredentials({
-                  address: Address.fromString(walletSigner.walletAddress).toScAddress(),
-                  nonce: delegatedNonce,
-                  signatureExpirationLedger: expiration,
-                  signature: signatureScVal,
-                })
-              ),
-              rootInvocation: delegatedInvocation,
-            });
-            signedAuthEntries.push(walletSignedEntry);
-          }
-        } else {
-          // This auth entry is for an address OTHER than the smart account
-          const walletSigner = walletSigners.find(
-            (s) => s.walletAddress === authAddress
-          );
-
-          if (walletSigner && this.externalSigners.canSignFor(authAddress)) {
-            onLog(`Signing separate auth entry for ${authAddress.slice(0, 8)}...`);
-
-            const entryClone = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-            entryClone.credentials().address().signatureExpirationLedger(expiration);
-
-            const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-              new xdr.HashIdPreimageSorobanAuthorization({
-                networkId: hash(Buffer.from(this.networkPassphrase)),
-                nonce: entryClone.credentials().address().nonce(),
-                signatureExpirationLedger: expiration,
-                invocation: entryClone.rootInvocation(),
-              })
-            );
-            const preimageXdr = preimage.toXDR("base64");
-
-            const { signedAuthEntry: signatureBase64 } = await this.externalSigners.signAuthEntry(
-              preimageXdr,
-              authAddress
-            );
-
-            const signatureBytes = Buffer.from(signatureBase64, "base64");
-            const publicKeyBytes = Address.fromString(authAddress)
-              .toScAddress()
-              .accountId()
-              .ed25519();
-
-            const signatureScVal = xdr.ScVal.scvVec([
-              xdr.ScVal.scvMap([
-                new xdr.ScMapEntry({
-                  key: xdr.ScVal.scvSymbol("public_key"),
-                  val: xdr.ScVal.scvBytes(publicKeyBytes),
-                }),
-                new xdr.ScMapEntry({
-                  key: xdr.ScVal.scvSymbol("signature"),
-                  val: xdr.ScVal.scvBytes(signatureBytes),
-                }),
-              ]),
-            ]);
-
-            entryClone.credentials().address().signature(signatureScVal);
-            signedAuthEntries.push(entryClone);
-          } else {
-            onLog(`Warning: Unknown auth entry for ${authAddress}`, "error");
-            signedAuthEntries.push(entry);
-          }
-        }
-      }
-
-      // Re-simulate with signed auth entries
-      onLog("Re-simulating with signatures...");
-      const freshSourceAccount = await this.rpc.getAccount(this.deployerPublicKey);
-
-      const resimTx = new TransactionBuilder(freshSourceAccount, {
-        fee: BASE_FEE,
-        networkPassphrase: this.networkPassphrase,
-      })
-        .addOperation(
-          Operation.invokeHostFunction({
-            func: hostFunc,
-            auth: signedAuthEntries,
-          })
-        )
-        .setTimeout(this.timeoutInSeconds)
-        .build();
-
-      const resimResult = await this.rpc.simulateTransaction(resimTx);
-
-      if ("error" in resimResult) {
-        return { success: false, hash: "", error: `Re-simulation failed: ${resimResult.error}` };
-      }
-
-      // Assemble and prepare the transaction
-      const resimTxXdr = resimTx.toXDR();
-      const normalizedTx = TransactionBuilder.fromXDR(resimTxXdr, this.networkPassphrase);
-      const assembled = assembleTransaction(normalizedTx as Transaction, resimResult);
-      const preparedTx = assembled.build() as Transaction;
-
-      // Sign with deployer keypair if not using fee sponsoring, or if tx has source_account auth
-      // (source_account auth requires envelope signature; Address auth has signature in entry)
-      const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-      if (!this.shouldUseFeeSponsoring(submissionOpts) || this.hasSourceAccountAuth(preparedTx)) {
-        preparedTx.sign(this.deployerKeypair);
-      }
-
-      // Submit
-      onLog("Submitting transaction...");
-      return this.sendAndPoll(preparedTx, submissionOpts);
-    } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
-    }
+        timeoutInSeconds: this.timeoutInSeconds,
+        deployerKeypair: this.deployerKeypair,
+        deployerPublicKey: this.deployerPublicKey,
+        signAuthEntry: (entry, signOptions) => this.signAuthEntry(entry, signOptions),
+        shouldUseFeeSponsoring: (submissionOptions) =>
+          this.shouldUseFeeSponsoring(submissionOptions),
+        hasSourceAccountAuth: (preparedTx) => this.hasSourceAccountAuth(preparedTx),
+        sendAndPoll: (preparedTx, submissionOptions) =>
+          this.sendAndPoll(preparedTx, submissionOptions),
+      },
+      tokenContract,
+      recipient,
+      amount,
+      selectedSigners,
+      options
+    );
   }
 
   // ==========================================================================
@@ -2753,53 +1299,7 @@ export class SmartAccountKit {
     policyType: "threshold" | "spending_limit" | "weighted_threshold",
     params: unknown
   ): unknown {
-    if (!this.wallet) {
-      // No wallet connected - return params as-is
-      return params;
-    }
-
-    // Map policy types to their UDT names in the contract spec
-    const udtNames: Record<string, string> = {
-      threshold: "SimpleThresholdAccountParams",
-      spending_limit: "SpendingLimitAccountParams",
-      weighted_threshold: "WeightedThresholdAccountParams",
-    };
-
-    const udtName = udtNames[policyType];
-    if (!udtName) {
-      return params;
-    }
-
-    try {
-      // Create UDT type definition
-      const udtType = xdr.ScSpecTypeDef.scSpecTypeUdt(
-        new xdr.ScSpecTypeUdt({ name: udtName })
-      );
-
-      // Use the contract spec to convert native JS object to ScVal
-      // The spec is accessible on the ContractClient as an internal property
-      const walletObj = this.wallet as unknown as Record<string, unknown>;
-      const spec = walletObj.spec as { nativeToScVal?: (val: unknown, type: xdr.ScSpecTypeDef) => xdr.ScVal } | undefined;
-      if (spec && typeof spec.nativeToScVal === "function") {
-        const scVal = spec.nativeToScVal(params, udtType);
-        // Ensure ScMap entries are sorted by key (Soroban requirement)
-        if (scVal.switch().name === "scvMap" && scVal.map()) {
-          scVal.map()?.sort((a, b) => {
-            // Sort by symbol name (for struct fields)
-            const aKey = a.key().switch().name === "scvSymbol" ? a.key().sym().toString() : a.key().toXDR("hex");
-            const bKey = b.key().switch().name === "scvSymbol" ? b.key().sym().toString() : b.key().toXDR("hex");
-            return aKey.localeCompare(bKey);
-          });
-        }
-        return scVal;
-      }
-      // Spec not available, fall back to raw params
-      return params;
-    } catch (error) {
-      // Fall back to raw params if conversion fails
-      console.warn("[SmartAccountKit] Failed to convert policy params to ScVal:", error);
-      return params;
-    }
+    return convertPolicyParams(this.wallet, policyType, params);
   }
 
   /**
@@ -2816,52 +1316,6 @@ export class SmartAccountKit {
     policies: Map<string, unknown>,
     policyTypes: Map<string, "threshold" | "spending_limit" | "weighted_threshold" | "custom">
   ): xdr.ScVal {
-    if (!this.wallet) {
-      throw new Error("Wallet not connected");
-    }
-
-    // Convert each policy to ScMapEntry
-    const entries: xdr.ScMapEntry[] = [];
-
-    for (const [address, params] of policies) {
-      // Convert address to ScAddress
-      const scAddress = new Address(address).toScVal();
-
-      // Convert params to ScVal
-      const policyType = policyTypes.get(address);
-      let scParams: xdr.ScVal;
-
-      if (policyType && policyType !== "custom") {
-        const converted = this.convertPolicyParams(policyType, params);
-        scParams = converted instanceof xdr.ScVal ? converted : xdr.ScVal.scvVoid();
-      } else {
-        // For custom policies, try to use nativeToScVal directly
-        const walletObj = this.wallet as unknown as Record<string, unknown>;
-        const spec = walletObj.spec as { nativeToScVal?: (val: unknown, type: xdr.ScSpecTypeDef) => xdr.ScVal } | undefined;
-        if (spec && typeof spec.nativeToScVal === "function") {
-          try {
-            scParams = spec.nativeToScVal(params, xdr.ScSpecTypeDef.scSpecTypeVal());
-          } catch {
-            scParams = xdr.ScVal.scvVoid();
-          }
-        } else {
-          scParams = xdr.ScVal.scvVoid();
-        }
-      }
-
-      entries.push(new xdr.ScMapEntry({
-        key: scAddress,
-        val: scParams,
-      }));
-    }
-
-    // Sort entries by key (ScAddress XDR comparison)
-    entries.sort((a, b) => {
-      const aXdr = a.key().toXDR("hex");
-      const bXdr = b.key().toXDR("hex");
-      return aXdr.localeCompare(bXdr);
-    });
-
-    return xdr.ScVal.scvMap(entries);
+    return buildPoliciesScVal(this.wallet, policies, policyTypes);
   }
 }

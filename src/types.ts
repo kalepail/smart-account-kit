@@ -183,21 +183,21 @@ export interface SmartAccountConfig {
    * });
    *
    * // Discover all contracts for a credential ID
-   * const contracts = await kit.discoverContracts(credentialId);
+   * const contracts = await kit.discoverContractsByCredential(credentialId);
    * ```
    */
   indexerUrl?: string | false;
 
   /**
    * Optional Relayer proxy URL for fee-sponsored transaction submission.
-   * When configured, transactions are POSTed to this URL instead of
-   * submitted directly to the RPC, allowing for gasless transactions.
+   * When configured, the SDK posts `{ func, auth }` for invokeHostFunction
+   * flows and `{ xdr }` for signed transactions, enabling gasless submissions.
    *
    * @example
    * ```typescript
    * const kit = new SmartAccountKit({
    *   // ... other config
-   *   relayerUrl: 'https://my-relayer-proxy.example.com/submit',
+   *   relayerUrl: 'https://my-relayer-proxy.example.com',
    * });
    *
    * // Transactions will automatically use the Relayer if configured

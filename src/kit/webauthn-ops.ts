@@ -10,6 +10,7 @@ import type { StorageAdapter } from "../types";
 import type {
   Client as SmartAccountClient,
   Signer as ContractSigner,
+  ContextRuleType,
   WebAuthnSigData,
 } from "smart-account-kit-bindings";
 import { WEBAUTHN_TIMEOUT_MS, SECP256R1_PUBLIC_KEY_SIZE } from "../constants";
@@ -151,7 +152,12 @@ export async function signAuthEntry(
   const compactedSignature = compactSignature(rawSignature);
 
   const credentialIdBuffer = base64url.toBuffer(authResponse.id);
-  const keyData = await findKeyDataByCredentialId(deps.requireWallet, credentialIdBuffer);
+  const contextRuleTypes = buildContextRuleTypes(normalizedEntry);
+  const keyData = await findKeyDataByCredentialId(
+    deps.requireWallet,
+    credentialIdBuffer,
+    contextRuleTypes
+  );
 
   const signerId: ContractSignerId = {
     tag: "External",
@@ -194,23 +200,26 @@ export async function signAuthEntry(
 
 async function findKeyDataByCredentialId(
   requireWallet: RequireWallet,
-  credentialId: Buffer
+  credentialId: Buffer,
+  contextRuleTypes: ContextRuleType[]
 ): Promise<Buffer> {
   const { wallet } = requireWallet();
 
-  const rulesResult = await wallet.get_context_rules({
-    context_rule_type: { tag: "Default", values: undefined },
-  });
-  const rules = rulesResult.result;
+  for (const contextRuleType of contextRuleTypes) {
+    const rulesResult = await wallet.get_context_rules({
+      context_rule_type: contextRuleType,
+    });
+    const rules = rulesResult.result;
 
-  for (const rule of rules) {
-    for (const signer of rule.signers) {
-      if (signer.tag === "External") {
-        const keyData = signer.values[1] as Buffer;
-        if (keyData.length > SECP256R1_PUBLIC_KEY_SIZE) {
-          const suffix = keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
-          if (suffix.equals(credentialId)) {
-            return keyData;
+    for (const rule of rules) {
+      for (const signer of rule.signers) {
+        if (signer.tag === "External") {
+          const keyData = signer.values[1] as Buffer;
+          if (keyData.length > SECP256R1_PUBLIC_KEY_SIZE) {
+            const suffix = keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
+            if (suffix.equals(credentialId)) {
+              return keyData;
+            }
           }
         }
       }
@@ -220,6 +229,97 @@ async function findKeyDataByCredentialId(
   throw new Error(
     `No signer found for credential ID: ${credentialId.toString("base64")}`
   );
+}
+
+function buildContextRuleTypes(
+  entry: xdr.SorobanAuthorizationEntry
+): ContextRuleType[] {
+  const types: ContextRuleType[] = [];
+  const seen = new Set<string>();
+
+  const add = (type: ContextRuleType) => {
+    let key: string;
+    if (type.tag === "Default") {
+      key = "Default";
+    } else if (type.tag === "CallContract") {
+      key = `CallContract:${type.values[0]}`;
+    } else {
+      const wasm = Buffer.from(type.values[0]);
+      key = `CreateContract:${wasm.toString("hex")}`;
+    }
+    if (!seen.has(key)) {
+      seen.add(key);
+      types.push(type);
+    }
+  };
+
+  const walk = (invocation: xdr.SorobanAuthorizedInvocation) => {
+    const fn = invocation.function();
+    const switchName = fn.switch().name;
+    if (switchName === "sorobanAuthorizedFunctionTypeContractFn") {
+      const args = fn.contractFn();
+      const contractAddress = Address.fromScAddress(args.contractAddress()).toString();
+      add({ tag: "CallContract", values: [contractAddress] });
+    } else if (switchName.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
+      const wasmHash = extractCreateContractWasmHash(fn);
+      if (wasmHash) {
+        add({ tag: "CreateContract", values: [wasmHash] });
+      }
+    }
+
+    for (const sub of invocation.subInvocations()) {
+      walk(sub);
+    }
+  };
+
+  walk(entry.rootInvocation());
+  add({ tag: "Default", values: undefined });
+
+  return types;
+}
+
+function extractCreateContractWasmHash(
+  fn: xdr.SorobanAuthorizedFunction
+): Buffer | null {
+  const candidates: Array<unknown> = [];
+  const fnAny = fn as unknown as {
+    createContractHostFn?: () => unknown;
+    createContractWithCtorHostFn?: () => unknown;
+    createContractWithConstructorHostFn?: () => unknown;
+  };
+
+  if (typeof fnAny.createContractHostFn === "function") {
+    candidates.push(fnAny.createContractHostFn());
+  }
+  if (typeof fnAny.createContractWithCtorHostFn === "function") {
+    candidates.push(fnAny.createContractWithCtorHostFn());
+  }
+  if (typeof fnAny.createContractWithConstructorHostFn === "function") {
+    candidates.push(fnAny.createContractWithConstructorHostFn());
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const ctx = candidate as { executable?: unknown };
+    const executable = typeof ctx.executable === "function"
+      ? (ctx.executable as () => unknown)()
+      : ctx.executable;
+    if (!executable || typeof executable !== "object") continue;
+    const execAny = executable as {
+      switch?: () => { name: string };
+      wasm?: () => Buffer;
+      wasm?: Buffer;
+    };
+    const execSwitch = execAny.switch?.();
+    if (execSwitch && execSwitch.name === "contractExecutableWasm") {
+      const wasm = typeof execAny.wasm === "function" ? execAny.wasm() : execAny.wasm;
+      if (wasm) {
+        return Buffer.from(wasm);
+      }
+    }
+  }
+
+  return null;
 }
 
 function buildSignatureMapEntry(

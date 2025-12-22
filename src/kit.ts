@@ -335,12 +335,12 @@ export class SmartAccountKit {
    * // Configure Relayer in the kit
    * const kit = new SmartAccountKit({
    *   // ... other config
-   *   relayerUrl: 'https://my-relayer-proxy.example.com/submit',
+   *   relayerUrl: 'https://my-relayer-proxy.example.com',
    * });
    *
-   * // Submit a transaction via Relayer
+   * // Submit a signed transaction via Relayer (fee-bump)
    * if (kit.relayer) {
-   *   const result = await kit.relayer.send(signedTransaction);
+   *   const result = await kit.relayer.sendXdr(signedTransaction);
    *   console.log('Hash:', result.hash);
    * }
    * ```
@@ -400,8 +400,8 @@ export class SmartAccountKit {
       ? new RelayerClient(config.relayerUrl)
       : null;
 
-    // Deployer keypair - deterministically derived from network passphrase
-    // This ensures the same deployer is used across all clients on the same network
+    // Deployer keypair - deterministically derived from a fixed seed.
+    // This ensures the same deployer is used across all clients.
     this.deployerKeypair = Keypair.fromRawEd25519Seed(
       hash(Buffer.from("openzeppelin-smart-account-kit"))
     );

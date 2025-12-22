@@ -168,7 +168,15 @@ export async function simulateHostFunction(
   },
   hostFunc: xdr.HostFunction
 ): Promise<{ authEntries: xdr.SorobanAuthorizationEntry[] }> {
-  const sourceAccount = await deps.rpc.getAccount(deps.deployerKeypair.publicKey());
+  let sourceAccount;
+  try {
+    sourceAccount = await deps.rpc.getAccount(deps.deployerKeypair.publicKey());
+  } catch (error) {
+    throw new Error(
+      `Simulation requires the deployer account to exist on-chain. ` +
+      `Fund ${deps.deployerKeypair.publicKey()} before simulating transactions.`
+    );
+  }
 
   const simulationTx = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,
@@ -221,7 +229,15 @@ export async function signResimulateAndPrepare(
     signedAuthEntries.push(signedEntry);
   }
 
-  const sourceAccount = await deps.rpc.getAccount(deps.deployerKeypair.publicKey());
+  let sourceAccount;
+  try {
+    sourceAccount = await deps.rpc.getAccount(deps.deployerKeypair.publicKey());
+  } catch (error) {
+    throw new Error(
+      `Re-simulation requires the deployer account to exist on-chain. ` +
+      `Fund ${deps.deployerKeypair.publicKey()} before re-simulating transactions.`
+    );
+  }
 
   const resimTx = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,

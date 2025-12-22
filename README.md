@@ -68,12 +68,13 @@ const result = await kit.signAndSubmit(transaction);
 
 ### Fee Sponsoring
 
-Configure a relayer URL to enable gasless transactions. Transactions are POSTed to this URL with `{ xdr }` body.
+Configure a relayer URL to enable gasless transactions. The SDK posts `{ func, auth }` for
+invokeHostFunction flows and `{ xdr }` for signed transactions (e.g., deployments).
 
 ```typescript
 const kit = new SmartAccountKit({
   // ... other config
-  relayerUrl: 'https://my-relayer-proxy.example.com/submit',
+  relayerUrl: 'https://my-relayer-proxy.example.com',
 });
 
 // Transactions automatically use the Relayer if configured
@@ -166,7 +167,7 @@ await kit.connectWallet({ credentialId: '...' });   // Connect with specific cre
 await kit.connectWallet({ contractId: 'C...' });    // Connect with specific contract
 
 // Transfer tokens
-const result = await kit.transfer('CTOKEN...', 'GRECIPIENT...', '100');
+const result = await kit.transfer('CTOKEN...', 'GRECIPIENT...', 100);
 
 // Disconnect
 await kit.disconnect();
@@ -639,7 +640,7 @@ When the Relayer is configured in SmartAccountKit, it's used automatically for a
 ```typescript
 const kit = new SmartAccountKit({
   // ... other config
-  relayerUrl: 'https://my-relayer-proxy.example.com/submit',
+  relayerUrl: 'https://my-relayer-proxy.example.com',
 });
 
 // Transactions automatically use the Relayer
@@ -650,17 +651,20 @@ await kit.transfer(tokenContract, recipient, amount, { forceMethod: 'rpc' });
 
 // Access the Relayer client directly
 if (kit.relayer) {
-  const result = await kit.relayer.send(signedTransaction);
+  const result = await kit.relayer.sendXdr(signedTransaction);
 }
 ```
 
 #### Using RelayerClient Directly
 
 ```typescript
-const relayer = new RelayerClient('https://my-relayer-proxy.example.com/submit');
+const relayer = new RelayerClient('https://my-relayer-proxy.example.com');
 
-// Submit a transaction for fee sponsoring
-const result = await relayer.send(signedTransaction);
+// Submit a transaction for fee sponsoring (func + auth)
+const result = await relayer.send(funcXdr, authXdrs);
+
+// Or submit a signed transaction for fee-bumping
+const xdrResult = await relayer.sendXdr(signedTransaction);
 
 if (result.success) {
   console.log('Transaction hash:', result.hash);

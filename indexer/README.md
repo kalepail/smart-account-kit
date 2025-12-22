@@ -203,26 +203,16 @@ wrangler deploy --env production
 
 ### Relayer Proxy API Endpoints
 
-**Submit Transaction (XDR)**
+**Health Check**
 ```
-POST /api/submit/:network
-Body: { "xdr": "base64-encoded-xdr" }
+GET /
 ```
 
-**Submit Soroban Transaction (func/auth)**
+**Submit Transaction**
 ```
-POST /api/submit-soroban/:network
+POST /
 Body: { "func": "base64-encoded-func", "auth": ["base64-auth-entry", ...] }
-```
-
-**Get Fee Usage**
-```
-GET /api/fee-usage/:network
-```
-
-**Get Proxy Status**
-```
-GET /api/status
+Body: { "xdr": "base64-encoded-xdr" }
 ```
 
 ### SDK Integration
@@ -236,9 +226,7 @@ const kit = new SmartAccountKit({
   accountWasmHash: '...',
   webauthnVerifierAddress: 'C...',
   // Use Relayer via proxy
-  relayer: {
-    url: 'https://smart-account-relayer-proxy.your-domain.workers.dev/api/submit/testnet',
-  },
+  relayerUrl: 'https://smart-account-relayer-proxy.your-domain.workers.dev',
 });
 
 // Transactions will automatically use Relayer if configured

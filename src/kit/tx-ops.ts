@@ -485,41 +485,89 @@ export async function fundWallet(
     const authEntries = simResult.result?.auth || [];
     const signedAuthEntries: xdr.SorobanAuthorizationEntry[] = [];
 
+    const currentLedger = simResult.latestLedger;
+    const expirationLedger = currentLedger + 720; // ~1 hour
+
     for (const entry of authEntries) {
-      if (entry.credentials().switch().name !== "sorobanCredentialsAddress") {
+      const credType = entry.credentials().switch().name;
+
+      // For source_account credentials, convert to Address credentials
+      // so the Relayer can use its own channel accounts
+      if (credType === "sorobanCredentialsSourceAccount") {
+        // Generate a nonce for the new Address credential
+        const nonce = xdr.Int64.fromString(Date.now().toString());
+
+        const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
+          new xdr.HashIdPreimageSorobanAuthorization({
+            networkId: hash(Buffer.from(deps.networkPassphrase)),
+            nonce,
+            signatureExpirationLedger: expirationLedger,
+            invocation: entry.rootInvocation(),
+          })
+        );
+        const payload = hash(preimage.toXDR());
+        const signature = tempKeypair.sign(payload);
+
+        const sigEntry = new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol("public_key"),
+          val: xdr.ScVal.scvBytes(tempKeypair.rawPublicKey()),
+        });
+        const sigEntrySignature = new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol("signature"),
+          val: xdr.ScVal.scvBytes(signature),
+        });
+
+        // Create new Address credentials entry to replace source_account
+        const addressEntry = new xdr.SorobanAuthorizationEntry({
+          credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(
+            new xdr.SorobanAddressCredentials({
+              address: Address.fromString(tempKeypair.publicKey()).toScAddress(),
+              nonce,
+              signatureExpirationLedger: expirationLedger,
+              signature: xdr.ScVal.scvVec([xdr.ScVal.scvMap([sigEntry, sigEntrySignature])]),
+            })
+          ),
+          rootInvocation: entry.rootInvocation(),
+        });
+
+        signedAuthEntries.push(addressEntry);
+        continue;
+      }
+
+      // For Address credentials, sign them
+      if (credType === "sorobanCredentialsAddress") {
+        const credentials = entry.credentials().address();
+        credentials.signatureExpirationLedger(expirationLedger);
+
+        const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
+          new xdr.HashIdPreimageSorobanAuthorization({
+            networkId: hash(Buffer.from(deps.networkPassphrase)),
+            nonce: credentials.nonce(),
+            signatureExpirationLedger: credentials.signatureExpirationLedger(),
+            invocation: entry.rootInvocation(),
+          })
+        );
+        const payload = hash(preimage.toXDR());
+        const signature = tempKeypair.sign(payload);
+
+        const sigEntry = new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol("public_key"),
+          val: xdr.ScVal.scvBytes(tempKeypair.rawPublicKey()),
+        });
+        const sigEntrySignature = new xdr.ScMapEntry({
+          key: xdr.ScVal.scvSymbol("signature"),
+          val: xdr.ScVal.scvBytes(signature),
+        });
+
+        credentials.signature(
+          xdr.ScVal.scvVec([xdr.ScVal.scvMap([sigEntry, sigEntrySignature])])
+        );
+
         signedAuthEntries.push(entry);
         continue;
       }
 
-      const credentials = entry.credentials().address();
-      const currentLedger = simResult.latestLedger;
-      credentials.signatureExpirationLedger(currentLedger + 100);
-
-      const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-        new xdr.HashIdPreimageSorobanAuthorization({
-          networkId: hash(Buffer.from(deps.networkPassphrase)),
-          nonce: credentials.nonce(),
-          signatureExpirationLedger: credentials.signatureExpirationLedger(),
-          invocation: entry.rootInvocation(),
-        })
-      );
-      const payload = hash(preimage.toXDR());
-
-      const signature = tempKeypair.sign(payload);
-
-      const sigEntry = new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("public_key"),
-        val: xdr.ScVal.scvBytes(tempKeypair.rawPublicKey()),
-      });
-      const sigEntrySignature = new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("signature"),
-        val: xdr.ScVal.scvBytes(signature),
-      });
-
-      credentials.signature(
-        xdr.ScVal.scvVec([xdr.ScVal.scvMap([sigEntry, sigEntrySignature])])
-      );
-
+      // Unknown credential type - push as-is (shouldn't happen)
       signedAuthEntries.push(entry);
     }
 

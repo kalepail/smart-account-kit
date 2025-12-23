@@ -1,0 +1,42 @@
+[
+    {
+        "name": "account_id",
+        "datatype": "string"
+    },
+    {
+        "name": "asset_code",
+        "datatype": "string"
+    },
+    {
+        "name": "asset_type",
+        "datatype": "string"
+    },
+    {
+        "name": "asset_issuer",
+        "datatype": "string"
+    },
+    {
+        "name": "liquidity_pool_id",
+        "datatype": "string"
+    },
+    {
+        "name": "balance",
+        "datatype": "long"
+    },
+    {
+        "name": "last_modified_ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "change_type",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_entry_type",
+        "datatype": "string"
+    },
+    {
+        "name": "ingested_at",
+        "datatype": "string"
+    }
+]

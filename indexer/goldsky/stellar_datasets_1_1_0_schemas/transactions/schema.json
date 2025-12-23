@@ -1,0 +1,142 @@
+[
+    {
+        "name": "transaction_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "account",
+        "datatype": "string"
+    },
+    {
+        "name": "account_muxed",
+        "datatype": "string"
+    },
+    {
+        "name": "account_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "max_fee",
+        "datatype": "long"
+    },
+    {
+        "name": "fee_charged",
+        "datatype": "long"
+    },
+    {
+        "name": "fee_account",
+        "datatype": "string"
+    },
+    {
+        "name": "fee_account_muxed",
+        "datatype": "string"
+    },
+    {
+        "name": "inner_transaction_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "new_max_fee",
+        "datatype": "long"
+    },
+    {
+        "name": "memo_type",
+        "datatype": "string"
+    },
+    {
+        "name": "memo",
+        "datatype": "string"
+    },
+    {
+        "name": "time_bounds_lower",
+        "datatype": "long"
+    },
+    {
+        "name": "time_bounds_upper",
+        "datatype": "long"
+    },
+    {
+        "name": "successful",
+        "datatype": "boolean"
+    },
+    {
+        "name": "transaction_result_code",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_count",
+        "datatype": "long"
+    },
+    {
+        "name": "event_count",
+        "datatype": "long"
+    },
+    {
+        "name": "diagnostic_event_count",
+        "datatype": "long"
+    },
+    {
+        "name": "inclusion_fee_bid",
+        "datatype": "long"
+    },
+    {
+        "name": "resource_fee",
+        "datatype": "long"
+    },
+    {
+        "name": "soroban_resources_instructions",
+        "datatype": "long"
+    },
+    {
+        "name": "soroban_resources_read_bytes",
+        "datatype": "long"
+    },
+    {
+        "name": "soroban_resources_write_bytes",
+        "datatype": "long"
+    },
+    {
+        "name": "non_refundable_resource_fee_charged",
+        "datatype": "long"
+    },
+    {
+        "name": "refundable_resource_fee_charged",
+        "datatype": "long"
+    },
+    {
+        "name": "rent_fee_charged",
+        "datatype": "long"
+    },
+    {
+        "name": "tx_signers",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_closed_at",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_signature",
+        "datatype": "string"
+    },
+    {
+        "name": "_gs_op",
+        "datatype": "string"
+    }
+]
+
+
+
+
+
+
+
+

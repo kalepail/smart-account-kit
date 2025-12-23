@@ -1,0 +1,104 @@
+[
+    [
+        {
+            "name": "id",
+            "value": "59834759-2358be17e39382d3169110a0e395edfa895f0505c5eaafa63fbf9614b0596e5f-op-0-event-4"
+        },
+        {
+            "name": "transfer_type",
+            "value": "transfer"
+        },
+        {
+            "name": "sender",
+            "value": "GCO45COWIBDZEGJ3DRGDGCCCJXK777F2S6D6HXQKXVB3EKQVCQU7B2WA"
+        },
+        {
+            "name": "recipient",
+            "value": "LCZPVFZJNYUQETF4ZB5UEQJEQYGWI6EWIS6GYUC5EIZZBLJI4SO4RSG5"
+        },
+        {
+            "name": "asset_raw",
+            "value": "USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+        },
+        {
+            "name": "asset_code",
+            "value": "USDC"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
+        },
+        {
+            "name": "amount",
+            "value": "789875"
+        },
+        {
+            "name": "to_muxed_id",
+            "value": ""
+        },
+        {
+            "name": "contract_id",
+            "value": "CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75"
+        },
+        {
+            "name": "topics",
+            "value": "[{\"symbol\":\"transfer\"},{\"address\":\"GCO45COWIBDZEGJ3DRGDGCCCJXK777F2S6D6HXQKXVB3EKQVCQU7B2WA\"},{\"address\":\"LCZPVFZJNYUQETF4ZB5UEQJEQYGWI6EWIS6GYUC5EIZZBLJI4SO4RSG5\"},{\"string\":\"USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN\"}]"
+        },
+        {
+            "name": "data",
+            "value": "{\"i128\":\"789875\"}"
+        },
+        {
+            "name": "in_successful_contract_call",
+            "value": "1"
+        },
+        {
+            "name": "transaction_hash",
+            "value": "2358be17e39382d3169110a0e395edfa895f0505c5eaafa63fbf9614b0596e5f"
+        },
+        {
+            "name": "transaction_account",
+            "value": "GD2ODX5V7OHB5EIKOJ3SQGOS4VECZYZ7VJVO23APQ4M3FZ2BZLBDUXO5"
+        },
+        {
+            "name": "transaction_fee_account",
+            "value": ""
+        },
+        {
+            "name": "transaction_successful",
+            "value": "1"
+        },
+        {
+            "name": "transaction_index",
+            "value": "40"
+        },
+        {
+            "name": "operation_body",
+            "value": "{\"path_payment_strict_receive\":{\"dest_amount\":\"2963458\",\"dest_asset\":\"native\",\"destination\":\"GCO45COWIBDZEGJ3DRGDGCCCJXK777F2S6D6HXQKXVB3EKQVCQU7B2WA\",\"path\":[{\"credit_alphanum4\":{\"asset_code\":\"XRP\",\"issuer\":\"GBXRPL45NPHCVMFFAYZVUVFFVKSIZ362ZXFP7I2ETNQ3QKZMFLPRDTD5\"}},{\"credit_alphanum4\":{\"asset_code\":\"USDC\",\"issuer\":\"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN\"}},{\"credit_alphanum4\":{\"asset_code\":\"VELO\",\"issuer\":\"GDM4RQUQQUVSKQA7S6EM7XBZP3FCGH4Q7CL6TABQ7B2BEJ5ERARM2M5M\"}},{\"credit_alphanum4\":{\"asset_code\":\"BTC\",\"issuer\":\"GDPJALI4AZKUU2W426U5WKMAT6CN3AJRPIIRYR2YM54TL2GDWO5O2MZM\"}},{\"credit_alphanum4\":{\"asset_code\":\"BTC\",\"issuer\":\"GCQVEST7KIWV3KOSNDDUJKEPZLBFWKM7DUS4TCLW2VNVPCBGTDRVTEIT\"}}],\"send_asset\":\"native\",\"send_max\":\"2963458\"}}"
+        },
+        {
+            "name": "operation_result_code",
+            "value": "PathPaymentStrictReceiveSuccess"
+        },
+        {
+            "name": "operation_type",
+            "value": "path_payment_strict_receive"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "59834759"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "304dda543d0779a785e132d4ffa86aa305bf970c02fb9678e9ff44d902722ed7"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "2025-11-13 15:42:18"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "e078FIVMGnulJ4TzM9ZazvnaFURGvPb7HtyG3RAlXqaLzSHcrlXlmbJ+yXk4gNCBmV/Pv7YWBTbEgnv059dvAg=="
+        }
+    ]
+]

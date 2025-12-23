@@ -1,0 +1,26 @@
+[
+    {
+        "name": "ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_closed_at",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_signature",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_count",
+        "datatype": "long"
+    },
+    {
+        "name": "_gs_op",
+        "datatype": "string"
+    }
+]

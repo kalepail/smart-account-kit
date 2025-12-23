@@ -1,4 +1,7 @@
-# Goldsky Pipeline for Smart Account Kit Event Indexing - TESTNET
+# Goldsky Mirror Pipeline for Smart Account Kit Event Indexing - TESTNET
+#
+# NOTE: Testnet uses Mirror format because Turbo datasets for stellar_testnet
+# are not yet available. Mainnet uses Turbo format (pipeline-mainnet.yaml).
 #
 # This pipeline indexes all smart account events from Stellar to enable
 # reverse lookups from signer public keys to contract IDs and full state tracking.
@@ -13,9 +16,9 @@
 # - policy_removed: When a policy is removed from a context rule
 #
 # Deployment:
-#   goldsky pipeline apply ./pipeline.yaml --status ACTIVE
+#   goldsky pipeline apply ./pipeline-testnet.yaml --status ACTIVE
 
-name: smart-account-signers
+name: smart-account-signers-testnet
 resource_size: s
 apiVersion: 3
 
@@ -33,6 +36,7 @@ transforms:
       SELECT
         id,
         ledger_sequence,
+        ledger_closed_at,
         contract_id,
         topics,
         data,
@@ -49,13 +53,16 @@ transforms:
         transaction_hash
       FROM stellar_events
       WHERE
-        topics LIKE '%context_rule_added%'
-        OR topics LIKE '%context_rule_updated%'
-        OR topics LIKE '%context_rule_removed%'
-        OR topics LIKE '%signer_added%'
-        OR topics LIKE '%signer_removed%'
-        OR topics LIKE '%policy_added%'
-        OR topics LIKE '%policy_removed%'
+        in_successful_contract_call = true
+        AND (
+          topics LIKE '%context_rule_added%'
+          OR topics LIKE '%context_rule_updated%'
+          OR topics LIKE '%context_rule_removed%'
+          OR topics LIKE '%signer_added%'
+          OR topics LIKE '%signer_removed%'
+          OR topics LIKE '%policy_added%'
+          OR topics LIKE '%policy_removed%'
+        )
     primary_key: id
 
 sinks:

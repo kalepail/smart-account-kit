@@ -11,7 +11,7 @@ import {
   type ConnectedWallet,
   type IndexedContractSummary,
 } from "smart-account-kit";
-import { Networks, rpc, Asset } from "@stellar/stellar-sdk";
+import { Networks, rpc, Asset, Contract, Address, TransactionBuilder, Account, scValToNative, Keypair } from "@stellar/stellar-sdk";
 import type { ContextRule, Signer } from "smart-account-kit-bindings";
 
 // Import new components
@@ -24,6 +24,7 @@ const CONFIG = {
   accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "a12e8fa9621efd20315753bd4007d974390e31fbcb4a7ddc4dd0a0dec728bf2e",
   webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CBSHV66WG7UV6FQVUTB67P3DZUEJ2KJ5X6JKQH5MFRAAFNFJUAJVXJYV",
   nativeTokenContract: import.meta.env.VITE_NATIVE_TOKEN_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  usdcTokenContract: import.meta.env.VITE_USDC_TOKEN_CONTRACT || "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
   ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CDGMOL3BP6Y6LYOXXTRNXBNJ2SLNTQ47BGG3LOS2OBBE657E3NYCN54B",
   // Relayer fee sponsoring (optional)
   relayerUrl: import.meta.env.VITE_RELAYER_URL || "",
@@ -66,12 +67,15 @@ function App() {
   const [loading, setLoading] = useState<string | null>(null);
   const [configValid, setConfigValid] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
+  const [usdcBalance, setUsdcBalance] = useState<string | null>(null);
   const [autoConnectAttempted, setAutoConnectAttempted] = useState(false);
 
   // Form state
   const [userName, setUserName] = useState("");
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("10");
+  const [usdcTransferTo, setUsdcTransferTo] = useState("");
+  const [usdcTransferAmount, setUsdcTransferAmount] = useState("10");
 
   // Editable config
   const [accountWasmHash, setAccountWasmHash] = useState(CONFIG.accountWasmHash);
@@ -162,7 +166,7 @@ function App() {
     }
   }, [kit, refreshConnectedWallets, log]);
 
-  // Fetch wallet balance
+  // Fetch wallet balance (XLM)
   const fetchBalance = useCallback(async (walletContractId: string) => {
     try {
       const server = new rpc.Server(CONFIG.rpcUrl);
@@ -181,6 +185,40 @@ function App() {
     } catch (error) {
       console.warn("Failed to fetch balance:", error);
       setBalance(null);
+    }
+  }, []);
+
+  // Fetch USDC balance
+  const fetchUsdcBalance = useCallback(async (walletContractId: string) => {
+    try {
+      const server = new rpc.Server(CONFIG.rpcUrl);
+      const contract = new Contract(CONFIG.usdcTokenContract);
+      const call = contract.call("balance", new Address(walletContractId).toScVal());
+
+      // Use a random keypair for the source account (needed for simulation only)
+      const dummyAccount = new Account(Keypair.random().publicKey(), "0");
+
+      const tx = new TransactionBuilder(dummyAccount, {
+        fee: "100",
+        networkPassphrase: CONFIG.networkPassphrase,
+      })
+        .addOperation(call)
+        .setTimeout(30)
+        .build();
+
+      const simResult = await server.simulateTransaction(tx);
+
+      if ("result" in simResult && simResult.result?.retval) {
+        const balance = scValToNative(simResult.result.retval);
+        // USDC has 7 decimals
+        const usdcBal = (Number(balance) / 10_000_000).toFixed(2);
+        setUsdcBalance(usdcBal);
+      } else {
+        setUsdcBalance("0.00");
+      }
+    } catch (error) {
+      console.warn("Failed to fetch USDC balance:", error);
+      setUsdcBalance("0.00");
     }
   }, []);
 
@@ -289,6 +327,7 @@ function App() {
         setCredentialIdState(result.credentialId);
         setIsConnected(true);
         fetchBalance(result.contractId);
+        fetchUsdcBalance(result.contractId);
         fetchAllSigners(kit, result.credentialId);
       }
     };
@@ -296,7 +335,7 @@ function App() {
     autoConnect().catch((error) => {
       log(`Auto-connect failed: ${error}`, "error");
     });
-  }, [kit, configValid, isConnected, autoConnectAttempted, log, fetchBalance, fetchAllSigners]);
+  }, [kit, configValid, isConnected, autoConnectAttempted, log, fetchBalance, fetchUsdcBalance, fetchAllSigners]);
 
   const handleCreateWallet = async () => {
     if (!kit) return;
@@ -320,6 +359,7 @@ function App() {
         setCredentialIdState(result.credentialId);
         setIsConnected(true);
         fetchBalance(result.contractId);
+        fetchUsdcBalance(result.contractId);
         fetchAllSigners(kit, result.credentialId);
         // Session is automatically saved by the kit
       } else if (result.submitResult) {
@@ -372,6 +412,7 @@ function App() {
           setCredentialIdState(result.credentialId);
           setIsConnected(true);
           fetchBalance(result.contractId);
+          fetchUsdcBalance(result.contractId);
           fetchAllSigners(kit, result.credentialId);
         }
         return;
@@ -389,6 +430,7 @@ function App() {
         setCredentialIdState(result.credentialId);
         setIsConnected(true);
         fetchBalance(result.contractId);
+        fetchUsdcBalance(result.contractId);
         fetchAllSigners(kit, result.credentialId);
       }
     } catch (error) {
@@ -419,6 +461,7 @@ function App() {
         setCredentialIdState(result.credentialId);
         setIsConnected(true);
         fetchBalance(result.contractId);
+        fetchUsdcBalance(result.contractId);
         fetchAllSigners(kit, result.credentialId);
       }
     } catch (error) {
@@ -436,6 +479,7 @@ function App() {
     await kit.disconnect();
     setContractId(null);
     setBalance(null);
+    setUsdcBalance(null);
     setCredentialIdState(null);
     setIsConnected(false);
     setAllSigners([]);
@@ -490,6 +534,48 @@ function App() {
       }
     } catch (error) {
       log(`Transfer failed: ${error}`, "error");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleUsdcTransfer = async () => {
+    if (!kit || !isConnected || !contractId) return;
+
+    const recipient = usdcTransferTo.trim();
+    const amount = parseFloat(usdcTransferAmount.trim());
+
+    // Validate inputs using SDK utilities
+    try {
+      validateAddress(recipient, "recipient address");
+      validateAmount(amount, "transfer amount");
+    } catch (error) {
+      log(error instanceof Error ? error.message : "Validation failed", "error");
+      return;
+    }
+
+    // Single signer flow for USDC (multi-signer can be added similar to XLM if needed)
+    setLoading("Building USDC transfer...");
+    log(`Transferring ${amount} USDC to ${recipient.slice(0, 10)}...`);
+    log(`From smart wallet: ${contractId}`, "info");
+
+    try {
+      // Use the kit's transfer helper with USDC token contract
+      const result = await kit.transfer(
+        CONFIG.usdcTokenContract,
+        recipient,
+        amount
+      );
+
+      if (result.success) {
+        log(`Transfer successful! Sent ${amount} USDC to ${recipient.slice(0, 10)}...`, "success");
+        log(`Transaction: ${result.hash.slice(0, 20)}...`, "success");
+        fetchUsdcBalance(contractId);
+      } else {
+        throw new Error(result.error || "Transfer failed");
+      }
+    } catch (error) {
+      log(`USDC Transfer failed: ${error}`, "error");
     } finally {
       setLoading(null);
     }
@@ -577,6 +663,7 @@ function App() {
         setCredentialIdState(credential.credentialId);
         setIsConnected(true);
         fetchBalance(result.contractId);
+        fetchUsdcBalance(result.contractId);
         fetchAllSigners(kit, credential.credentialId);
         // Session is automatically saved by the kit
         // Refresh pending list
@@ -843,9 +930,15 @@ function App() {
             </div>
             <div className="wallet-info-row">
               <div className="balance-display">
-                <div className="balance-label">Balance</div>
+                <div className="balance-label">XLM Balance</div>
                 <div className="balance-value">
                   {balance !== null ? `${balance} XLM` : "—"}
+                </div>
+              </div>
+              <div className="balance-display">
+                <div className="balance-label">USDC Balance</div>
+                <div className="balance-value">
+                  {usdcBalance !== null ? `${usdcBalance} USDC` : "—"}
                 </div>
               </div>
               <ActiveSignerDisplay
@@ -923,7 +1016,7 @@ function App() {
         />
       )}
 
-      {/* Transfer */}
+      {/* Transfer XLM */}
       {isConnected && (
         <div className="card">
           <h3>Token Transfer (XLM)</h3>
@@ -954,6 +1047,43 @@ function App() {
                 <span className="spinner" />
               ) : (
                 "Send Transfer"
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer USDC */}
+      {isConnected && (
+        <div className="card">
+          <h3>Token Transfer (USDC)</h3>
+          <div className="form-group">
+            <label>Recipient Address</label>
+            <input
+              type="text"
+              value={usdcTransferTo}
+              onChange={(e) => setUsdcTransferTo(e.target.value)}
+              placeholder="G... or C..."
+            />
+          </div>
+          <div className="form-group">
+            <label>Amount (USDC)</label>
+            <input
+              type="text"
+              value={usdcTransferAmount}
+              onChange={(e) => setUsdcTransferAmount(e.target.value)}
+              placeholder="10"
+            />
+          </div>
+          <div className="button-group">
+            <button
+              onClick={handleUsdcTransfer}
+              disabled={loading !== null || !usdcTransferTo}
+            >
+              {loading === "Building USDC transfer..." ? (
+                <span className="spinner" />
+              ) : (
+                "Send USDC"
               )}
             </button>
           </div>

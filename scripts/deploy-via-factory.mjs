@@ -21,7 +21,7 @@ const CONFIG = {
   factoryAddress: 'CCMGFBBY44JOY6LMM2HTADT5MZ77W75PMAT2QS7GQ4KVNC2RSEBTIAEJ',
   wasmHash: 'f340242d143b42e273f628f44ccb907f55f5beb256f3de17de2c005fcdbc9783',
   webauthnVerifier: 'CDX3NZ2YODNGEFDHRK4DQLWM44R64WW6D6JHXC66B5236YP76H6BPCB3',
-  relayerUrl: 'https://rozo-wallet-relayer-mainnet.eng3798.workers.dev',
+  relayerUrl: process.env.RELAYER_URL || 'https://your-relayer-proxy.example.com',
 };
 
 // Generate a unique salt for this deployment

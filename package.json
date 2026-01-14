@@ -22,7 +22,6 @@
     "LICENSE"
   ],
   "scripts": {
-    "version:sync": "node scripts/sync-version.js",
     "prebuild": "node scripts/sync-version.js",
     "build": "tsc",
     "build:all": "./scripts/build.sh",

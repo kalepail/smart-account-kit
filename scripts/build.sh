@@ -2,7 +2,7 @@
 
 # Build Script for Smart Account Kit SDK
 #
-# Syncs version to src/version.ts and builds the SDK.
+# Builds the SDK. Version sync happens automatically via prebuild hook.
 # Assumes bindings are already available (via npm or local build).
 
 set -e
@@ -21,11 +21,7 @@ echo ""
 
 cd "$KIT_DIR"
 
-# Sync version to src/version.ts
-echo -e "${YELLOW}Syncing version...${NC}"
-pnpm run version:sync
-
-# Build
+# Build (prebuild hook syncs version automatically)
 echo -e "${YELLOW}Building...${NC}"
 pnpm run build
 

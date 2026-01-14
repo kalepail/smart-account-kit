@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@creit-tech/stellar-wallets-kit": "npm:@jsr/creit-tech__stellar-wallets-kit@^2.0.0-beta.9",
-    "@stellar/stellar-base": "^14.0.3",
-    "@stellar/stellar-sdk": "^14.4.2",
+    "@stellar/stellar-base": "^14.0.4",
+    "@stellar/stellar-sdk": "^14.4.3",
     "buffer": "^6.0.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
@@ -19,10 +19,10 @@
     "smart-account-kit-bindings": "workspace:^"
   },
   "devDependencies": {
-    "@types/react": "^19.2.7",
+    "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.2",
     "typescript": "^5.9.3",
-    "vite": "^7.3.0"
+    "vite": "^7.3.1"
   }
 }

@@ -69,6 +69,10 @@ const stellarAddressInput = document.getElementById("stellar-address") as HTMLIn
 const indexerUrlInput = document.getElementById("indexer-url") as HTMLInputElement;
 const rpcUrlInput = document.getElementById("rpc-url") as HTMLInputElement;
 
+// Set default values from environment variables (with fallbacks)
+indexerUrlInput.value = import.meta.env.VITE_INDEXER_URL || "https://smart-account-indexer.sdf-ecosystem.workers.dev";
+rpcUrlInput.value = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
+
 // ============================================================================
 // Utility Functions
 // ============================================================================

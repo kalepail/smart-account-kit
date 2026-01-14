@@ -1,0 +1,86 @@
+[
+    {
+        "name": "id",
+        "datatype": "string"
+    },
+    {
+        "name": "change_type",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_entry_type",
+        "datatype": "string"
+    },
+    {
+        "name": "entry_data",
+        "datatype": "string"
+    },
+    {
+        "name": "key_data",
+        "datatype": "string"
+    },
+    {
+        "name": "last_modified_ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "operation_id",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_type",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_result_code",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_source_account",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_source_account_muxed",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_body",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_account",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_fee_account",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_successful",
+        "datatype": "boolean"
+    },
+    {
+        "name": "transaction_index",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_closed_at",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_signature",
+        "datatype": "string"
+    }
+]

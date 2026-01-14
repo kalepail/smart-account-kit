@@ -1,0 +1,144 @@
+[
+    [
+        {
+            "name": "transaction_hash",
+            "value": "0001a5bfa3339e4fbec9099472160eec67fc07a1314da179c2d346373c1a95fc"
+        },
+        {
+            "name": "account",
+            "value": "GBCG2BE5BJW6K4GENA3KM2ZSGQRAV4CMHNOUTLVLC475A2GKEQQIFBXJ"
+        },
+        {
+            "name": "account_muxed",
+            "value": ""
+        },
+        {
+            "name": "account_sequence",
+            "value": "250135515179802850"
+        },
+        {
+            "name": "max_fee",
+            "value": "125640"
+        },
+        {
+            "name": "fee_charged",
+            "value": "70058"
+        },
+        {
+            "name": "fee_account",
+            "value": "GBGWQFSJSOMJ2BTOH5RLZUTZPV544YR2DF5CGYL7WDZ2Y6OSRHR6TUBE"
+        },
+        {
+            "name": "fee_account_muxed",
+            "value": ""
+        },
+        {
+            "name": "inner_transaction_hash",
+            "value": "f5232d42bd990caad1e633f05e26cb6dc1fdfebef88079c72ca6da1fc9f8ea43"
+        },
+        {
+            "name": "new_max_fee",
+            "value": "125640"
+        },
+        {
+            "name": "memo_type",
+            "value": "MemoTypeMemoNone"
+        },
+        {
+            "name": "memo",
+            "value": ""
+        },
+        {
+            "name": "time_bounds_lower",
+            "value": "0"
+        },
+        {
+            "name": "time_bounds_upper",
+            "value": "1764273102000"
+        },
+        {
+            "name": "successful",
+            "value": "1"
+        },
+        {
+            "name": "transaction_result_code",
+            "value": "TransactionResultCodeTxFeeBumpInnerSuccess"
+        },
+        {
+            "name": "operation_count",
+            "value": "1"
+        },
+        {
+            "name": "event_count",
+            "value": "2"
+        },
+        {
+            "name": "diagnostic_event_count",
+            "value": "21"
+        },
+        {
+            "name": "inclusion_fee_bid",
+            "value": "0"
+        },
+        {
+            "name": "resource_fee",
+            "value": "0"
+        },
+        {
+            "name": "soroban_resources_instructions",
+            "value": "0"
+        },
+        {
+            "name": "soroban_resources_read_bytes",
+            "value": "0"
+        },
+        {
+            "name": "soroban_resources_write_bytes",
+            "value": "0"
+        },
+        {
+            "name": "non_refundable_resource_fee_charged",
+            "value": "0"
+        },
+        {
+            "name": "refundable_resource_fee_charged",
+            "value": "0"
+        },
+        {
+            "name": "rent_fee_charged",
+            "value": "0"
+        },
+        {
+            "name": "tx_signers",
+            "value": "[]"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "60045569"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "e813e347091ae1c7919162c968c5021896e19472a183eb6ea549dc71fa235c57"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "2025-11-27 14:51:19"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "1sM9azdQGjNbVmR/6kq5njX9S8gApbTJ0rF6abbejp0fDzqhPe2tPbaPXYVCAzaUENgMlVHncJvDfgCa4vicAQ=="
+        },
+        {
+            "name": "_gs_op",
+            "value": "i"
+        }
+    ]
+]
+
+
+
+
+
+
+
+

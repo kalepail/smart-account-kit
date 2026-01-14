@@ -62,7 +62,7 @@ export function validateAddress(address: string, fieldName: string = "address"):
  * @throws {ValidationError} If the amount is invalid
  */
 export function validateAmount(amount: number, fieldName: string = "amount"): void {
-  if (typeof amount !== "number" || isNaN(amount)) {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) {
     throw new ValidationError(
       `${fieldName} must be a number`,
       SmartAccountErrorCode.INVALID_AMOUNT,
@@ -107,7 +107,7 @@ export function validateNotEmpty(value: string | undefined | null, fieldName: st
  * @returns Amount in stroops as BigInt
  */
 export function xlmToStroops(xlm: number): bigint {
-  return BigInt(Math.floor(xlm * STROOPS_PER_XLM));
+  return BigInt(Math.round(xlm * STROOPS_PER_XLM));
 }
 
 /**

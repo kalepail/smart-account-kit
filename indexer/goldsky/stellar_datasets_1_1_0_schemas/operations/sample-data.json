@@ -1,0 +1,72 @@
+[
+    [
+        {
+            "name": "body",
+            "value": "{\"path_payment_strict_receive\":{\"dest_amount\":\"1843704172\",\"dest_asset\":\"native\",\"destination\":\"GBQGQGB7PX6IMZJB2JJXO7DBKYQIDPJ62GCJK3WIC5OSEXPXWRSTSUCU\",\"path\":[{\"credit_alphanum4\":{\"asset_code\":\"TFT\",\"issuer\":\"GBOVQKJYHXRR3DX6NOX2RRYFRCUMSADGDESTDNBDS6CDVLGVESRTAC47\"}},{\"credit_alphanum4\":{\"asset_code\":\"USDC\",\"issuer\":\"GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN\"}},{\"credit_alphanum4\":{\"asset_code\":\"AQUA\",\"issuer\":\"GBNZILSTVQZ4R7IKQDGHYGY2QXL5QOFJYQMXPKWRRM5PAV7Y4M67AQUA\"}}],\"send_asset\":\"native\",\"send_max\":\"1843078774\"}}"
+        },
+        {
+            "name": "event_count",
+            "value": "0"
+        },
+        {
+            "name": "id",
+            "value": "59819052-02f8edf9df51f9d25da173f9c098e21573f253e19f6c0362772958b1242dfba3-0"
+        },
+        {
+            "name": "ledger_entry_changes_count",
+            "value": "0"
+        },
+        {
+            "name": "result_code",
+            "value": "PathPaymentStrictReceiveOverSendmax"
+        },
+        {
+            "name": "source_account",
+            "value": "GBQGQGB7PX6IMZJB2JJXO7DBKYQIDPJ62GCJK3WIC5OSEXPXWRSTSUCU"
+        },
+        {
+            "name": "source_account_muxed",
+            "value": ""
+        },
+        {
+            "name": "type",
+            "value": "path_payment_strict_receive"
+        },
+        {
+            "name": "transaction_hash",
+            "value": "02f8edf9df51f9d25da173f9c098e21573f253e19f6c0362772958b1242dfba3"
+        },
+        {
+            "name": "transaction_account",
+            "value": "GBQGQGB7PX6IMZJB2JJXO7DBKYQIDPJ62GCJK3WIC5OSEXPXWRSTSUCU"
+        },
+        {
+            "name": "transaction_fee_account",
+            "value": ""
+        },
+        {
+            "name": "transaction_successful",
+            "value": "0"
+        },
+        {
+            "name": "transaction_index",
+            "value": "0"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "59819052"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "009e532ee793ddbb1a5d9bc571446ef55163c50b145c86b3195a29d7537946e1"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "2025-11-12 14:39:05"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "kGthbwypxIguekfjQJilouv/GwCd+3pdqkBJLfiQibeAtybhguJv+wA1bEUIzEcmkolRkoqBQ95Tp6KwxGjvBw=="
+        }
+    ]
+]

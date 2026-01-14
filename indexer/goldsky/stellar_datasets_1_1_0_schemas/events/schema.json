@@ -1,0 +1,74 @@
+[
+    {
+        "name": "id",
+        "datatype": "string"
+    },
+    {
+        "name": "type",
+        "datatype": "string"
+    },
+    {
+        "name": "contract_id",
+        "datatype": "string"
+    },
+    {
+        "name": "topics",
+        "datatype": "string"
+    },
+    {
+        "name": "data",
+        "datatype": "string"
+    },
+    {
+        "name": "in_successful_contract_call",
+        "datatype": "boolean"
+    },
+    {
+        "name": "transaction_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_account",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_fee_account",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_successful",
+        "datatype": "boolean"
+    },
+    {
+        "name": "transaction_index",
+        "datatype": "long"
+    },
+    {
+        "name": "operation_body",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_result_code",
+        "datatype": "string"
+    },
+    {
+        "name": "operation_type",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_closed_at",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_signature",
+        "datatype": "string"
+    }
+]

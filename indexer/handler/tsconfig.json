@@ -6,12 +6,11 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types"],
     "resolveJsonModule": true,
     "noEmit": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "worker-configuration.d.ts"],
   "exclude": ["node_modules"]
 }

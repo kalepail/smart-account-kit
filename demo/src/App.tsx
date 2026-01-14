@@ -25,9 +25,8 @@ const CONFIG = {
   webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CBSHV66WG7UV6FQVUTB67P3DZUEJ2KJ5X6JKQH5MFRAAFNFJUAJVXJYV",
   nativeTokenContract: import.meta.env.VITE_NATIVE_TOKEN_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
   ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CDGMOL3BP6Y6LYOXXTRNXBNJ2SLNTQ47BGG3LOS2OBBE657E3NYCN54B",
-  // Launchtube fee sponsoring (optional)
-  launchtubeUrl: import.meta.env.VITE_LAUNCHTUBE_URL || "",
-  launchtubeJwt: import.meta.env.VITE_LAUNCHTUBE_JWT || "",
+  // Relayer fee sponsoring (optional)
+  relayerUrl: import.meta.env.VITE_RELAYER_URL || "",
 };
 
 // Known policy contracts - reads from environment variables with testnet defaults
@@ -233,13 +232,8 @@ function App() {
           storage: new IndexedDBStorage(),
           rpName: "Smart Account Kit Demo",
           externalWallet: walletAdapter,
-          // Enable Launchtube fee sponsoring if URL is configured
-          launchtube: CONFIG.launchtubeUrl
-            ? {
-                url: CONFIG.launchtubeUrl,
-                jwt: CONFIG.launchtubeJwt || undefined,
-              }
-            : undefined,
+          // Enable Relayer fee sponsoring if URL is configured
+          relayerUrl: CONFIG.relayerUrl || undefined,
         });
         setKit(newKit);
         setConfigValid(true);
@@ -251,9 +245,9 @@ function App() {
 
         log("SDK initialized with provided config", "success");
 
-        // Log Launchtube status
-        if (newKit.launchtube) {
-          log("Launchtube fee sponsoring enabled", "success");
+        // Log fee sponsoring status
+        if (newKit.relayer) {
+          log("Relayer fee sponsoring enabled", "success");
         }
 
         // Sync credentials - clean up any that are already deployed,
@@ -704,9 +698,9 @@ function App() {
           >
             {configValid ? "Config Valid" : "Missing Config"}
           </span>
-          {kit?.launchtube && (
-            <span className="status connected" title="Fee sponsoring via Launchtube">
-              Launchtube
+          {kit?.relayer && (
+            <span className="status connected" title="Fee sponsoring via Relayer">
+              Relayer
             </span>
           )}
         </div>

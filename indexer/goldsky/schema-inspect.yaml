@@ -1,0 +1,116 @@
+# Schema inspection pipeline for ALL Stellar mainnet datasets
+# Deploy: goldsky turbo apply schema-inspect.yaml
+# Inspect: goldsky turbo inspect schema-inspect-all
+# Delete: goldsky turbo delete schema-inspect-all
+
+name: schema-inspect-all
+resource_size: s
+
+sources:
+  # All 7 Stellar mainnet datasets
+  stellar_transactions:
+    type: dataset
+    dataset_name: stellar_mainnet.transactions
+    version: 1.1.0
+    start_at: latest
+
+  stellar_transfers:
+    type: dataset
+    dataset_name: stellar_mainnet.transfers
+    version: 1.1.0
+    start_at: latest
+
+  stellar_events:
+    type: dataset
+    dataset_name: stellar_mainnet.events
+    version: 1.1.0
+    start_at: latest
+
+  stellar_operations:
+    type: dataset
+    dataset_name: stellar_mainnet.operations
+    version: 1.1.0
+    start_at: latest
+
+  stellar_ledger_entries:
+    type: dataset
+    dataset_name: stellar_mainnet.ledger_entries
+    version: 1.1.0
+    start_at: latest
+
+  stellar_ledgers:
+    type: dataset
+    dataset_name: stellar_mainnet.ledgers
+    version: 1.1.0
+    start_at: latest
+
+  stellar_balances:
+    type: dataset
+    dataset_name: stellar_mainnet.balances
+    version: 1.1.0
+    start_at: latest
+
+transforms:
+  transactions_passthrough:
+    type: sql
+    primary_key: transaction_hash
+    sql: SELECT * FROM stellar_transactions
+
+  transfers_passthrough:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM stellar_transfers
+
+  events_passthrough:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM stellar_events
+
+  operations_passthrough:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM stellar_operations
+
+  ledger_entries_passthrough:
+    type: sql
+    primary_key: id
+    sql: SELECT * FROM stellar_ledger_entries
+
+  ledgers_passthrough:
+    type: sql
+    primary_key: ledger_sequence
+    sql: SELECT * FROM stellar_ledgers
+
+  balances_passthrough:
+    type: sql
+    primary_key: account_id, asset_code
+    sql: SELECT * FROM stellar_balances
+
+sinks:
+  sink_transactions:
+    type: blackhole
+    from: transactions_passthrough
+
+  sink_transfers:
+    type: blackhole
+    from: transfers_passthrough
+
+  sink_events:
+    type: blackhole
+    from: events_passthrough
+
+  sink_operations:
+    type: blackhole
+    from: operations_passthrough
+
+  sink_ledger_entries:
+    type: blackhole
+    from: ledger_entries_passthrough
+
+  sink_ledgers:
+    type: blackhole
+    from: ledgers_passthrough
+
+  sink_balances:
+    type: blackhole
+    from: balances_passthrough

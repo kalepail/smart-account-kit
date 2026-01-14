@@ -1,0 +1,380 @@
+[
+    [
+        {
+            "name": "account_id",
+            "value": "GA22GMTPNBGOLB6R2LARNXQHSS6YNZRQLAQLWN6FR2X2T4SOZSS6ZV6N"
+        },
+        {
+            "name": "asset_code",
+            "value": "NEURAL"
+        },
+        {
+            "name": "asset_type",
+            "value": "credit_alphanum12"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GDWPLDNL6LPRCICPDVXG7BQCT2JPO6R3QD7HOHQSG47TLQU33M2KNEUR"
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "44864702006369"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60151293"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "trustline"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:10:14.902161324"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA22GMTPNBGOLB6R2LARNXQHSS6YNZRQLAQLWN6FR2X2T4SOZSS6ZV6N"
+        },
+        {
+            "name": "asset_code",
+            "value": "XLM"
+        },
+        {
+            "name": "asset_type",
+            "value": "native"
+        },
+        {
+            "name": "asset_issuer",
+            "value": ""
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "237110834"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60151293"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "account"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:08:58.490192277"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA22MHPWUODDYFSQMQ3I6BJAHEJCDLEPOIYG5RP47LLIO3YV3KPSIVXV"
+        },
+        {
+            "name": "asset_code",
+            "value": "XLM"
+        },
+        {
+            "name": "asset_type",
+            "value": "native"
+        },
+        {
+            "name": "asset_issuer",
+            "value": ""
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "969993541131"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60151525"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "account"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:20:31.752027422"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA22STCZGYT74ZAVFG2RCQP2MVAXZTGLW27VUY4JK3CDWYXJUOVDIVXV"
+        },
+        {
+            "name": "asset_code",
+            "value": "XLM"
+        },
+        {
+            "name": "asset_type",
+            "value": "native"
+        },
+        {
+            "name": "asset_issuer",
+            "value": ""
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "14989900"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60151491"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "account"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:30:31.625750450"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA233R5HB3T4UPNAJ75RNZBSRKJRXZHFEEN6NV3HRCC3KBVURN3LCN4V"
+        },
+        {
+            "name": "asset_code",
+            "value": "UltraEUR"
+        },
+        {
+            "name": "asset_type",
+            "value": "credit_alphanum12"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GAFSZXHPYGIOMA4Q46HSTWOYBPGBOLAPRFQJVOVHWG3XBJDBZLUAA2SD"
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "288591528600000"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60222706"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "trustline"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:25:00.370497705"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA233R5HB3T4UPNAJ75RNZBSRKJRXZHFEEN6NV3HRCC3KBVURN3LCN4V"
+        },
+        {
+            "name": "asset_code",
+            "value": "UltraRLUSD"
+        },
+        {
+            "name": "asset_type",
+            "value": "credit_alphanum12"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GAFSZXHPYGIOMA4Q46HSTWOYBPGBOLAPRFQJVOVHWG3XBJDBZLUAA2SD"
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "232632000000000"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60222637"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "trustline"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:39:45.675395464"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA233R5HB3T4UPNAJ75RNZBSRKJRXZHFEEN6NV3HRCC3KBVURN3LCN4V"
+        },
+        {
+            "name": "asset_code",
+            "value": "UltraUSD"
+        },
+        {
+            "name": "asset_type",
+            "value": "credit_alphanum12"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GAFSZXHPYGIOMA4Q46HSTWOYBPGBOLAPRFQJVOVHWG3XBJDBZLUAA2SD"
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "294079375000000"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60222729"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "trustline"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:12:18.449671486"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA233R5HB3T4UPNAJ75RNZBSRKJRXZHFEEN6NV3HRCC3KBVURN3LCN4V"
+        },
+        {
+            "name": "asset_code",
+            "value": "UltraUSDC"
+        },
+        {
+            "name": "asset_type",
+            "value": "credit_alphanum12"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GAFSZXHPYGIOMA4Q46HSTWOYBPGBOLAPRFQJVOVHWG3XBJDBZLUAA2SD"
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "211516000000000"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60222615"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "trustline"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:13:18.479727768"
+        }
+    ],
+    [
+        {
+            "name": "account_id",
+            "value": "GA234NGBK45YPL6ODCDWUYCOURFKFSKHWWKHMJWZTY667D3PWB42QB4U"
+        },
+        {
+            "name": "asset_code",
+            "value": "ASTH"
+        },
+        {
+            "name": "asset_type",
+            "value": "credit_alphanum4"
+        },
+        {
+            "name": "asset_issuer",
+            "value": "GB3RNZA7QRAQDCY5JYV3RVVUXZPQPREB6IAYKCJTVSGSSEL5UCV3ONGA"
+        },
+        {
+            "name": "liquidity_pool_id",
+            "value": ""
+        },
+        {
+            "name": "balance",
+            "value": "10971282480"
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "24660577"
+        },
+        {
+            "name": "change_type",
+            "value": "updated"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "trustline"
+        },
+        {
+            "name": "ingested_at",
+            "value": "2025-12-12 14:34:46.678915498"
+        }
+    ]
+]

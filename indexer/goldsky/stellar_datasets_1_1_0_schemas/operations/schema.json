@@ -1,0 +1,70 @@
+[
+    {
+        "name": "body",
+        "datatype": "string"
+    },
+    {
+        "name": "event_count",
+        "datatype": "long"
+    },
+    {
+        "name": "id",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_entry_changes_count",
+        "datatype": "long"
+    },
+    {
+        "name": "result_code",
+        "datatype": "string"
+    },
+    {
+        "name": "source_account",
+        "datatype": "string"
+    },
+    {
+        "name": "source_account_muxed",
+        "datatype": "string"
+    },
+    {
+        "name": "type",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_account",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_fee_account",
+        "datatype": "string"
+    },
+    {
+        "name": "transaction_successful",
+        "datatype": "boolean"
+    },
+    {
+        "name": "transaction_index",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_sequence",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_hash",
+        "datatype": "string"
+    },
+    {
+        "name": "ledger_closed_at",
+        "datatype": "long"
+    },
+    {
+        "name": "ledger_signature",
+        "datatype": "string"
+    }
+]

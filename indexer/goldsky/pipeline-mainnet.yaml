@@ -1,4 +1,4 @@
-# Goldsky Pipeline for Smart Account Kit Event Indexing - MAINNET
+# Goldsky Turbo Pipeline for Smart Account Kit Event Indexing - MAINNET
 #
 # This pipeline indexes all smart account events from Stellar to enable
 # reverse lookups from signer public keys to contract IDs and full state tracking.
@@ -13,26 +13,32 @@
 # - policy_removed: When a policy is removed from a context rule
 #
 # Deployment:
-#   goldsky pipeline apply ./pipeline-mainnet.yaml --status ACTIVE
+#   goldsky turbo apply ./pipeline-mainnet.yaml
 
 name: smart-account-signers-mainnet
-resource_size: m
-apiVersion: 3
+resource_size: xl
+
+config_overrides:
+  env:
+    STREAMLING__INTERNAL_BUFFER_SIZE: "1"
+    STREAMLING__RECORD_BATCH_SIZE: "1"
 
 sources:
   stellar_events:
     type: dataset
-    dataset_name: stellar.events
-    version: 3.2.0
+    dataset_name: stellar_mainnet.events
+    version: 1.1.0
     start_at: earliest
 
 transforms:
   signer_events:
     type: sql
+    primary_key: id
     sql: |
       SELECT
         id,
         ledger_sequence,
+        ledger_closed_at,
         contract_id,
         topics,
         data,
@@ -49,14 +55,16 @@ transforms:
         transaction_hash
       FROM stellar_events
       WHERE
-        topics LIKE '%context_rule_added%'
-        OR topics LIKE '%context_rule_updated%'
-        OR topics LIKE '%context_rule_removed%'
-        OR topics LIKE '%signer_added%'
-        OR topics LIKE '%signer_removed%'
-        OR topics LIKE '%policy_added%'
-        OR topics LIKE '%policy_removed%'
-    primary_key: id
+        in_successful_contract_call = true
+        AND (
+          topics LIKE '%context_rule_added%'
+          OR topics LIKE '%context_rule_updated%'
+          OR topics LIKE '%context_rule_removed%'
+          OR topics LIKE '%signer_added%'
+          OR topics LIKE '%signer_removed%'
+          OR topics LIKE '%policy_added%'
+          OR topics LIKE '%policy_removed%'
+        )
 
 sinks:
   postgres_signers:
@@ -65,3 +73,4 @@ sinks:
     from: signer_events
     table: smart_account_signer_events
     schema: public
+    primary_key: id

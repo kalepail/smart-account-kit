@@ -9,9 +9,11 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import postgres from "postgres";
 
-// Types
-interface Env {
-  DATABASE_URL: string;
+// Extend the generated Env interface with secrets (not in wrangler.toml)
+declare global {
+  interface Env {
+    DATABASE_URL: string;
+  }
 }
 
 interface ContractSummary {

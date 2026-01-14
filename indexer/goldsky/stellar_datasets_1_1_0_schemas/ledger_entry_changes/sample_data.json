@@ -1,0 +1,88 @@
+[
+    [
+        {
+            "name": "id",
+            "value": "60028754-04d29bf3075e47ae97992169edb39c4711d2215ee77bf29baeb130692eee1ac4-0-0"
+        },
+        {
+            "name": "change_type",
+            "value": "state"
+        },
+        {
+            "name": "ledger_entry_type",
+            "value": "account"
+        },
+        {
+            "name": "entry_data",
+            "value": "{\"account\":{\"account_id\":\"GBYUYEAO52BYHZEUMLHMHM5SWENBB2RHKAGDVAKBUHZLJTSSRMR6SZYL\",\"balance\":\"14946364525\",\"ext\":{\"v1\":{\"ext\":{\"v2\":{\"ext\":{\"v3\":{\"ext\":\"v0\",\"seq_ledger\":56176131,\"seq_time\":\"1742126782\"}},\"num_sponsored\":0,\"num_sponsoring\":0,\"signer_sponsoring_i_ds\":[]}},\"liabilities\":{\"buying\":\"2184670861\",\"selling\":\"878227320\"}}},\"flags\":0,\"home_domain\":\"\",\"inflation_dest\":null,\"num_sub_entries\":9,\"seq_num\":\"125312130499401448\",\"signers\":[],\"thresholds\":\"01000000\"}}"
+        },
+        {
+            "name": "key_data",
+            "value": ""
+        },
+        {
+            "name": "last_modified_ledger_sequence",
+            "value": "60028754"
+        },
+        {
+            "name": "operation_id",
+            "value": "60028754-04d29bf3075e47ae97992169edb39c4711d2215ee77bf29baeb130692eee1ac4-0"
+        },
+        {
+            "name": "operation_type",
+            "value": "manage_sell_offer"
+        },
+        {
+            "name": "operation_result_code",
+            "value": "ManageSellOfferSuccess"
+        },
+        {
+            "name": "operation_source_account",
+            "value": "GBYUYEAO52BYHZEUMLHMHM5SWENBB2RHKAGDVAKBUHZLJTSSRMR6SZYL"
+        },
+        {
+            "name": "operation_source_account_muxed",
+            "value": ""
+        },
+        {
+            "name": "operation_body",
+            "value": "{\"manage_sell_offer\":{\"amount\":\"1\",\"buying\":\"native\",\"offer_id\":\"0\",\"price\":{\"d\":1,\"n\":2147483647},\"selling\":{\"credit_alphanum4\":{\"asset_code\":\"XXA\",\"issuer\":\"GC4HS4CQCZULIOTGLLPGRAAMSBDLFRR6Y7HCUQG66LNQDISXKIXXADIM\"}}}}"
+        },
+        {
+            "name": "transaction_hash",
+            "value": "04d29bf3075e47ae97992169edb39c4711d2215ee77bf29baeb130692eee1ac4"
+        },
+        {
+            "name": "transaction_account",
+            "value": "GBM4BSR7VGAOYF7BY6NJ5ZUB2KYVBBYEDTRPRUBZUDKYHO6QCQUKGQIK"
+        },
+        {
+            "name": "transaction_fee_account",
+            "value": ""
+        },
+        {
+            "name": "transaction_successful",
+            "value": "1"
+        },
+        {
+            "name": "transaction_index",
+            "value": "28"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "60028754"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "427c8f184f3a06ad8327a2ab91397ae17cb28d2ec6d82be6fce38ce1d32e619a"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "2025-11-26 11:52:08"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "+uYtetjRjh+bUhTttZ5VMGVGA64fmEnunJ1UiXWS0gnALeSGtTf2/JO3YtHNKe6HC4PBWC3cwUK+YLVSMuHrAg=="
+        }
+    ]
+]

@@ -20,6 +20,7 @@ Stellar Network → Goldsky Pipeline → PostgreSQL → Cloudflare Worker API �
 
 - **`goldsky/`** - Goldsky pipeline configuration for ingesting Stellar events
 - **`handler/`** - Cloudflare Worker API for queries
+- **`relayer-proxy/`** - Cloudflare Worker proxy for OpenZeppelin Relayer Channels
 - **`demo/`** - Standalone demo for testing the indexer
 
 ## Deployment
@@ -167,4 +168,70 @@ curl https://smart-account-indexer.sdf-ecosystem.workers.dev/api/stats
 
 # Lookup credential
 curl https://smart-account-indexer.sdf-ecosystem.workers.dev/api/lookup/<credential-id-hex>
+```
+
+## Relayer Proxy
+
+The `relayer-proxy/` directory contains a Cloudflare Worker that proxies requests to the OpenZeppelin Relayer Channels service. This allows frontend applications to submit fee-sponsored transactions without exposing API keys.
+
+### Features
+
+- Automatic API key generation per IP address (one key per IP, persisted indefinitely)
+- Relayer's usage limits reset every 24 hours on their side - no need to regenerate keys
+- Rate limiting via Relayer's built-in fair use policy
+- Support for both testnet and mainnet
+
+### Deployment
+
+```bash
+cd relayer-proxy
+pnpm install
+
+# Create KV namespace
+wrangler kv namespace create API_KEYS
+
+# Update wrangler.toml with your KV namespace ID
+
+# Deploy (testnet)
+wrangler deploy
+
+# For mainnet production:
+wrangler kv namespace create API_KEYS --env production
+# Update wrangler.toml with production KV namespace ID
+wrangler deploy --env production
+```
+
+### Relayer Proxy API Endpoints
+
+**Health Check**
+```
+GET /
+```
+
+**Submit Transaction**
+```
+POST /
+Body: { "func": "base64-encoded-func", "auth": ["base64-auth-entry", ...] }
+Body: { "xdr": "base64-encoded-xdr" }
+```
+
+### SDK Integration
+
+Configure the Smart Account Kit to use the relayer proxy:
+
+```typescript
+const kit = new SmartAccountKit({
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+  accountWasmHash: '...',
+  webauthnVerifierAddress: 'C...',
+  // Use Relayer via proxy
+  relayerUrl: 'https://smart-account-relayer-proxy.your-domain.workers.dev',
+});
+
+// Transactions will automatically use Relayer if configured
+const result = await kit.signAndSubmit(transaction);
+
+// Or force a specific submission method
+const result = await kit.signAndSubmit(transaction, { forceMethod: 'relayer' });
 ```

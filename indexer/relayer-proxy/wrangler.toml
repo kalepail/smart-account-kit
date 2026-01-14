@@ -1,0 +1,41 @@
+name = "smart-account-relayer-proxy"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV Namespace for storing API keys per IP
+# Create KV namespace:
+# wrangler kv namespace create API_KEYS
+[[kv_namespaces]]
+binding = "API_KEYS"
+id = "6d548e99f4e14aeb93c25c7d2c0928b5"
+# For preview/dev:
+# preview_id = "<your-preview-kv-namespace-id>"
+
+# Increase CPU limit for long-running retries on testnet.
+# On testnet, if Relayer channel accounts are missing (after testnet reset),
+# we fund them via friendbot and retry for up to 5 minutes.
+# Network wait time (fetch calls) doesn't count toward CPU time.
+# Mainnet uses default limit since no retries occur there.
+[limits]
+cpu_ms = 300_000
+
+[vars]
+# Network this instance serves
+NETWORK = "testnet"
+RELAYER_BASE_URL = "https://channels.openzeppelin.com/testnet"
+
+# ============================================================================
+# Production environment (mainnet)
+# ============================================================================
+# Deploy: wrangler deploy --env production
+[env.production]
+name = "smart-account-relayer-proxy-mainnet"
+
+[env.production.vars]
+NETWORK = "mainnet"
+RELAYER_BASE_URL = "https://channels.openzeppelin.com"
+
+[[env.production.kv_namespaces]]
+binding = "API_KEYS"
+id = "4afa99de423a48feb9827ab35b158e5e"

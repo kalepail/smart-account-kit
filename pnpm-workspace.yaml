@@ -3,3 +3,4 @@ packages:
   - 'demo'
   - 'indexer/demo'
   - 'indexer/handler'
+  - 'indexer/relayer-proxy'

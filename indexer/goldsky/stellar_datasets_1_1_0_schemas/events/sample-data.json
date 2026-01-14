@@ -1,0 +1,188 @@
+[
+    [
+        {
+            "name": "id",
+            "value": "57837545-ff089e91c0440c01314b8314ead7b3009539e7aec0820352624d5f0e642c22ae-event-3"
+        },
+        {
+            "name": "type",
+            "value": "diagnostic"
+        },
+        {
+            "name": "contract_id",
+            "value": "75bb4470b1a4ff61ecc7295e8b8eb74419dd586eee404cdf5249915d890e0877"
+        },
+        {
+            "name": "topics",
+            "value": "[{\"symbol\":\"fn_return\"},{\"symbol\":\"burn\"}]"
+        },
+        {
+            "name": "data",
+            "value": "\"void\""
+        },
+        {
+            "name": "in_successful_contract_call",
+            "value": "true"
+        },
+        {
+            "name": "transaction_hash",
+            "value": "ff089e91c0440c01314b8314ead7b3009539e7aec0820352624d5f0e642c22ae"
+        },
+        {
+            "name": "transaction_account",
+            "value": "GCSDBCE7AMCMYEINOXN4NUNO3M4HRFZBFHKZALPMIWRHUQMXCDBILDW4"
+        },
+        {
+            "name": "transaction_fee_account",
+            "value": "GBGWQFSJSOMJ2BTOH5RLZUTZPV544YR2DF5CGYL7WDZ2Y6OSRHR6TUBE"
+        },
+        {
+            "name": "transaction_successful",
+            "value": "true"
+        },
+        {
+            "name": "transaction_index",
+            "value": "12"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "57837545"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "5d7f941894f1cc7b70f2634cbfdbc96d61123e7868786750b02b3d37f243807a"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "1751576061000"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "vBVhVVAG/6/ZJauy/qHwZXdpysCl9Sjl9e6eYlvlAJvbvVRIDYUyQU++87ym6ZAtRx1rbq13QEJ0ieZOWNafAA=="
+        }
+    ],
+    [
+        {
+            "name": "id",
+            "value": "57837545-ff089e91c0440c01314b8314ead7b3009539e7aec0820352624d5f0e642c22ae-event-9"
+        },
+        {
+            "name": "type",
+            "value": "diagnostic"
+        },
+        {
+            "name": "contract_id",
+            "value": "null"
+        },
+        {
+            "name": "topics",
+            "value": "[{\"symbol\":\"core_metrics\"},{\"symbol\":\"read_key_byte\"}]"
+        },
+        {
+            "name": "data",
+            "value": "{\"u64\":\"416\"}"
+        },
+        {
+            "name": "in_successful_contract_call",
+            "value": "false"
+        },
+        {
+            "name": "transaction_hash",
+            "value": "ff089e91c0440c01314b8314ead7b3009539e7aec0820352624d5f0e642c22ae"
+        },
+        {
+            "name": "transaction_account",
+            "value": "GCSDBCE7AMCMYEINOXN4NUNO3M4HRFZBFHKZALPMIWRHUQMXCDBILDW4"
+        },
+        {
+            "name": "transaction_fee_account",
+            "value": "GBGWQFSJSOMJ2BTOH5RLZUTZPV544YR2DF5CGYL7WDZ2Y6OSRHR6TUBE"
+        },
+        {
+            "name": "transaction_successful",
+            "value": "true"
+        },
+        {
+            "name": "transaction_index",
+            "value": "12"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "57837545"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "5d7f941894f1cc7b70f2634cbfdbc96d61123e7868786750b02b3d37f243807a"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "1751576061000"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "vBVhVVAG/6/ZJauy/qHwZXdpysCl9Sjl9e6eYlvlAJvbvVRIDYUyQU++87ym6ZAtRx1rbq13QEJ0ieZOWNafAA=="
+        }
+    ],
+    [
+        {
+            "name": "id",
+            "value": "57837545-ff089e91c0440c01314b8314ead7b3009539e7aec0820352624d5f0e642c22ae-event-12"
+        },
+        {
+            "name": "type",
+            "value": "diagnostic"
+        },
+        {
+            "name": "contract_id",
+            "value": "null"
+        },
+        {
+            "name": "topics",
+            "value": "[{\"symbol\":\"core_metrics\"},{\"symbol\":\"write_data_byte\"}]"
+        },
+        {
+            "name": "data",
+            "value": "{\"u64\":\"1588\"}"
+        },
+        {
+            "name": "in_successful_contract_call",
+            "value": "false"
+        },
+        {
+            "name": "transaction_hash",
+            "value": "ff089e91c0440c01314b8314ead7b3009539e7aec0820352624d5f0e642c22ae"
+        },
+        {
+            "name": "transaction_account",
+            "value": "GCSDBCE7AMCMYEINOXN4NUNO3M4HRFZBFHKZALPMIWRHUQMXCDBILDW4"
+        },
+        {
+            "name": "transaction_fee_account",
+            "value": "GBGWQFSJSOMJ2BTOH5RLZUTZPV544YR2DF5CGYL7WDZ2Y6OSRHR6TUBE"
+        },
+        {
+            "name": "transaction_successful",
+            "value": "true"
+        },
+        {
+            "name": "transaction_index",
+            "value": "12"
+        },
+        {
+            "name": "ledger_sequence",
+            "value": "57837545"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "5d7f941894f1cc7b70f2634cbfdbc96d61123e7868786750b02b3d37f243807a"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "1751576061000"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "vBVhVVAG/6/ZJauy/qHwZXdpysCl9Sjl9e6eYlvlAJvbvVRIDYUyQU++87ym6ZAtRx1rbq13QEJ0ieZOWNafAA=="
+        }
+    ]
+]

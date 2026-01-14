@@ -64,32 +64,24 @@ const result = await kit.signAndSubmit(transaction);
 | `storage` | StorageAdapter | No | Credential storage adapter |
 | `rpId` | string | No | WebAuthn relying party ID |
 | `rpName` | string | No | WebAuthn relying party name |
-| `launchtube` | LaunchtubeConfig | No | Launchtube fee sponsoring config |
+| `relayerUrl` | string | No | Relayer proxy URL for fee sponsoring |
 
-### Launchtube Fee Sponsoring
+### Fee Sponsoring
 
-Launchtube is a service that sponsors transaction fees, enabling gasless transactions for users. When configured, all transactions are submitted via Launchtube by default.
+Configure a relayer URL to enable gasless transactions. The SDK posts `{ func, auth }` for
+invokeHostFunction flows and `{ xdr }` for signed transactions (e.g., deployments).
 
 ```typescript
 const kit = new SmartAccountKit({
   // ... other config
-  launchtube: {
-    url: 'https://launchtube.xyz',
-    jwt: 'your-jwt-token', // Optional if handled server-side
-  },
+  relayerUrl: 'https://my-relayer-proxy.example.com',
 });
 
-// All operations now use Launchtube by default
+// Transactions automatically use the Relayer if configured
 await kit.transfer(tokenContract, recipient, amount);
 
-// To bypass Launchtube for specific operations, use skipLaunchtube
-await kit.transfer(tokenContract, recipient, amount, { skipLaunchtube: true });
-
-// Check Launchtube credits
-if (kit.launchtube) {
-  const info = await kit.launchtube.getInfo();
-  console.log('Credits remaining:', info?.credits);
-}
+// To bypass the Relayer for specific operations
+await kit.transfer(tokenContract, recipient, amount, { forceMethod: 'rpc' });
 ```
 
 ### Storage Adapters
@@ -175,7 +167,7 @@ await kit.connectWallet({ credentialId: '...' });   // Connect with specific cre
 await kit.connectWallet({ contractId: 'C...' });    // Connect with specific contract
 
 // Transfer tokens
-const result = await kit.transfer('CTOKEN...', 'GRECIPIENT...', '100');
+const result = await kit.transfer('CTOKEN...', 'GRECIPIENT...', 100);
 
 // Disconnect
 await kit.disconnect();
@@ -372,7 +364,6 @@ if (kit.externalSigners.canSignFor('GABC...')) {
 import type {
   SmartAccountConfig,     // SDK initialization config
   PolicyConfig,           // Policy contract config
-  LaunchtubeConfig,       // Launchtube fee sponsoring config
   SubmissionOptions,      // Transaction submission options
 } from 'smart-account-kit';
 ```
@@ -625,68 +616,61 @@ await kit.externalSigners.addFromWallet(adapter);
 
 ---
 
-### Launchtube Client
+### Relayer Client
 
-The SDK includes a Launchtube client for fee-sponsored transaction submission.
+The SDK includes a Relayer client for fee-sponsored transaction submission via the Relayer proxy.
 
 ```typescript
 import {
-  LaunchtubeClient,
+  RelayerClient,
+  RelayerErrorCodes,
 } from 'smart-account-kit';
 
 import type {
-  LaunchtubeResponse,
-  LaunchtubeSendOptions,
+  RelayerResponse,
+  RelayerSendOptions,
+  RelayerErrorCode,
 } from 'smart-account-kit';
 ```
 
 #### Using via SmartAccountKit (Recommended)
 
-When Launchtube is configured in SmartAccountKit, it's used automatically for all transaction submissions:
+When the Relayer is configured in SmartAccountKit, it's used automatically for all transaction submissions:
 
 ```typescript
 const kit = new SmartAccountKit({
   // ... other config
-  launchtube: {
-    url: 'https://launchtube.xyz',
-    jwt: 'your-jwt-token', // Optional
-  },
+  relayerUrl: 'https://my-relayer-proxy.example.com',
 });
 
-// Transactions automatically use Launchtube
+// Transactions automatically use the Relayer
 await kit.transfer(tokenContract, recipient, amount);
 
-// Bypass Launchtube for specific operations
-await kit.transfer(tokenContract, recipient, amount, { skipLaunchtube: true });
+// Bypass the Relayer for specific operations
+await kit.transfer(tokenContract, recipient, amount, { forceMethod: 'rpc' });
 
-// Access the Launchtube client directly
-if (kit.launchtube) {
-  const info = await kit.launchtube.getInfo();
+// Access the Relayer client directly
+if (kit.relayer) {
+  const result = await kit.relayer.sendXdr(signedTransaction);
 }
 ```
 
-#### Using LaunchtubeClient Directly
+#### Using RelayerClient Directly
 
 ```typescript
-const launchtube = new LaunchtubeClient({
-  url: 'https://launchtube.xyz',
-  jwt: 'your-jwt-token',
-});
+const relayer = new RelayerClient('https://my-relayer-proxy.example.com');
 
-// Submit a transaction for fee sponsoring
-const result = await launchtube.send(signedTransaction, {
-  fee: 1000000, // Optional: max fee in stroops
-});
+// Submit a transaction for fee sponsoring (func + auth)
+const result = await relayer.send(funcXdr, authXdrs);
+
+// Or submit a signed transaction for fee-bumping
+const xdrResult = await relayer.sendXdr(signedTransaction);
 
 if (result.success) {
   console.log('Transaction hash:', result.hash);
 } else {
-  console.error('Failed:', result.error);
+  console.error('Failed:', result.error, result.errorCode);
 }
-
-// Check remaining credits
-const info = await launchtube.getInfo();
-console.log('Credits:', info?.credits);
 ```
 
 ---

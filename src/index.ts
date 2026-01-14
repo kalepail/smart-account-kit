@@ -32,7 +32,6 @@ export type {
   // Configuration
   SmartAccountConfig,
   PolicyConfig,
-  LaunchtubeConfig,
 
   // Credentials & Sessions
   StoredCredential,
@@ -45,6 +44,7 @@ export type {
   ConnectWalletResult,
   TransactionResult,
   SubmissionOptions,
+  SubmissionMethod,
 
   // External Wallet Integration
   ExternalWalletAdapter,
@@ -180,12 +180,13 @@ export type {
   IndexerStatsResponse,
 } from "./indexer";
 
-// Launchtube client for fee-sponsored transactions
-export { LaunchtubeClient } from "./launchtube";
+// Relayer client for fee-sponsored transactions via proxy
+export { RelayerClient, RelayerErrorCodes } from "./relayer";
 export type {
-  LaunchtubeResponse,
-  LaunchtubeSendOptions,
-} from "./launchtube";
+  RelayerResponse,
+  RelayerSendOptions,
+  RelayerErrorCode,
+} from "./relayer";
 
 // Wallet Adapters
 export { StellarWalletsKitAdapter } from "./wallet-adapter";

@@ -1,0 +1,29 @@
+[
+    [
+        {
+            "name": "ledger_sequence",
+            "value": "60045275"
+        },
+        {
+            "name": "ledger_hash",
+            "value": "940280961e48781e7b337a5b37881fd4053973f8d82f5c7b404cfd411bd2e886"
+        },
+        {
+            "name": "ledger_closed_at",
+            "value": "2025-11-27 14:23:15"
+        },
+        {
+            "name": "ledger_signature",
+            "value": "gKoQFcElyTEtAmZzK1dQyY9Aq9bma5VHhFMfJVOXWdzc+3DF53ZykfmBVRBqkpjjcN1TvaFNgGQgAhX2QRqGDQ=="
+        },
+        {
+            "name": "transaction_count",
+            "value": "409"
+        },
+        {
+            "name": "_gs_op",
+            "value": "i"
+        }
+    ]
+]
+

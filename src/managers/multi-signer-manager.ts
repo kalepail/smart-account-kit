@@ -19,7 +19,7 @@ import type { Keypair, Transaction, rpc } from "@stellar/stellar-sdk";
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type { Signer as ContractSigner, ContextRuleType } from "smart-account-kit-bindings";
 import type { ExternalSignerManager } from "../external-signers";
-import type { SelectedSigner, TransactionResult } from "../types";
+import type { SelectedSigner, SubmissionOptions, TransactionResult } from "../types";
 import { BASE_FEE } from "../constants";
 import { getCredentialIdFromSigner, collectUniqueSigners } from "../builders";
 
@@ -79,10 +79,10 @@ export interface MultiSignerManagerDeps {
     recipient: string,
     amount: number,
     selectedSigners: SelectedSigner[],
-    options?: MultiSignerOptions & { skipLaunchtube?: boolean }
+    options?: MultiSignerOptions
   ) => Promise<TransactionResult>;
-  /** Check if Launchtube should be used (default when configured, unless skipLaunchtube is true) */
-  shouldUseLaunchtube: (options?: { skipLaunchtube?: boolean }) => boolean;
+  /** Check if fee sponsoring should be used */
+  shouldUseFeeSponsoring: (options?: SubmissionOptions) => boolean;
 }
 
 /**
@@ -189,7 +189,7 @@ export class MultiSignerManager {
   async operation<T>(
     assembledTx: AssembledTransaction<T>,
     selectedSigners: SelectedSigner[],
-    options?: MultiSignerOptions & { skipLaunchtube?: boolean }
+    options?: MultiSignerOptions
   ): Promise<TransactionResult> {
     const onLog = options?.onLog ?? (() => {});
     const contractId = this.deps.getContractId();
@@ -418,9 +418,9 @@ export class MultiSignerManager {
       const assembled = assembleTransaction(normalizedTx as Transaction, resimResult);
       const preparedTx = assembled.build() as Transaction;
 
-      // Sign with deployer keypair if not using Launchtube, or if tx has source_account auth
+      // Sign with deployer keypair if not using fee sponsoring, or if tx has source_account auth
       // (source_account auth requires envelope signature; Address auth has signature in entry)
-      if (!this.deps.shouldUseLaunchtube(options) || this.deps.hasSourceAccountAuth(preparedTx)) {
+      if (!this.deps.shouldUseFeeSponsoring() || this.deps.hasSourceAccountAuth(preparedTx)) {
         preparedTx.sign(this.deps.deployerKeypair);
       }
 

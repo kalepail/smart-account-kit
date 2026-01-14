@@ -120,6 +120,9 @@ export interface SmartAccountConfig {
   /** Transaction timeout in seconds (default: 30) */
   timeoutInSeconds?: number;
 
+  /** Signature expiration in ledgers from current ledger (default: 720 = ~1 hour) */
+  signatureExpirationLedgers?: number;
+
   /** Custom storage adapter for credential persistence */
   storage?: StorageAdapter;
 
@@ -183,56 +186,30 @@ export interface SmartAccountConfig {
    * });
    *
    * // Discover all contracts for a credential ID
-   * const contracts = await kit.discoverContracts(credentialId);
+   * const contracts = await kit.discoverContractsByCredential(credentialId);
    * ```
    */
   indexerUrl?: string | false;
 
   /**
-   * Optional Launchtube configuration for fee-sponsored transaction submission.
-   * When configured, transactions can be submitted via Launchtube instead of
-   * directly to the RPC, allowing for gasless transactions.
+   * Optional Relayer proxy URL for fee-sponsored transaction submission.
+   * When configured, the SDK posts `{ func, auth }` for invokeHostFunction
+   * flows and `{ xdr }` for signed transactions, enabling gasless submissions.
    *
    * @example
    * ```typescript
    * const kit = new SmartAccountKit({
    *   // ... other config
-   *   launchtube: {
-   *     url: 'https://launchtube.xyz',
-   *     jwt: 'your-jwt-token', // Optional if handled server-side
-   *   },
+   *   relayerUrl: 'https://my-relayer-proxy.example.com',
    * });
    *
-   * // Submit transaction via Launchtube
-   * const result = await kit.launchtube.send(signedTransaction);
+   * // Transactions will automatically use the Relayer if configured
+   * const result = await kit.signAndSubmit(transaction);
    * ```
    */
-  launchtube?: LaunchtubeConfig;
+  relayerUrl?: string;
 }
 
-/**
- * Configuration for Launchtube fee sponsoring service
- */
-export interface LaunchtubeConfig {
-  /**
-   * Launchtube service URL (e.g., 'https://launchtube.xyz')
-   * Required to enable Launchtube integration.
-   */
-  url: string;
-
-  /**
-   * Optional JWT token for authentication.
-   * Some deployments handle JWT on the server side, in which case
-   * this can be omitted.
-   */
-  jwt?: string;
-
-  /**
-   * Optional custom headers to include in requests.
-   * Useful for proxied deployments or custom authentication schemes.
-   */
-  headers?: Record<string, string>;
-}
 
 /**
  * Configuration for policy contracts to include when creating wallets
@@ -354,18 +331,26 @@ export interface TransactionResult {
 }
 
 /**
+ * Submission method for transactions
+ */
+export type SubmissionMethod = "relayer" | "rpc";
+
+/**
  * Options for transaction submission.
  *
- * When Launchtube is configured, it's used by default for all submissions.
- * Use `skipLaunchtube: true` to bypass Launchtube and submit directly via RPC.
+ * By default, transactions are submitted via Relayer if configured,
+ * otherwise directly via RPC.
  */
 export interface SubmissionOptions {
   /**
-   * Skip Launchtube fee sponsoring for this submission.
-   * When true, submits directly via RPC even if Launchtube is configured.
-   * Default: false (use Launchtube if configured)
+   * Force a specific submission method, bypassing the default.
+   *
+   * - "relayer": Use Relayer proxy (fails if not configured)
+   * - "rpc": Submit directly via RPC (always available)
+   *
+   * When not specified, uses Relayer if configured, otherwise RPC.
    */
-  skipLaunchtube?: boolean;
+  forceMethod?: SubmissionMethod;
 }
 
 // ============================================================================

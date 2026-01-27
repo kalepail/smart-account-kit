@@ -590,10 +590,17 @@ export async function fundWallet(
       .setTimeout(30)
       .build();
 
+    // Re-simulate with signed Address credentials to get correct footprint and fees.
+    const resimResult = await deps.rpc.simulateTransaction(txWithAuth);
+
+    if ("error" in resimResult) {
+      return { success: false, hash: "", error: `Re-simulation failed: ${resimResult.error}` };
+    }
+
     const txWithAuthXdr = txWithAuth.toXDR();
     const normalizedTxWithAuth = TransactionBuilder.fromXDR(txWithAuthXdr, deps.networkPassphrase);
 
-    const preparedTx = rpc.assembleTransaction(normalizedTxWithAuth as Transaction, simResult).build();
+    const preparedTx = rpc.assembleTransaction(normalizedTxWithAuth as Transaction, resimResult).build();
 
     const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
     if (!deps.shouldUseFeeSponsoring(submissionOpts) || deps.hasSourceAccountAuth(preparedTx)) {

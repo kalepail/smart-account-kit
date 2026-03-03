@@ -111,6 +111,159 @@ export class RelayerClient {
     return !!this.url;
   }
 
+  private asObject(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private looksLikeErrorCode(value: string): boolean {
+    return /^[A-Z][A-Z0-9_:-]*$/.test(value.trim());
+  }
+
+  private extractResponseData(responseData: unknown): Record<string, unknown> {
+    const root = this.asObject(responseData);
+    if (!root) {
+      return {};
+    }
+    const nested = this.asObject(root.data);
+    return nested ?? root;
+  }
+
+  private hasTransactionFields(value: unknown): boolean {
+    const data = this.asObject(value);
+    if (!data) {
+      return false;
+    }
+    return (
+      typeof data.transactionId === "string" ||
+      typeof data.hash === "string" ||
+      typeof data.status === "string"
+    );
+  }
+
+  private isSuccessResponse(response: Response, responseData: unknown): boolean {
+    const root = this.asObject(responseData);
+    if (!root) {
+      return false;
+    }
+    if (root.success === true) {
+      return true;
+    }
+    if (!response.ok || root.success === false) {
+      return false;
+    }
+
+    // Backward compatibility: some relayer proxies return tx fields directly
+    // without a top-level `success` boolean.
+    if (this.hasTransactionFields(root)) {
+      return true;
+    }
+    const nested = this.asObject(root.data);
+    return this.hasTransactionFields(nested);
+  }
+
+  private extractErrorMessage(responseData: unknown, status: number): string {
+    const root = this.asObject(responseData);
+    if (!root) {
+      return `Relayer request failed with status ${status}`;
+    }
+
+    const message = typeof root.message === "string" ? root.message.trim() : "";
+    if (message.length > 0) {
+      return message;
+    }
+
+    const rawError = typeof root.error === "string" ? root.error.trim() : "";
+    if (rawError.length > 0 && !this.looksLikeErrorCode(rawError)) {
+      return rawError;
+    }
+
+    const nested = this.asObject(root.data);
+    const nestedMessage = nested && typeof nested.message === "string"
+      ? nested.message.trim()
+      : "";
+    if (nestedMessage.length > 0) {
+      return nestedMessage;
+    }
+
+    if (rawError.length > 0) {
+      return rawError;
+    }
+    return `Relayer request failed with status ${status}`;
+  }
+
+  private toSuccessResult(responseData: unknown): RelayerResponse {
+    const data = this.extractResponseData(responseData);
+    return {
+      success: true,
+      transactionId: typeof data.transactionId === "string" ? data.transactionId : undefined,
+      hash: typeof data.hash === "string" ? data.hash : undefined,
+      status: typeof data.status === "string" ? data.status : undefined,
+    };
+  }
+
+  private toErrorResult(responseData: unknown, status: number): RelayerResponse {
+    const errorCode = this.extractErrorCode(responseData);
+    return {
+      success: false,
+      error: this.extractErrorMessage(responseData, status),
+      errorCode,
+      details: this.extractResponseData(responseData),
+    };
+  }
+
+  private async submit(body: string, options?: RelayerSendOptions): Promise<RelayerResponse> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-Client-Name": NAME,
+      "X-Client-Version": VERSION,
+    };
+
+    try {
+      const controller = new AbortController();
+      const timeout = options?.timeout ?? this.timeout;
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(this.url, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      let responseData: unknown = null;
+      try {
+        responseData = await response.json();
+      } catch {
+        responseData = null;
+      }
+
+      if (this.isSuccessResponse(response, responseData)) {
+        return this.toSuccessResult(responseData);
+      }
+
+      return this.toErrorResult(responseData, response.status);
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return {
+          success: false,
+          error: "Relayer request timed out",
+          errorCode: "TIMEOUT",
+        };
+      }
+
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Relayer request failed",
+        details: err,
+      };
+    }
+  }
+
   /**
    * Submit a transaction via Relayer for fee sponsoring.
    *
@@ -142,70 +295,7 @@ export class RelayerClient {
     auth: string[],
     options?: RelayerSendOptions
   ): Promise<RelayerResponse> {
-    // Build headers
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-Client-Name": NAME,
-      "X-Client-Version": VERSION,
-    };
-
-    // Build request body - always use func + auth, never xdr
-    const body = JSON.stringify({ func, auth });
-
-    try {
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeout = options?.timeout ?? this.timeout;
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-      const response = await fetch(this.url, {
-        method: "POST",
-        headers,
-        body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const responseData = await response.json();
-
-      // Handle successful response
-      if (response.ok && responseData.success) {
-        const data = responseData.data ?? responseData;
-        return {
-          success: true,
-          transactionId: data.transactionId ?? undefined,
-          hash: data.hash ?? undefined,
-          status: data.status ?? undefined,
-        };
-      }
-
-      // Handle error response
-      const errorMessage = responseData.error ?? responseData.message ?? `Relayer request failed with status ${response.status}`;
-      const errorCode = this.extractErrorCode(responseData);
-
-      return {
-        success: false,
-        error: errorMessage,
-        errorCode,
-        details: responseData.data ?? responseData,
-      };
-    } catch (err) {
-      // Handle network errors and timeouts
-      if (err instanceof Error && err.name === "AbortError") {
-        return {
-          success: false,
-          error: "Relayer request timed out",
-          errorCode: "TIMEOUT",
-        };
-      }
-
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : "Relayer request failed",
-        details: err,
-      };
-    }
+    return this.submit(JSON.stringify({ func, auth }), options);
   }
 
   /**
@@ -236,81 +326,17 @@ export class RelayerClient {
       ? transaction
       : transaction.toXDR();
 
-    // Build headers
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-Client-Name": NAME,
-      "X-Client-Version": VERSION,
-    };
-
-    // Build request body
-    const body = JSON.stringify({ xdr });
-
-    try {
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeout = options?.timeout ?? this.timeout;
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-      const response = await fetch(this.url, {
-        method: "POST",
-        headers,
-        body,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const responseData = await response.json();
-
-      // Handle successful response
-      if (response.ok && responseData.success) {
-        const data = responseData.data ?? responseData;
-        return {
-          success: true,
-          transactionId: data.transactionId ?? undefined,
-          hash: data.hash ?? undefined,
-          status: data.status ?? undefined,
-        };
-      }
-
-      // Handle error response
-      const errorMessage = responseData.error ?? responseData.message ?? `Relayer request failed with status ${response.status}`;
-      const errorCode = this.extractErrorCode(responseData);
-
-      return {
-        success: false,
-        error: errorMessage,
-        errorCode,
-        details: responseData.data ?? responseData,
-      };
-    } catch (err) {
-      // Handle network errors and timeouts
-      if (err instanceof Error && err.name === "AbortError") {
-        return {
-          success: false,
-          error: "Relayer request timed out",
-          errorCode: "TIMEOUT",
-        };
-      }
-
-      return {
-        success: false,
-        error: err instanceof Error ? err.message : "Relayer request failed",
-        details: err,
-      };
-    }
+    return this.submit(JSON.stringify({ xdr }), options);
   }
 
   /**
    * Extract error code from Relayer response
    */
   private extractErrorCode(responseData: unknown): RelayerErrorCode | string | undefined {
-    if (!responseData || typeof responseData !== "object") {
+    const data = this.asObject(responseData);
+    if (!data) {
       return undefined;
     }
-
-    const data = responseData as Record<string, unknown>;
 
     // Check common error code locations
     if (typeof data.code === "string") {
@@ -324,6 +350,15 @@ export class RelayerClient {
       if (typeof nestedData.code === "string") {
         return nestedData.code;
       }
+      if (typeof nestedData.errorCode === "string") {
+        return nestedData.errorCode;
+      }
+      if (typeof nestedData.error === "string" && this.looksLikeErrorCode(nestedData.error)) {
+        return nestedData.error;
+      }
+    }
+    if (typeof data.error === "string" && this.looksLikeErrorCode(data.error)) {
+      return data.error;
     }
 
     return undefined;

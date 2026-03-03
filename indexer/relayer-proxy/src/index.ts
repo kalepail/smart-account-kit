@@ -39,11 +39,27 @@ interface StoredApiKey {
   createdAt: number;
 }
 
+interface ApiKeyReadResult {
+  storedKey: StoredApiKey;
+  needsMigration: boolean;
+}
+
 // Hono app
 const app = new Hono<{ Bindings: Env }>();
 
 // Enable CORS
 app.use("*", cors());
+
+app.onError((error, c) => {
+  console.error("Unhandled worker error:", error);
+  return c.json(
+    {
+      success: false,
+      error: "Internal server error",
+    },
+    500
+  );
+});
 
 // ============================================================================
 // Helper Functions
@@ -69,6 +85,95 @@ function getKVKey(ip: string): string {
 }
 
 /**
+ * Validate API key format before use.
+ */
+function isValidApiKey(apiKey: string): boolean {
+  const trimmed = apiKey.trim();
+  return (
+    trimmed.length >= API_KEY_MIN_LENGTH && trimmed.length <= API_KEY_MAX_LENGTH
+  );
+}
+
+/**
+ * Runtime type guard for stored API key records.
+ */
+function isStoredApiKey(value: unknown): value is StoredApiKey {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<StoredApiKey>;
+  return (
+    typeof candidate.apiKey === "string" &&
+    typeof candidate.createdAt === "number" &&
+    isValidApiKey(candidate.apiKey)
+  );
+}
+
+/**
+ * Read and normalize a stored API key record.
+ *
+ * Supports legacy plain-text values and migrates them lazily.
+ */
+async function readStoredApiKey(
+  env: Env,
+  kvKey: string
+): Promise<ApiKeyReadResult | null> {
+  try {
+    const raw = await env.API_KEYS.get(kvKey);
+    if (!raw) {
+      return null;
+    }
+
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      console.error(`Empty API key value in KV for ${kvKey}. Deleting record.`);
+      await env.API_KEYS.delete(kvKey);
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+
+      if (isStoredApiKey(parsed)) {
+        return { storedKey: parsed, needsMigration: false };
+      }
+
+      // Backward compatibility: JSON string value, e.g. "\"sk_...\""
+      if (typeof parsed === "string" && isValidApiKey(parsed)) {
+        return {
+          storedKey: {
+            apiKey: parsed.trim(),
+            createdAt: Date.now(),
+          },
+          needsMigration: true,
+        };
+      }
+    } catch {
+      // Backward compatibility: plain text value, e.g. "sk_..."
+      if (isValidApiKey(trimmed)) {
+        return {
+          storedKey: {
+            apiKey: trimmed,
+            createdAt: Date.now(),
+          },
+          needsMigration: true,
+        };
+      }
+    }
+
+    console.error(
+      `Corrupted API key KV value for ${kvKey}. Deleting invalid record.`
+    );
+    await env.API_KEYS.delete(kvKey);
+    return null;
+  } catch (error) {
+    console.error(`Failed reading API key from KV for ${kvKey}:`, error);
+    return null;
+  }
+}
+
+/**
  * Get or generate an API key for the given IP.
  * Keys are stored indefinitely - one key per IP address.
  * The Relayer's usage limits reset every 24 hours on their side.
@@ -80,9 +185,17 @@ async function getOrCreateApiKey(
   const kvKey = getKVKey(ip);
 
   // Check if we already have an API key for this IP
-  const cached = (await env.API_KEYS.get(kvKey, "json")) as StoredApiKey | null;
+  const cached = await readStoredApiKey(env, kvKey);
   if (cached) {
-    return { apiKey: cached.apiKey, isNew: false };
+    if (cached.needsMigration) {
+      try {
+        await env.API_KEYS.put(kvKey, JSON.stringify(cached.storedKey));
+      } catch (error) {
+        console.error(`Failed migrating legacy API key format for ${kvKey}:`, error);
+      }
+    }
+
+    return { apiKey: cached.storedKey.apiKey, isNew: false };
   }
 
   // No existing key - generate a new one from Relayer's /gen endpoint
@@ -98,7 +211,12 @@ async function getOrCreateApiKey(
   };
 
   // Store without expiration TTL - key persists until manually deleted
-  await env.API_KEYS.put(kvKey, JSON.stringify(storedKey));
+  try {
+    await env.API_KEYS.put(kvKey, JSON.stringify(storedKey));
+  } catch (error) {
+    console.error(`Failed storing API key in KV for ${kvKey}:`, error);
+    return null;
+  }
 
   return { apiKey: newApiKey, isNew: true };
 }
@@ -207,20 +325,20 @@ app.get("/", (c) => {
  * we'll fund them via friendbot and retry for up to 5 minutes.
  */
 app.post("/", async (c) => {
-  const ip = getClientIP(c.req.raw);
-  const apiKeyResult = await getOrCreateApiKey(c.env, ip);
-
-  if (!apiKeyResult) {
-    return c.json(
-      {
-        success: false,
-        error: "Could not obtain API key. Service may be misconfigured.",
-      },
-      500
-    );
-  }
-
   try {
+    const ip = getClientIP(c.req.raw);
+    const apiKeyResult = await getOrCreateApiKey(c.env, ip);
+
+    if (!apiKeyResult) {
+      return c.json(
+        {
+          success: false,
+          error: "Could not obtain API key. Service may be misconfigured.",
+        },
+        500
+      );
+    }
+
     const body = await c.req.json<{
       func?: string;
       auth?: string[];
@@ -315,6 +433,16 @@ app.post("/", async (c) => {
   } catch (error) {
     console.error("Relayer submission error:", error);
 
+    if (error instanceof SyntaxError) {
+      return c.json(
+        {
+          success: false,
+          error: "Invalid JSON body",
+        },
+        400
+      );
+    }
+
     if (error instanceof PluginExecutionError) {
       return c.json(
         {
@@ -355,33 +483,44 @@ app.post("/", async (c) => {
  * GET /fee-usage
  */
 app.get("/fee-usage", async (c) => {
-  const ip = getClientIP(c.req.raw);
-  const kvKey = getKVKey(ip);
+  try {
+    const ip = getClientIP(c.req.raw);
+    const kvKey = getKVKey(ip);
 
-  // Check if we have an API key for this IP
-  const cached = (await c.env.API_KEYS.get(kvKey, "json")) as StoredApiKey | null;
+    // Check if we have an API key for this IP
+    const cached = await readStoredApiKey(c.env, kvKey);
 
-  if (!cached) {
+    if (!cached) {
+      return c.json({
+        success: true,
+        data: {
+          hasKey: false,
+          message: "No API key assigned yet. Submit a transaction to get one.",
+        },
+      });
+    }
+
+    // Fee usage query requires admin access which we don't have for the managed service
+    // Just return key info
     return c.json({
       success: true,
       data: {
-        hasKey: false,
-        message: "No API key assigned yet. Submit a transaction to get one.",
+        hasKey: true,
+        keyCreatedAt: cached.storedKey.createdAt,
+        network: c.env.NETWORK,
+        message: "Fee usage details not available for managed service.",
       },
     });
+  } catch (error) {
+    console.error("Fee usage endpoint failed:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Could not read fee usage",
+      },
+      500
+    );
   }
-
-  // Fee usage query requires admin access which we don't have for the managed service
-  // Just return key info
-  return c.json({
-    success: true,
-    data: {
-      hasKey: true,
-      keyCreatedAt: cached.createdAt,
-      network: c.env.NETWORK,
-      message: "Fee usage details not available for managed service.",
-    },
-  });
 });
 
 /**
@@ -389,20 +528,31 @@ app.get("/fee-usage", async (c) => {
  * GET /status
  */
 app.get("/status", async (c) => {
-  const ip = getClientIP(c.req.raw);
-  const kvKey = getKVKey(ip);
+  try {
+    const ip = getClientIP(c.req.raw);
+    const kvKey = getKVKey(ip);
 
-  const apiKey = (await c.env.API_KEYS.get(kvKey, "json")) as StoredApiKey | null;
+    const apiKey = await readStoredApiKey(c.env, kvKey);
 
-  return c.json({
-    success: true,
-    data: {
-      clientIP: ip,
-      network: c.env.NETWORK,
-      hasKey: !!apiKey,
-      keyCreatedAt: apiKey?.createdAt,
-    },
-  });
+    return c.json({
+      success: true,
+      data: {
+        clientIP: ip,
+        network: c.env.NETWORK,
+        hasKey: !!apiKey,
+        keyCreatedAt: apiKey?.storedKey.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("Status endpoint failed:", error);
+    return c.json(
+      {
+        success: false,
+        error: "Could not read status",
+      },
+      500
+    );
+  }
 });
 
 // ============================================================================

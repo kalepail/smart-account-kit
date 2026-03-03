@@ -80,7 +80,7 @@ fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 
 # Build
 echo -e "${YELLOW}Building...${NC}"
-"$SCRIPT_DIR/build.sh"
+BINDINGS_VERSION="$NEW_VERSION" "$SCRIPT_DIR/build.sh"
 
 # Publish
 echo ""

@@ -83,8 +83,12 @@ echo -e "${YELLOW}Patching package.json...${NC}"
 
 cd "$BINDINGS_DIR"
 
-# Preserve version if it exists and isn't 0.0.0
-CURRENT_VERSION=$(node -p "require('./package.json').version || '0.1.0'" 2>/dev/null || echo "0.1.0")
+# Preserve version if it exists and isn't 0.0.0. Allow callers to force a
+# specific publish version via BINDINGS_VERSION.
+CURRENT_VERSION="${BINDINGS_VERSION:-}"
+if [ -z "$CURRENT_VERSION" ]; then
+    CURRENT_VERSION=$(node -p "require('./package.json').version || '0.1.0'" 2>/dev/null || echo "0.1.0")
+fi
 if [ "$CURRENT_VERSION" = "0.0.0" ]; then
     CURRENT_VERSION="0.1.0"
 fi

@@ -166,6 +166,30 @@ export function hasSourceAccountAuth(transaction: Transaction): boolean {
   return false;
 }
 
+export function buildTokenTransferHostFunction(
+  tokenContract: string,
+  fromAddress: string,
+  toAddress: string,
+  amountInStroops: bigint
+): xdr.HostFunction {
+  return xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: Address.fromString(tokenContract).toScAddress(),
+      functionName: "transfer",
+      args: [
+        xdr.ScVal.scvAddress(Address.fromString(fromAddress).toScAddress()),
+        xdr.ScVal.scvAddress(Address.fromString(toAddress).toScAddress()),
+        xdr.ScVal.scvI128(
+          new xdr.Int128Parts({
+            lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
+            hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
+          })
+        ),
+      ],
+    })
+  );
+}
+
 export async function simulateHostFunction(
   deps: {
     rpc: rpc.Server;
@@ -446,7 +470,6 @@ export async function fundWallet(
     const RESERVE_XLM = FRIENDBOT_RESERVE_XLM;
     let sourceAccount = await deps.rpc.getAccount(tempKeypair.publicKey());
 
-    const tokenAddress = Address.fromString(nativeTokenContract);
     const fromAddress = Address.fromString(tempKeypair.publicKey());
 
     const balanceKey = xdr.ScVal.scvVec([
@@ -483,24 +506,12 @@ export async function fundWallet(
 
     const amountInStroops = xlmToStroops(transferAmount);
 
-    const toAddress = Address.fromString(contractId);
-
     const transferOp = Operation.invokeHostFunction({
-      func: xdr.HostFunction.hostFunctionTypeInvokeContract(
-        new xdr.InvokeContractArgs({
-          contractAddress: tokenAddress.toScAddress(),
-          functionName: "transfer",
-          args: [
-            xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-            xdr.ScVal.scvAddress(toAddress.toScAddress()),
-            xdr.ScVal.scvI128(
-              new xdr.Int128Parts({
-                lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
-                hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-              })
-            ),
-          ],
-        })
+      func: buildTokenTransferHostFunction(
+        nativeTokenContract,
+        fromAddress.toString(),
+        contractId,
+        amountInStroops
       ),
       auth: [],
     });
@@ -702,25 +713,11 @@ export async function transfer(
   try {
     const amountInStroops = xlmToStroops(amount);
 
-    const tokenAddress = Address.fromString(tokenContract);
-    const fromAddress = Address.fromString(contractId);
-    const toAddress = Address.fromString(recipient);
-
-    const hostFunc = xdr.HostFunction.hostFunctionTypeInvokeContract(
-      new xdr.InvokeContractArgs({
-        contractAddress: tokenAddress.toScAddress(),
-        functionName: "transfer",
-        args: [
-          xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-          xdr.ScVal.scvAddress(toAddress.toScAddress()),
-          xdr.ScVal.scvI128(
-            new xdr.Int128Parts({
-              lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
-              hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-            })
-          ),
-        ],
-      })
+    const hostFunc = buildTokenTransferHostFunction(
+      tokenContract,
+      contractId,
+      recipient,
+      amountInStroops
     );
 
     const { authEntries } = await simulateHostFunction(

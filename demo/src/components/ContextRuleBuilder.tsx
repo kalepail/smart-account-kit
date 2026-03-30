@@ -11,7 +11,6 @@ import {
   createWeightedThresholdParams,
   LEDGERS_PER_DAY,
   getCredentialIdFromSigner,
-  formatSignerForDisplay,
   signersEqual,
 } from "smart-account-kit";
 import { rpc, xdr, Address, scValToNative } from "@stellar/stellar-sdk";
@@ -19,6 +18,7 @@ import { STROOPS_PER_XLM } from "../constants";
 import type { ContextRule, Signer, ContextRuleType } from "smart-account-kit-bindings";
 import type { ConnectedWallet } from "smart-account-kit";
 import { SignerPicker, type SelectedSigner } from "./SignerPicker";
+import { formatSignerForDisplay } from "../utils/sdk";
 
 // Configuration for RPC
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";

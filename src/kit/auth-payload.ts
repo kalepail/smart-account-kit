@@ -3,7 +3,7 @@ import type {
   AuthPayload,
   Signer as ContractSigner,
 } from "smart-account-kit-bindings";
-import { signersEqual } from "../builders";
+import { signersEqual } from "../signer-utils";
 import type { WebAuthnSigData } from "../contract-types";
 
 export function buildSignaturePayload(

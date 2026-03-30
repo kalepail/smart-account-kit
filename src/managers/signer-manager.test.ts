@@ -119,40 +119,4 @@ describe("SignerManager", () => {
     expect(result).toEqual({ result: null });
   });
 
-  it("removes a passkey signer by credential id", async () => {
-    const deps = makeDeps();
-    const credentialId = Buffer.from("credential-passkey").toString("base64url");
-    const publicKey = Buffer.alloc(65, 8);
-    const signer = {
-      tag: "External",
-      values: ["CCAAAAA", buildKeyData(publicKey, credentialId)],
-    } as const;
-
-    deps.storage.get.mockResolvedValue({
-      credentialId,
-      publicKey,
-      contractId: "CCONTRACT",
-    });
-    deps.wallet.get_context_rule.mockResolvedValue({
-      result: {
-        signers: [signer],
-        signer_ids: [88],
-      },
-    });
-    deps.wallet.remove_signer.mockResolvedValue({ result: null });
-    const manager = new SignerManager({
-      ...deps,
-      createPasskey: vi.fn(),
-      webauthnVerifierAddress: "CCAAAAA",
-    });
-
-    const result = await manager.removePasskey(4, credentialId);
-
-    expect(deps.storage.get).toHaveBeenCalledWith(credentialId);
-    expect(deps.wallet.remove_signer).toHaveBeenCalledWith({
-      context_rule_id: 4,
-      signer_id: 88,
-    });
-    expect(result).toEqual({ result: null });
-  });
 });

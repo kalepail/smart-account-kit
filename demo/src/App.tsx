@@ -3,8 +3,6 @@ import {
   SmartAccountKit,
   IndexedDBStorage,
   getCredentialIdFromSigner,
-  validateAddress,
-  validateAmount,
   StellarWalletsKitAdapter,
   type StoredCredential,
   type SelectedSigner,
@@ -14,6 +12,7 @@ import {
 import { Networks, rpc, Asset } from "@stellar/stellar-sdk";
 import type { ContextRule, Signer } from "smart-account-kit-bindings";
 import { STROOPS_PER_XLM, MAX_LOG_ENTRIES } from "./constants";
+import { validateAddress, validateAmount } from "./utils/sdk";
 
 // Import new components
 import { ContextRulesPanel, ContextRuleBuilder, ActiveSignerDisplay, SignerPicker } from "./components";

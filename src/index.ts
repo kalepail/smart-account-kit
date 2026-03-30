@@ -55,7 +55,6 @@ export type {
 } from "./types";
 
 // Contract Types (re-exported from bindings)
-import type { Signer } from "smart-account-kit-bindings";
 export type {
   // Contract Signer types
   Signer as ContractSigner,
@@ -71,9 +70,6 @@ export type {
   WeightedThresholdAccountParams,
   SpendingLimitAccountParams,
 } from "./contract-types";
-
-// SignerId is the same type as Signer - used for signature map keys
-export type ContractSignerId = Signer;
 
 // Storage adapters
 export {
@@ -107,12 +103,10 @@ export {
   wrapError,
 } from "./errors";
 
-// Utility functions (public API - low-level helpers are internal)
+// Utility functions
 export {
-  // Conversion utilities
   xlmToStroops,
   stroopsToXlm,
-  // Validation utilities
   validateAddress,
   validateAmount,
   validateNotEmpty,
@@ -137,17 +131,20 @@ export {
   LEDGERS_PER_HOUR,
   LEDGERS_PER_DAY,
   LEDGERS_PER_WEEK,
-  // Signer helper functions
-  getCredentialIdFromSigner,
+  // Compatibility helpers
+  truncateAddress,
   describeSignerType,
+  signerMatchesCredential,
+  signerMatchesAddress,
   formatSignerForDisplay,
+  formatContextType,
+} from "./builders";
+export {
+  getCredentialIdFromSigner,
   signersEqual,
   getSignerKey,
   collectUniqueSigners,
-  // Display helpers
-  truncateAddress,
-  formatContextType,
-} from "./builders";
+} from "./signer-utils";
 
 // Event emitter
 export { SmartAccountEventEmitter } from "./events";

@@ -10,7 +10,7 @@ import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import type { SmartAccountEventEmitter } from "../events";
 import type { StorageAdapter, StoredCredential } from "../types";
 import { buildKeyData } from "../utils";
-import { signersEqual } from "../builders";
+import { signersEqual } from "../signer-utils";
 
 /** Dependencies required by SignerManager */
 export interface SignerManagerDeps {
@@ -136,23 +136,5 @@ export class SignerManager {
       context_rule_id: contextRuleId,
       signer_id: rule.signer_ids[signerIndex],
     });
-  }
-
-  /**
-   * Remove a passkey signer by credential ID.
-   */
-  async removePasskey(contextRuleId: number, credentialId: string) {
-    const credential = await this.deps.storage.get(credentialId);
-    if (!credential) {
-      throw new Error(`Credential ${credentialId} not found in storage`);
-    }
-
-    const keyData = buildKeyData(credential.publicKey, credentialId);
-    const signer: ContractSigner = {
-      tag: "External",
-      values: [this.deps.webauthnVerifierAddress, keyData],
-    };
-
-    return this.remove(contextRuleId, signer);
   }
 }

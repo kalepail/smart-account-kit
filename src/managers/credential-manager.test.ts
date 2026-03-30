@@ -1,6 +1,5 @@
 import base64url from "base64url";
 import { describe, expect, it, vi } from "vitest";
-import { Keypair } from "@stellar/stellar-sdk";
 import type { StoredCredential } from "../types";
 import { CredentialManager } from "./credential-manager";
 
@@ -44,7 +43,6 @@ function makeDeps(initial: StoredCredential[] = []) {
   const signWithDeployer = vi.fn();
   const submitDeploymentTx = vi.fn();
   const deriveContractAddress = vi.fn();
-  const shouldUseFeeSponsoring = vi.fn().mockReturnValue(false);
   const getContractId = vi.fn().mockReturnValue(undefined);
 
   return {
@@ -58,9 +56,7 @@ function makeDeps(initial: StoredCredential[] = []) {
     signWithDeployer,
     submitDeploymentTx,
     deriveContractAddress,
-    shouldUseFeeSponsoring,
     getContractId,
-    deployerKeypair: Keypair.fromRawEd25519Seed(Buffer.alloc(32, 1)),
   };
 }
 
@@ -85,8 +81,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue("CCONTRACT-2"),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     await expect(manager.getAll()).resolves.toEqual(credentials);
@@ -122,8 +116,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     await expect(manager.getForWallet()).resolves.toEqual([]);
@@ -143,8 +135,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "Smart Account Kit",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     const credential = await manager.create({
@@ -185,8 +175,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     const saved = await manager.save({
@@ -235,8 +223,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     const result = await manager.deploy(credentialId, {
@@ -257,39 +243,6 @@ describe("CredentialManager", () => {
       contractId: "CCONTRACT",
       signedTransaction: "signed-xdr",
       submitResult: { success: true, hash: "tx-1" },
-    });
-  });
-
-  it("marks credentials deployed or failed", async () => {
-    const deps = makeDeps([
-      {
-        credentialId: "cred-1",
-        publicKey: Buffer.alloc(65, 1),
-        contractId: "CCONTRACT",
-        createdAt: 1,
-      },
-      {
-        credentialId: "cred-2",
-        publicKey: Buffer.alloc(65, 2),
-        contractId: "CCONTRACT",
-        createdAt: 2,
-      },
-    ]);
-    const manager = new CredentialManager({
-      ...deps,
-      getContractId: vi.fn().mockReturnValue(undefined),
-      rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
-    });
-
-    await manager.markDeployed("cred-1");
-    await manager.markFailed("cred-2", "boom");
-
-    expect(deps.storage.delete).toHaveBeenCalledWith("cred-1");
-    expect(deps.storage.update).toHaveBeenCalledWith("cred-2", {
-      deploymentStatus: "failed",
-      deploymentError: "boom",
     });
   });
 
@@ -317,8 +270,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     await expect(manager.sync("cred-1")).resolves.toBe(true);
@@ -359,8 +310,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     await expect(manager.syncAll()).resolves.toEqual({
@@ -384,8 +333,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     await manager.delete("cred-1");
@@ -407,8 +354,6 @@ describe("CredentialManager", () => {
       ...deps,
       getContractId: vi.fn().mockReturnValue(undefined),
       rpName: "App",
-      networkPassphrase: "Test SDF Network ; September 2015",
-      webauthnVerifierAddress: "CCAAAAA",
     });
 
     await expect(manager.delete("cred-1")).rejects.toThrow(

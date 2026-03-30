@@ -7,7 +7,6 @@
 
 import base64url from "base64url";
 import { xdr } from "@stellar/stellar-sdk";
-import type { Keypair } from "@stellar/stellar-sdk";
 import type { rpc } from "@stellar/stellar-sdk";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/browser";
 import type { SmartAccountEventEmitter } from "../events";
@@ -21,14 +20,8 @@ export interface CredentialManagerDeps {
   rpc: rpc.Server;
   /** Event emitter */
   events: SmartAccountEventEmitter;
-  /** WebAuthn verifier contract address */
-  webauthnVerifierAddress: string;
   /** Relying party name for WebAuthn */
   rpName: string;
-  /** Network passphrase */
-  networkPassphrase: string;
-  /** Deployer keypair for signing deploy transactions */
-  deployerKeypair: Keypair;
   /** Get current contract ID (if connected) */
   getContractId: () => string | undefined;
   /** Set contract ID and credential ID after deployment */
@@ -52,8 +45,6 @@ export interface CredentialManagerDeps {
   submitDeploymentTx: (tx: unknown, credentialId: string, options?: SubmissionOptions) => Promise<TransactionResult>;
   /** Derive contract address from credential ID */
   deriveContractAddress: (credentialIdBuffer: Buffer) => string;
-  /** Check if fee sponsoring should be used */
-  shouldUseFeeSponsoring: (options?: SubmissionOptions) => boolean;
 }
 
 /**
@@ -189,23 +180,6 @@ export class CredentialManager {
       signedTransaction,
       submitResult,
     };
-  }
-
-  /**
-   * Mark a credential as deployed (removes from storage).
-   */
-  async markDeployed(credentialId: string): Promise<void> {
-    await this.deps.storage.delete(credentialId);
-  }
-
-  /**
-   * Mark a credential as failed.
-   */
-  async markFailed(credentialId: string, error?: string): Promise<void> {
-    await this.deps.storage.update(credentialId, {
-      deploymentStatus: "failed",
-      deploymentError: error,
-    });
   }
 
   /**

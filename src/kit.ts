@@ -35,7 +35,6 @@ import type {
   SubmissionOptions,
   SubmissionMethod,
   ExternalWalletAdapter,
-  SelectedSigner,
 } from "./types";
 import { MemoryStorage } from "./storage/memory";
 import {
@@ -79,16 +78,16 @@ import {
   CredentialManager as CredentialManagerClass,
   MultiSignerManager as MultiSignerManagerClass,
 } from "./managers";
-
-import type { MultiSignerOptions } from "./kit/public-types";
 export type {
   SignerManager,
   ContextRuleManager,
   PolicyManager,
   CredentialManager,
   MultiSignerManager,
+} from "./managers";
+export type {
   MultiSignerOptions,
-} from "./kit/public-types";
+} from "./managers/multi-signer-manager";
 
 import {
   discoverContractsByCredential,
@@ -116,13 +115,10 @@ import {
   fundWallet,
   transfer,
   hasSourceAccountAuth,
-  simulateHostFunction,
   signResimulateAndPrepare,
-  getSubmissionMethod,
   shouldUseFeeSponsoring,
   sendAndPoll,
 } from "./kit/tx-ops";
-import { multiSignersTransfer } from "./kit/multi-signer-ops";
 import { convertPolicyParams, buildPoliciesScVal } from "./kit/policies-ops";
 
 
@@ -257,10 +253,7 @@ export class SmartAccountKit {
    *
    * @example
    * ```typescript
-   * const selectedSigners = [
-   *   { type: 'passkey', credentialId: 'abc123', label: 'My Passkey' },
-   *   { type: 'wallet', walletAddress: 'G...', label: 'Freighter' },
-   * ];
+   * const selectedSigners = kit.multiSigners.buildSelectedSigners(signers, activeCredentialId);
    * const result = await kit.multiSigners.transfer(
    *   tokenContract, recipient, amount, selectedSigners
    * );
@@ -443,10 +436,7 @@ export class SmartAccountKit {
       storage: this.storage,
       rpc: this.rpc,
       events: this.events,
-      webauthnVerifierAddress: this.webauthnVerifierAddress,
       rpName: this.rpName,
-      networkPassphrase: this.networkPassphrase,
-      deployerKeypair: this.deployerKeypair,
       getContractId: () => this._contractId,
       setConnectedState: (contractId, credentialId) => {
         this._contractId = contractId;
@@ -461,7 +451,6 @@ export class SmartAccountKit {
         this.submitDeploymentTx(tx as contract.AssembledTransaction<null>, credentialId, options),
       deriveContractAddress: (credentialIdBuffer) =>
         deriveContractAddress(credentialIdBuffer, this.deployerKeypair.publicKey(), this.networkPassphrase),
-      shouldUseFeeSponsoring: (options) => this.shouldUseFeeSponsoring(options),
     });
 
     this.multiSigners = new MultiSignerManagerClass({
@@ -477,10 +466,8 @@ export class SmartAccountKit {
       deployerKeypair: this.deployerKeypair,
       deployerPublicKey: this.deployerPublicKey,
       signAuthEntry: (entry, options) => this.signAuthEntry(entry, options),
-      sendAndPoll: (tx) => this.sendAndPoll(tx),
+      sendAndPoll: (tx, options) => this.sendAndPoll(tx, options),
       hasSourceAccountAuth: (tx) => this.hasSourceAccountAuth(tx),
-      executeTransfer: (tokenContract, recipient, amount, selectedSigners, options) =>
-        this.multiSignersTransfer(tokenContract, recipient, amount, selectedSigners, options),
       shouldUseFeeSponsoring: (options) => this.shouldUseFeeSponsoring(options),
     });
   }
@@ -1189,23 +1176,6 @@ export class SmartAccountKit {
   }
 
   /**
-   * Simulate a host function to get auth entries
-   */
-  private async simulateHostFunction(
-    hostFunc: xdr.HostFunction
-  ): Promise<{ authEntries: xdr.SorobanAuthorizationEntry[] }> {
-    return simulateHostFunction(
-      {
-        rpc: this.rpc,
-        networkPassphrase: this.networkPassphrase,
-        timeoutInSeconds: this.timeoutInSeconds,
-        deployerKeypair: this.deployerKeypair,
-      },
-      hostFunc
-    );
-  }
-
-  /**
    * Sign auth entries with WebAuthn, re-simulate, and prepare transaction for submission.
    *
    * This is the core helper that handles the WebAuthn-specific flow:
@@ -1236,20 +1206,6 @@ export class SmartAccountKit {
       authEntries,
       options
     );
-  }
-
-  /**
-   * Determine which submission method to use based on configuration and options.
-   *
-   * Priority order (when not forced):
-   * 1. Relayer (if configured)
-   * 2. RPC (always available)
-   *
-   * @param options - Submission options
-   * @returns The submission method to use
-   */
-  private getSubmissionMethod(options?: SubmissionOptions): SubmissionMethod {
-    return getSubmissionMethod(this.relayer, options);
   }
 
   /**
@@ -1302,48 +1258,6 @@ export class SmartAccountKit {
       },
       credentialId,
       publicKey
-    );
-  }
-
-
-  // ==========================================================================
-  // Multi-Signer Operations (private - access via kit.multiSigners.*)
-  // ==========================================================================
-
-  /**
-   * Execute a transfer with multiple signers.
-   * @internal Access via kit.multiSigners.transfer()
-   */
-  private async multiSignersTransfer(
-    tokenContract: string,
-    recipient: string,
-    amount: number,
-    selectedSigners: SelectedSigner[],
-    options?: MultiSignerOptions & { forceMethod?: SubmissionMethod }
-  ): Promise<TransactionResult> {
-    return multiSignersTransfer(
-      {
-        getContractId: () => this._contractId,
-        externalSigners: this.externalSigners,
-        requireWallet: () => this.requireWallet(),
-        getContractDetailsFromIndexer: () => this.getActiveContractDetailsFromIndexer(),
-        rpc: this.rpc,
-        networkPassphrase: this.networkPassphrase,
-        timeoutInSeconds: this.timeoutInSeconds,
-        deployerKeypair: this.deployerKeypair,
-        deployerPublicKey: this.deployerPublicKey,
-        signAuthEntry: (entry, signOptions) => this.signAuthEntry(entry, signOptions),
-        shouldUseFeeSponsoring: (submissionOptions) =>
-          this.shouldUseFeeSponsoring(submissionOptions),
-        hasSourceAccountAuth: (preparedTx) => this.hasSourceAccountAuth(preparedTx),
-        sendAndPoll: (preparedTx, submissionOptions) =>
-          this.sendAndPoll(preparedTx, submissionOptions),
-      },
-      tokenContract,
-      recipient,
-      amount,
-      selectedSigners,
-      options
     );
   }
 

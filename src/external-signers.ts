@@ -113,13 +113,6 @@ export class ExternalSignerManager {
   }
 
   /**
-   * Set or update the external wallet adapter
-   */
-  setWalletAdapter(adapter: ExternalWalletAdapter | null): void {
-    this.walletAdapter = adapter;
-  }
-
-  /**
    * Add a signer from a raw secret key.
    *
    * The keypair is stored in memory only and is never persisted.
@@ -391,37 +384,6 @@ export class ExternalSignerManager {
   }
 
   /**
-   * Get signer info for a specific address.
-   *
-   * @param address - The G-address to look up
-   * @returns Signer info if found, undefined otherwise
-   */
-  get(address: string): ExternalSigner | undefined {
-    // Check keypair signers
-    if (this.keypairSigners.has(address)) {
-      return {
-        address,
-        type: "keypair",
-      };
-    }
-
-    // Check wallet adapter
-    if (this.walletAdapter) {
-      const wallet = this.walletAdapter.getWalletForAddress?.(address);
-      if (wallet) {
-        return {
-          address: wallet.address,
-          type: "wallet",
-          walletName: wallet.walletName,
-          walletId: wallet.walletId,
-        };
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
    * Check if any external signers are registered.
    */
   get hasSigners(): boolean {
@@ -475,10 +437,4 @@ export class ExternalSignerManager {
     throw new Error(`No signer available for address: ${address}`);
   }
 
-  /**
-   * Check if the wallet adapter is available and initialized.
-   */
-  get hasWalletAdapter(): boolean {
-    return this.walletAdapter !== null;
-  }
 }

@@ -1,8 +1,5 @@
 import type { Signer } from "smart-account-kit-bindings";
-import {
-  truncateAddress,
-  formatSignerForDisplay,
-} from "smart-account-kit";
+import { truncateAddress, formatSignerForDisplay } from "../utils/sdk";
 
 // Re-export SDK utilities for backwards compatibility with other demo components
 export { formatSignerForDisplay as formatSigner };

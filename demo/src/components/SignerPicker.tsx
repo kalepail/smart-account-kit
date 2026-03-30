@@ -3,10 +3,9 @@ import type { Signer } from "smart-account-kit-bindings";
 import type { SelectedSigner } from "smart-account-kit";
 import {
   getCredentialIdFromSigner,
-  formatSignerForDisplay,
-  truncateAddress,
   type ConnectedWallet,
 } from "smart-account-kit";
+import { formatSignerForDisplay, truncateAddress } from "../utils/sdk";
 
 // Re-export SelectedSigner for convenience
 export type { SelectedSigner };

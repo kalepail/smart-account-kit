@@ -45,8 +45,9 @@ This is a clean-cut migration. The SDK no longer preserves the legacy `Signature
 
 ### Multi-signer flow
 
-- Updated both multi-signer execution paths to write `AuthPayload` instead of the legacy tuple wrapper.
+- Updated the multi-signer execution flow to write `AuthPayload` instead of the legacy tuple wrapper.
 - Delegated signer auth entries now sign the bound `auth_digest`, not the raw `signature_payload`.
+- Consolidated multi-signer transfer and generic operation signing onto one shared manager-owned execution path so the SDK no longer carries parallel implementations of the same auth assembly logic.
 
 ### Repo/docs/demo
 
@@ -59,6 +60,6 @@ This is a clean-cut migration. The SDK no longer preserves the legacy `Signature
 
 ## Current State
 
-The migration is complete for the current repo state. The SDK is aligned to the regenerated contract surface, the signing flow uses `AuthPayload`, indexer-backed rule discovery is documented as a requirement, and the remaining raw contract methods are intentionally left on `kit.wallet` rather than wrapped.
+The migration is complete for the current repo state. The SDK is aligned to the regenerated contract surface, the signing flow uses `AuthPayload`, indexer-backed rule discovery is documented as a requirement, the remaining raw contract methods are intentionally left on `kit.wallet` rather than wrapped, and demo-specific formatting helpers are no longer part of the package root API.
 
 Any future cleanup should be treated as normal product work rather than migration debt.

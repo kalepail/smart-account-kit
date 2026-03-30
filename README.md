@@ -206,7 +206,6 @@ Manage signers on context rules.
 | `addPasskey(contextRuleId, appName, userName, options?)` | Add passkey signer |
 | `addDelegated(contextRuleId, address)` | Add G-address signer |
 | `remove(contextRuleId, signer)` | Remove a signer |
-| `removePasskey(contextRuleId, credentialId)` | Remove passkey by credential ID |
 
 ```typescript
 // Add a new passkey signer
@@ -222,7 +221,6 @@ await kit.signers.addDelegated(0, 'GABC...');
 
 // Remove a signer by value; the SDK resolves signer IDs internally
 await kit.signers.remove(0, signer);
-await kit.signers.removePasskey(0, 'credential-id');
 ```
 
 `batch_add_signer` stays on the raw wallet client because the SDK does not add enough ergonomics or cross-cutting behavior to justify another wrapper.
@@ -291,8 +289,6 @@ Manage stored credentials.
 | `create(options?)` | Create new credential |
 | `save(credential)` | Save credential to storage |
 | `deploy(credentialId, options?)` | Deploy pending credential |
-| `markDeployed(credentialId)` | Mark as deployed |
-| `markFailed(credentialId, error?)` | Mark as failed |
 | `sync(credentialId)` | Sync with on-chain state |
 | `syncAll()` | Sync all credentials |
 | `delete(credentialId)` | Delete credential |
@@ -313,7 +309,7 @@ await kit.credentials.syncAll();
 await kit.credentials.delete('credential-id');
 ```
 
-Credential lifecycle notes: `create()` and `save()` create local pending credentials, `deploy()` moves a credential into a connected wallet flow, `markFailed()` preserves a credential for retry, `markDeployed()` removes a successfully deployed credential, and `delete()` is for pending credentials that never deployed.
+Credential lifecycle notes: `create()` and `save()` create local pending credentials, `deploy()` moves a credential into a connected wallet flow, `sync()` and `syncAll()` reconcile local pending state against on-chain deployment state, and `delete()` is for pending credentials that never deployed.
 
 #### MultiSignerManager (`kit.multiSigners`)
 
@@ -323,9 +319,6 @@ Multi-signer transaction flows.
 |--------|-------------|
 | `transfer(tokenContract, recipient, amount, selectedSigners)` | Multi-sig transfer |
 | `getAvailableSigners()` | Get all signers from active rules via indexer-backed rule discovery |
-| `extractCredentialId(signer)` | Get credential ID from signer |
-| `signerMatchesCredential(signer, credentialId)` | Check if signer matches credential |
-| `signerMatchesAddress(signer, address)` | Check if signer matches address |
 | `needsMultiSigner(signers)` | Check if multi-sig is needed |
 | `buildSelectedSigners(signers, activeCredentialId?)` | Build signer selection |
 | `operation(assembledTx, selectedSigners, options?)` | Execute generic multi-sig operation |
@@ -509,39 +502,11 @@ const spendingParams = createSpendingLimitParams(
 ```typescript
 import {
   getCredentialIdFromSigner,  // Extract credential ID from signer
-  describeSignerType,         // Human-readable signer type
-  formatSignerForDisplay,     // UI-friendly signer display
   signersEqual,               // Compare two signers
-  getSignerKey,               // Unique signer identifier
-  collectUniqueSigners,       // Deduplicate signers
 } from 'smart-account-kit';
 ```
 
-#### Display Helpers
-
-```typescript
-import {
-  truncateAddress,    // Truncate address for UI (e.g., "GABC...XYZ")
-  formatContextType,  // Human-readable context type
-} from 'smart-account-kit';
-```
-
----
-
-### Utility Functions
-
-```typescript
-import {
-  // Conversion
-  xlmToStroops,       // Convert XLM to stroops
-  stroopsToXlm,       // Convert stroops to XLM
-
-  // Validation
-  validateAddress,    // Validate Stellar address (G... or C...)
-  validateAmount,     // Validate positive amount
-  validateNotEmpty,   // Validate non-empty string
-} from 'smart-account-kit';
-```
+Display helpers used by the demo were moved out of the package root and now live in the demo app itself.
 
 ---
 

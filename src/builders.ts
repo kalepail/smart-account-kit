@@ -7,7 +7,6 @@
  * @packageDocumentation
  */
 
-import { Address } from "@stellar/stellar-sdk";
 import type {
   Signer,
   ContextRuleType,
@@ -19,7 +18,7 @@ import type {
 } from "./contract-types";
 import { buildKeyData } from "./utils";
 import { ValidationError, SmartAccountErrorCode } from "./errors";
-import { SECP256R1_PUBLIC_KEY_SIZE } from "./constants";
+import { getCredentialIdFromSigner } from "./signer-utils";
 
 // ============================================================================
 // Signer Builders
@@ -425,104 +424,9 @@ export function createSpendingLimitParams(
 export { LEDGERS_PER_HOUR, LEDGERS_PER_DAY, LEDGERS_PER_WEEK } from "./constants";
 
 // ============================================================================
-// Helper Functions
+// Compatibility Helper Functions
 // ============================================================================
 
-/**
- * Parse a signer from various input formats.
- *
- * Accepts:
- * - Stellar account address (G...) → Delegated signer
- * - Full Signer object → returned as-is
- *
- * @param input - Signer input to parse
- * @returns Parsed Signer object
- */
-export function parseSigner(input: string | Signer): Signer {
-  if (typeof input === "string") {
-    // Check if it's a Stellar account address
-    if (input.startsWith("G") && input.length === 56) {
-      return createDelegatedSigner(input);
-    }
-    throw new ValidationError(
-      "Invalid signer input. Use a Stellar address (G...) or a Signer object.",
-      SmartAccountErrorCode.INVALID_INPUT,
-      { input }
-    );
-  }
-  return input;
-}
-
-/**
- * Extract credential ID from a WebAuthn signer's key_data.
- *
- * @param signer - External signer with WebAuthn key_data
- * @returns Base64URL encoded credential ID
- */
-export function getCredentialIdFromSigner(signer: Signer): string | null {
-  if (signer.tag !== "External") {
-    return null;
-  }
-  const keyData = signer.values[1] as Buffer;
-  if (keyData.length <= SECP256R1_PUBLIC_KEY_SIZE) {
-    return null; // Not a WebAuthn signer (no credential ID suffix)
-  }
-  const credentialId = keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
-  // Convert to base64url
-  return credentialId
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=/g, "");
-}
-
-/**
- * Check if a signer is a Delegated signer (native Stellar account).
- */
-export function isDelegatedSigner(signer: Signer): signer is { tag: "Delegated"; values: [string] } {
-  return signer.tag === "Delegated";
-}
-
-/**
- * Check if a signer is an External signer (verifier contract).
- */
-export function isExternalSigner(signer: Signer): signer is { tag: "External"; values: [string, Buffer] } {
-  return signer.tag === "External";
-}
-
-/**
- * Get a human-readable description of a signer.
- *
- * @param signer - The signer to describe
- * @returns Human-readable string
- */
-export function describeSignerType(signer: Signer): string {
-  if (signer.tag === "Delegated") {
-    return "Stellar Account";
-  }
-
-  const keyData = signer.values[1] as Buffer;
-
-  // WebAuthn signers have 65-byte pubkey + credential ID
-  if (keyData.length > 65) {
-    return "Passkey (WebAuthn)";
-  }
-
-  // Ed25519 signers have 32-byte public key
-  if (keyData.length === 32) {
-    return "Ed25519";
-  }
-
-  return "External Verifier";
-}
-
-/**
- * Truncate an address for display.
- *
- * @param address - Full address
- * @param chars - Number of characters to show on each end (default: 4)
- * @returns Truncated address like "GABC...WXYZ"
- */
 export function truncateAddress(address: string, chars: number = 4): string {
   if (address.length <= chars * 2 + 3) {
     return address;
@@ -530,61 +434,30 @@ export function truncateAddress(address: string, chars: number = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-/**
- * Check if a signer matches a given credential ID.
- *
- * Useful for finding a specific passkey signer among a list of signers.
- *
- * @param signer - The signer to check
- * @param credentialId - The credential ID to match (base64url encoded)
- * @returns True if the signer's credential ID matches
- *
- * @example
- * ```ts
- * const signers = await kit.multiSigners.getAvailableSigners();
- * const matchingSigner = signers.find(s => signerMatchesCredential(s, myCredentialId));
- * ```
- */
 export function signerMatchesCredential(signer: Signer, credentialId: string): boolean {
-  const signerCredId = getCredentialIdFromSigner(signer);
-  return signerCredId === credentialId;
+  return getCredentialIdFromSigner(signer) === credentialId;
 }
 
-/**
- * Check if a signer matches a given Stellar address.
- *
- * Useful for finding a specific delegated signer among a list of signers.
- *
- * @param signer - The signer to check
- * @param address - The Stellar address to match (G...)
- * @returns True if the signer is a Delegated signer with the matching address
- *
- * @example
- * ```ts
- * const signers = await kit.multiSigners.getAvailableSigners();
- * const matchingSigner = signers.find(s => signerMatchesAddress(s, walletAddress));
- * ```
- */
 export function signerMatchesAddress(signer: Signer, address: string): boolean {
-  if (signer.tag !== "Delegated") {
-    return false;
-  }
-  return signer.values[0] === address;
+  return signer.tag === "Delegated" && signer.values[0] === address;
 }
 
-/**
- * Format a signer for display, returning both type and identifier.
- *
- * @param signer - The signer to format
- * @returns Object with type label and display identifier
- *
- * @example
- * ```ts
- * const { type, display } = formatSignerForDisplay(signer);
- * // type: "Passkey" or "G-Address"
- * // display: "cred:abc123..." or "GABC...WXYZ"
- * ```
- */
+export function describeSignerType(signer: Signer): string {
+  if (signer.tag === "Delegated") {
+    return "Stellar Account";
+  }
+
+  const keyData = signer.values[1] as Buffer;
+  if (getCredentialIdFromSigner(signer)) {
+    return "Passkey (WebAuthn)";
+  }
+  if (keyData.length === 32) {
+    return "Ed25519";
+  }
+
+  return "External Verifier";
+}
+
 export function formatSignerForDisplay(signer: Signer): { type: string; display: string } {
   if (signer.tag === "Delegated") {
     return {
@@ -615,105 +488,6 @@ export function formatSignerForDisplay(signer: Signer): { type: string; display:
   };
 }
 
-/**
- * Check if two signers are equal.
- *
- * Compares signers by their tag and values. For Delegated signers,
- * compares the address. For External signers, compares verifier address
- * and key_data bytes.
- *
- * @param a - First signer
- * @param b - Second signer
- * @returns True if signers are equal
- *
- * @example
- * ```ts
- * const isSame = signersEqual(signer1, signer2);
- * const newSigners = currentSigners.filter(s => !originalSigners.some(o => signersEqual(s, o)));
- * ```
- */
-export function signersEqual(a: Signer, b: Signer): boolean {
-  if (a.tag !== b.tag) return false;
-
-  if (a.tag === "Delegated" && b.tag === "Delegated") {
-    return a.values[0] === b.values[0];
-  }
-
-  if (a.tag === "External" && b.tag === "External") {
-    const aVerifier = a.values[0] as string;
-    const bVerifier = b.values[0] as string;
-    const aKey = a.values[1] as Buffer;
-    const bKey = b.values[1] as Buffer;
-    return aVerifier === bVerifier && aKey.equals(bKey);
-  }
-
-  return false;
-}
-
-/**
- * Get a unique key for a signer suitable for Map/Set operations.
- *
- * @param signer - The signer to get a key for
- * @returns A unique string key identifying this signer
- *
- * @example
- * ```ts
- * const signerMap = new Map<string, Signer>();
- * for (const signer of signers) {
- *   const key = getSignerKey(signer);
- *   if (!signerMap.has(key)) {
- *     signerMap.set(key, signer);
- *   }
- * }
- * ```
- */
-export function getSignerKey(signer: Signer): string {
-  if (signer.tag === "Delegated") {
-    return `delegated:${signer.values[0]}`;
-  }
-  const keyData = signer.values[1] as Buffer;
-  return `external:${signer.values[0]}:${keyData.toString("hex")}`;
-}
-
-/**
- * Collect unique signers from an array, removing duplicates.
- *
- * Uses `getSignerKey()` to determine uniqueness.
- *
- * @param signers - Array of signers (may contain duplicates)
- * @returns Array of unique signers
- *
- * @example
- * ```ts
- * const allSigners = rules.flatMap(r => r.signers);
- * const uniqueSigners = collectUniqueSigners(allSigners);
- * ```
- */
-export function collectUniqueSigners(signers: Signer[]): Signer[] {
-  const signerMap = new Map<string, Signer>();
-  for (const signer of signers) {
-    const key = getSignerKey(signer);
-    if (!signerMap.has(key)) {
-      signerMap.set(key, signer);
-    }
-  }
-  return Array.from(signerMap.values());
-}
-
-/**
- * Format a context rule type for display.
- *
- * @param contextType - The context rule type to format
- * @returns Human-readable description
- *
- * @example
- * ```ts
- * const label = formatContextType(rule.context_type);
- * // "Default (Any Operation)"
- * // "Call Contract: CABC...WXYZ"
- * // "Create Contract: abc123..."
- * ```
- */
 export function formatContextType(contextType: ContextRuleType): string {
   if (contextType.tag === "Default") {
     return "Default (Any Operation)";
@@ -725,8 +499,7 @@ export function formatContextType(contextType: ContextRuleType): string {
 
   if (contextType.tag === "CreateContract") {
     const hashBytes = contextType.values[0] as Buffer;
-    const hashHex = hashBytes.toString("hex");
-    return `Create Contract: ${hashHex.slice(0, 8)}...`;
+    return `Create Contract: ${hashBytes.toString("hex").slice(0, 8)}...`;
   }
 
   return "Unknown";

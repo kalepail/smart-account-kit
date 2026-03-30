@@ -5,7 +5,7 @@ import type {
   Signer as ContractSigner,
 } from "smart-account-kit-bindings";
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
-import { signersEqual } from "../builders";
+import { signersEqual } from "../signer-utils";
 import type { ContractDetailsResponse } from "../indexer";
 
 type ContextRuleQueryClient = {

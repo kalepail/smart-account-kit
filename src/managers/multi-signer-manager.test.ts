@@ -1,7 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+const { assembleTransactionMock } = vi.hoisted(() => ({
+  assembleTransactionMock: vi.fn(),
+}));
+
+vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@stellar/stellar-sdk")>();
+  return {
+    ...actual,
+    rpc: {
+      ...actual.rpc,
+      assembleTransaction: assembleTransactionMock,
+    },
+  };
+});
+
+vi.mock("../kit/tx-ops", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../kit/tx-ops")>();
+  return {
+    ...actual,
+    simulateHostFunction: vi.fn(),
+  };
+});
+
+import { Account, Address, Keypair, Operation, TransactionBuilder, xdr } from "@stellar/stellar-sdk";
 import { MultiSignerManager } from "./multi-signer-manager";
+import { simulateHostFunction } from "../kit/tx-ops";
 import {
   makeAccount,
+  makeAddressAuthEntry,
+  makeContract,
   makeDelegatedSigner,
   makeExternalSigner,
 } from "./test-utils";
@@ -13,7 +40,7 @@ function makeDeps() {
   };
 
   const deps = {
-    getContractId: vi.fn().mockReturnValue("CCONTRACT"),
+    getContractId: vi.fn().mockReturnValue(makeContract(99)),
     isConnected: vi.fn().mockReturnValue(true),
     getRules: vi.fn(),
     requireWallet: vi.fn(() => ({ wallet: {} })),
@@ -25,19 +52,44 @@ function makeDeps() {
     } as any,
     networkPassphrase: "Test SDF Network ; September 2015",
     timeoutInSeconds: 30,
-    deployerKeypair: { publicKey: () => "GAAAA" } as any,
-    deployerPublicKey: "GAAAA",
+    deployerKeypair: Keypair.fromRawEd25519Seed(Buffer.alloc(32, 5)),
+    deployerPublicKey: Keypair.fromRawEd25519Seed(Buffer.alloc(32, 5)).publicKey(),
     signAuthEntry: vi.fn(),
     sendAndPoll: vi.fn(),
     hasSourceAccountAuth: vi.fn().mockReturnValue(false),
-    executeTransfer: vi.fn(),
     shouldUseFeeSponsoring: vi.fn().mockReturnValue(false),
   };
 
   return deps;
 }
 
+function makeBuiltTransaction(auth: xdr.SorobanAuthorizationEntry[] = []) {
+  return new TransactionBuilder(new Account(makeAccount(77), "1"), {
+    fee: "100",
+    networkPassphrase: "Test SDF Network ; September 2015",
+  })
+    .addOperation(
+      Operation.invokeHostFunction({
+        func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+          new xdr.InvokeContractArgs({
+            contractAddress: Address.fromString(makeContract(31)).toScAddress(),
+            functionName: "ping",
+            args: [],
+          })
+        ),
+        auth,
+      })
+    )
+    .setTimeout(30)
+    .build();
+}
+
 describe("MultiSignerManager", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    assembleTransactionMock.mockReset();
+  });
+
   it("returns no signers when disconnected and deduplicates connected signers", async () => {
     const deps = makeDeps();
     deps.isConnected.mockReturnValue(false);
@@ -61,34 +113,7 @@ describe("MultiSignerManager", () => {
     });
   });
 
-  it("extracts credential ids and matches signers correctly", () => {
-    const deps = makeDeps();
-    const manager = new MultiSignerManager(deps);
-    const delegated = makeDelegatedSigner(7);
-    const external = makeExternalSigner(8, 9, 10);
-    const credentialId = Buffer.alloc(20, 10).toString("base64url");
-    const delegatedAddress = makeAccount(7);
-
-    expect(manager.extractCredentialId(external)).toBe(credentialId);
-    expect(manager.extractCredentialId(delegated)).toBeNull();
-    expect(manager.signerMatchesCredential(external, credentialId)).toBe(true);
-    expect(manager.signerMatchesCredential(external, "wrong")).toBe(false);
-    expect(manager.signerMatchesAddress(delegated, delegatedAddress)).toBe(true);
-    expect(manager.signerMatchesAddress(external, delegatedAddress)).toBe(false);
-  });
-
-  it("detects when multi-signer flows are needed", () => {
-    const deps = makeDeps();
-    const manager = new MultiSignerManager(deps);
-    const delegated = makeDelegatedSigner(1);
-    const external = makeExternalSigner(2, 3, 4);
-
-    expect(manager.needsMultiSigner([external])).toBe(false);
-    expect(manager.needsMultiSigner([delegated])).toBe(true);
-    expect(manager.needsMultiSigner([external, delegated])).toBe(true);
-  });
-
-  it("builds selected signers from available signers", () => {
+  it("builds selected signers from the active passkey and connected delegated wallets", () => {
     const deps = makeDeps();
     const manager = new MultiSignerManager(deps);
     const passkeySigner = makeExternalSigner(1, 2, 3);
@@ -115,55 +140,181 @@ describe("MultiSignerManager", () => {
     ]);
   });
 
-  it("executes transactions without auth entries directly", async () => {
+  it("detects when multi-signer flows are needed", () => {
     const deps = makeDeps();
     const manager = new MultiSignerManager(deps);
+    const delegated = makeDelegatedSigner(1);
+    const external = makeExternalSigner(2, 3, 4);
+
+    expect(manager.needsMultiSigner([external])).toBe(false);
+    expect(manager.needsMultiSigner([delegated])).toBe(true);
+    expect(manager.needsMultiSigner([external, delegated])).toBe(true);
+  });
+
+  it("submits auth-less operations through sendAndPoll", async () => {
+    const deps = makeDeps();
+    deps.shouldUseFeeSponsoring.mockReturnValue(true);
+    deps.sendAndPoll.mockResolvedValue({ success: true, hash: "tx-1" });
+    const manager = new MultiSignerManager(deps);
     const assembledTx = {
-      built: {
-        operations: [
-          {
-            type: "invokeHostFunction",
-            auth: [],
-          },
-        ],
-      },
+      built: makeBuiltTransaction(),
       signAndSend: vi.fn().mockResolvedValue({
         status: "SUCCESS",
         hash: "tx-1",
       }),
     } as any;
 
-    const result = await manager.operation(assembledTx, [], {});
+    const result = await manager.operation(assembledTx, [], { forceMethod: "rpc" });
 
-    expect(assembledTx.signAndSend).toHaveBeenCalledTimes(1);
+    expect(assembledTx.signAndSend).not.toHaveBeenCalled();
+    expect(deps.sendAndPoll).toHaveBeenCalledTimes(1);
+    expect(deps.sendAndPoll).toHaveBeenCalledWith(expect.anything(), { forceMethod: "rpc" });
     expect(result).toEqual({
       success: true,
       hash: "tx-1",
-      error: undefined,
     });
   });
 
-  it("delegates transfer execution to the kit-level transfer path", async () => {
+  it("builds transfer auth via simulation instead of delegating to the kit", async () => {
     const deps = makeDeps();
-    deps.executeTransfer.mockResolvedValue({ success: true, hash: "tx-2" });
     const manager = new MultiSignerManager(deps);
     const selectedSigners = [makeDelegatedSigner(1)];
+    vi.mocked(simulateHostFunction).mockRejectedValue(new Error("simulation failed"));
 
     const result = await manager.transfer(
-      "CCONTRACT",
+      makeContract(11),
       makeAccount(2),
       5,
       selectedSigners,
       { onLog: vi.fn() }
     );
 
-    expect(deps.executeTransfer).toHaveBeenCalledWith(
-      "CCONTRACT",
-      makeAccount(2),
-      5,
-      selectedSigners,
-      { onLog: expect.any(Function) }
+    expect(simulateHostFunction).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      success: false,
+      hash: "",
+      error: "simulation failed",
+    });
+  });
+
+  it("fails fast on unsupported external auth entries", async () => {
+    const deps = makeDeps();
+    deps.rpc.getLatestLedger.mockResolvedValue({ sequence: 100 });
+    const manager = new MultiSignerManager(deps);
+    const unsupportedAddress = makeAccount(12);
+
+    const result = await manager.operation(
+      {
+        built: {
+          operations: [{
+            type: "invokeHostFunction",
+            func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+              new xdr.InvokeContractArgs({
+                contractAddress: Address.fromString(makeContract(41)).toScAddress(),
+                functionName: "ping",
+                args: [],
+              })
+            ),
+            auth: [makeAddressAuthEntry(unsupportedAddress)],
+          }],
+        },
+      } as any,
+      [],
+      {}
     );
+
+    expect(result).toEqual({
+      success: false,
+      hash: "",
+      error: `Unsupported auth entry for ${unsupportedAddress}. Add an external signer for that address or remove it from the transaction.`,
+    });
+  });
+
+  it("signs separate delegated auth entries before submission", async () => {
+    const deps = makeDeps();
+    const delegatedAddress = makeAccount(21);
+    const authEntry = makeAddressAuthEntry(delegatedAddress);
+    const preparedTx = { sign: vi.fn() };
+    deps.externalSigners.canSignFor.mockReturnValue(true);
+    deps.externalSigners.signAuthEntry.mockResolvedValue({
+      signedAuthEntry: Buffer.alloc(64, 7).toString("base64"),
+      signerAddress: delegatedAddress,
+    });
+    deps.rpc.getLatestLedger.mockResolvedValue({ sequence: 200 });
+    deps.rpc.getAccount.mockResolvedValue(new Account(deps.deployerPublicKey, "1"));
+    deps.rpc.simulateTransaction.mockResolvedValue({ result: { auth: [] } });
+    deps.shouldUseFeeSponsoring.mockReturnValue(true);
+    deps.sendAndPoll.mockResolvedValue({ success: true, hash: "tx-2" });
+    assembleTransactionMock.mockReturnValue({
+      build: () => preparedTx,
+    });
+    const manager = new MultiSignerManager(deps);
+
+    const result = await manager.operation(
+      {
+        built: {
+          operations: [{
+            type: "invokeHostFunction",
+            func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+              new xdr.InvokeContractArgs({
+                contractAddress: Address.fromString(makeContract(42)).toScAddress(),
+                functionName: "ping",
+                args: [],
+              })
+            ),
+            auth: [authEntry],
+          }],
+        },
+      } as any,
+      [{
+        signer: makeDelegatedSigner(21),
+        type: "wallet",
+        walletAddress: delegatedAddress,
+      }],
+      {}
+    );
+
+    expect(deps.externalSigners.signAuthEntry).toHaveBeenCalledTimes(1);
+    expect(assembleTransactionMock).toHaveBeenCalledTimes(1);
+    expect(deps.sendAndPoll).toHaveBeenCalledWith(preparedTx, { forceMethod: undefined });
     expect(result).toEqual({ success: true, hash: "tx-2" });
+  });
+
+  it("fails fast when a wallet signer is missing contract signer metadata", async () => {
+    const deps = makeDeps();
+    const contractId = deps.getContractId();
+    const walletAddress = makeAccount(22);
+    deps.rpc.getLatestLedger.mockResolvedValue({ sequence: 300 });
+    deps.externalSigners.canSignFor.mockImplementation((address: string) => address === walletAddress);
+    const manager = new MultiSignerManager(deps);
+
+    const result = await manager.operation(
+      {
+        built: {
+          operations: [{
+            type: "invokeHostFunction",
+            func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+              new xdr.InvokeContractArgs({
+                contractAddress: Address.fromString(makeContract(43)).toScAddress(),
+                functionName: "ping",
+                args: [],
+              })
+            ),
+            auth: [makeAddressAuthEntry(contractId)],
+          }],
+        },
+      } as any,
+      [{
+        type: "wallet",
+        walletAddress,
+      }],
+      {}
+    );
+
+    expect(result).toEqual({
+      success: false,
+      hash: "",
+      error: `Wallet signer ${walletAddress} is missing contract signer metadata. Use buildSelectedSigners() or provide the signer field explicitly.`,
+    });
   });
 });

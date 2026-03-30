@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import type { SmartAccountKit, SelectedSigner, AssembledTransaction } from "smart-account-kit";
 import {
+  type ConnectedWallet,
+} from "smart-account-kit";
+import type { ContextRule, Signer } from "smart-account-kit-bindings";
+import {
   describeSignerType,
   truncateAddress,
   formatSignerForDisplay,
   formatContextType,
-  type ConnectedWallet,
-} from "smart-account-kit";
-import type { ContextRule, Signer } from "smart-account-kit-bindings";
+} from "../utils/sdk";
 
 interface ContextRulesPanelProps {
   kit: SmartAccountKit;

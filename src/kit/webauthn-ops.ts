@@ -4,23 +4,31 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import { Address, hash, xdr } from "@stellar/stellar-sdk";
+import { xdr } from "@stellar/stellar-sdk";
 import base64url from "base64url";
 import type { StorageAdapter } from "../types";
 import type {
   Client as SmartAccountClient,
   Signer as ContractSigner,
-  ContextRuleType,
-  WebAuthnSigData,
 } from "smart-account-kit-bindings";
-import { WEBAUTHN_TIMEOUT_MS, SECP256R1_PUBLIC_KEY_SIZE } from "../constants";
+import type { WebAuthnSigData } from "../contract-types";
+import { WEBAUTHN_TIMEOUT_MS } from "../constants";
 import {
   compactSignature,
   extractPublicKeyFromAttestation,
   generateChallenge,
 } from "../utils";
-
-type ContractSignerId = ContractSigner;
+import {
+  buildAuthDigest,
+  buildSignaturePayload,
+  buildWebAuthnSignatureBytes,
+  readAuthPayload,
+  upsertAuthPayloadSigner,
+  writeAuthPayload,
+} from "./auth-payload";
+import {
+  findWebAuthnSignerInRules,
+} from "./context-rules";
 
 type WebAuthnDeps = {
   rpId?: string;
@@ -36,7 +44,6 @@ type RequireWallet = () => { wallet: SmartAccountClient; contractId: string };
 type SignAuthEntryDeps = WebAuthnDeps & {
   networkPassphrase: string;
   storage: StorageAdapter;
-  webauthnVerifierAddress: string;
   calculateExpiration: () => Promise<number>;
   getCredentialId: () => string | undefined;
   requireWallet: RequireWallet;
@@ -113,252 +120,68 @@ export async function signAuthEntry(
   options?: {
     credentialId?: string;
     expiration?: number;
+    contextRuleIds?: number[];
+    signer?: ContractSigner;
   }
 ): Promise<xdr.SorobanAuthorizationEntry> {
-  const entryXdrBytes = entry.toXDR();
-  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entryXdrBytes);
-
+  const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
   const credentials = normalizedEntry.credentials().address();
   const expiration = options?.expiration ?? await deps.calculateExpiration();
   credentials.signatureExpirationLedger(expiration);
-
-  const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-    new xdr.HashIdPreimageSorobanAuthorization({
-      networkId: hash(Buffer.from(deps.networkPassphrase)),
-      nonce: credentials.nonce(),
-      signatureExpirationLedger: credentials.signatureExpirationLedger(),
-      invocation: normalizedEntry.rootInvocation(),
-    })
-  );
-  const payload = hash(preimage.toXDR());
+  const authPayload = readAuthPayload(credentials.signature());
 
   const credentialId = options?.credentialId ?? deps.getCredentialId();
+  if (!credentialId) {
+    throw new Error("A credential ID is required to sign smart account auth entries");
+  }
 
-  const authOptions: PublicKeyCredentialRequestOptionsJSON = {
-    challenge: base64url(payload),
-    rpId: deps.rpId,
-    userVerification: "preferred",
-    timeout: WEBAUTHN_TIMEOUT_MS,
-    ...(credentialId && {
-      allowCredentials: [{ id: credentialId, type: "public-key" }],
-    }),
-  };
+  const contextRuleIds = options?.contextRuleIds ?? authPayload.context_rule_ids;
+  if (contextRuleIds.length === 0) {
+    throw new Error(
+      "contextRuleIds are required to sign smart account auth entries when the payload does not already include them"
+    );
+  }
+
+  const { wallet } = deps.requireWallet();
+  const credentialIdBuffer = base64url.toBuffer(credentialId);
+  const signer = options?.signer ?? await findWebAuthnSignerInRules(wallet, contextRuleIds, credentialIdBuffer);
+  const signaturePayload = buildSignaturePayload(
+    deps.networkPassphrase,
+    normalizedEntry,
+    credentials.signatureExpirationLedger()
+  );
+  const authDigest = buildAuthDigest(signaturePayload, contextRuleIds);
 
   const authResponse = await deps.webAuthn.startAuthentication({
-    optionsJSON: authOptions,
+    optionsJSON: {
+      challenge: base64url(authDigest),
+      rpId: deps.rpId,
+      userVerification: "preferred",
+      timeout: WEBAUTHN_TIMEOUT_MS,
+      allowCredentials: [{ id: credentialId, type: "public-key" }],
+    },
   });
 
   const rawSignature = base64url.toBuffer(authResponse.response.signature);
   const compactedSignature = compactSignature(rawSignature);
 
-  const credentialIdBuffer = base64url.toBuffer(authResponse.id);
-  const contextRuleTypes = buildContextRuleTypes(normalizedEntry);
-  const keyData = await findKeyDataByCredentialId(
-    deps.requireWallet,
-    credentialIdBuffer,
-    contextRuleTypes
-  );
-
-  const signerId: ContractSignerId = {
-    tag: "External",
-    values: [
-      deps.webauthnVerifierAddress,
-      keyData,
-    ],
-  };
-
-  const webAuthnSigData = {
+  const webAuthnSigData: WebAuthnSigData = {
     authenticator_data: base64url.toBuffer(authResponse.response.authenticatorData),
     client_data: base64url.toBuffer(authResponse.response.clientDataJSON),
     signature: Buffer.from(compactedSignature),
   };
 
-  const scMapEntry = buildSignatureMapEntry(signerId, webAuthnSigData);
-
-  const currentSig = credentials.signature();
-  if (currentSig.switch().name === "scvVoid") {
-    credentials.signature(xdr.ScVal.scvVec([xdr.ScVal.scvMap([scMapEntry])]));
-  } else {
-    currentSig.vec()?.[0].map()?.push(scMapEntry);
+  if (
+    authPayload.context_rule_ids.length > 0 &&
+    authPayload.context_rule_ids.join(",") !== contextRuleIds.join(",")
+  ) {
+    throw new Error("Existing auth payload uses different context rule IDs");
   }
 
-  const sigMap = credentials.signature().vec()?.[0].map();
-  if (sigMap && sigMap.length > 1) {
-    sigMap.sort((a, b) => {
-      const aKeyXdr = a.key().toXDR("hex");
-      const bKeyXdr = b.key().toXDR("hex");
-      return aKeyXdr.localeCompare(bKeyXdr);
-    });
-  }
+  authPayload.context_rule_ids = contextRuleIds;
+  upsertAuthPayloadSigner(authPayload, signer, buildWebAuthnSignatureBytes(webAuthnSigData));
+  credentials.signature(writeAuthPayload(authPayload));
 
-  if (credentialId) {
-    await deps.storage.update(credentialId, { lastUsedAt: Date.now() });
-  }
-
+  await deps.storage.update(credentialId, { lastUsedAt: Date.now() });
   return normalizedEntry;
-}
-
-async function findKeyDataByCredentialId(
-  requireWallet: RequireWallet,
-  credentialId: Buffer,
-  contextRuleTypes: ContextRuleType[]
-): Promise<Buffer> {
-  const { wallet } = requireWallet();
-
-  for (const contextRuleType of contextRuleTypes) {
-    const rulesResult = await wallet.get_context_rules({
-      context_rule_type: contextRuleType,
-    });
-    const rules = rulesResult.result;
-
-    for (const rule of rules) {
-      for (const signer of rule.signers) {
-        if (signer.tag === "External") {
-          const keyData = signer.values[1] as Buffer;
-          if (keyData.length > SECP256R1_PUBLIC_KEY_SIZE) {
-            const suffix = keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
-            if (suffix.equals(credentialId)) {
-              return keyData;
-            }
-          }
-        }
-      }
-    }
-  }
-
-  throw new Error(
-    `No signer found for credential ID: ${credentialId.toString("base64")}`
-  );
-}
-
-function buildContextRuleTypes(
-  entry: xdr.SorobanAuthorizationEntry
-): ContextRuleType[] {
-  const types: ContextRuleType[] = [];
-  const seen = new Set<string>();
-
-  const add = (type: ContextRuleType) => {
-    let key: string;
-    if (type.tag === "Default") {
-      key = "Default";
-    } else if (type.tag === "CallContract") {
-      key = `CallContract:${type.values[0]}`;
-    } else {
-      const wasm = Buffer.from(type.values[0]);
-      key = `CreateContract:${wasm.toString("hex")}`;
-    }
-    if (!seen.has(key)) {
-      seen.add(key);
-      types.push(type);
-    }
-  };
-
-  const walk = (invocation: xdr.SorobanAuthorizedInvocation) => {
-    const fn = invocation.function();
-    const switchName = fn.switch().name;
-    if (switchName === "sorobanAuthorizedFunctionTypeContractFn") {
-      const args = fn.contractFn();
-      const contractAddress = Address.fromScAddress(args.contractAddress()).toString();
-      add({ tag: "CallContract", values: [contractAddress] });
-    } else if (switchName.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
-      const wasmHash = extractCreateContractWasmHash(fn);
-      if (wasmHash) {
-        add({ tag: "CreateContract", values: [wasmHash] });
-      }
-    }
-
-    for (const sub of invocation.subInvocations()) {
-      walk(sub);
-    }
-  };
-
-  walk(entry.rootInvocation());
-  add({ tag: "Default", values: undefined });
-
-  return types;
-}
-
-function extractCreateContractWasmHash(
-  fn: xdr.SorobanAuthorizedFunction
-): Buffer | null {
-  const candidates: Array<unknown> = [];
-  const fnAny = fn as unknown as {
-    createContractHostFn?: () => unknown;
-    createContractWithCtorHostFn?: () => unknown;
-    createContractWithConstructorHostFn?: () => unknown;
-  };
-
-  if (typeof fnAny.createContractHostFn === "function") {
-    candidates.push(fnAny.createContractHostFn());
-  }
-  if (typeof fnAny.createContractWithCtorHostFn === "function") {
-    candidates.push(fnAny.createContractWithCtorHostFn());
-  }
-  if (typeof fnAny.createContractWithConstructorHostFn === "function") {
-    candidates.push(fnAny.createContractWithConstructorHostFn());
-  }
-
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const ctx = candidate as { executable?: unknown };
-    const executable = typeof ctx.executable === "function"
-      ? (ctx.executable as () => unknown)()
-      : ctx.executable;
-    if (!executable || typeof executable !== "object") continue;
-    const execAny = executable as {
-      switch?: () => { name: string };
-      wasm?: (() => Buffer) | Buffer;
-    };
-    const execSwitch = execAny.switch?.();
-    if (execSwitch && execSwitch.name === "contractExecutableWasm") {
-      const wasm = typeof execAny.wasm === "function" ? execAny.wasm() : execAny.wasm;
-      if (wasm) {
-        return Buffer.from(wasm);
-      }
-    }
-  }
-
-  return null;
-}
-
-function buildSignatureMapEntry(
-  signerId: ContractSignerId,
-  sigData: WebAuthnSigData
-): xdr.ScMapEntry {
-  let keyVal: xdr.ScVal;
-  if (signerId.tag === "Delegated") {
-    keyVal = xdr.ScVal.scvVec([
-      xdr.ScVal.scvSymbol("Delegated"),
-      xdr.ScVal.scvAddress(Address.fromString(signerId.values[0]).toScAddress()),
-    ]);
-  } else {
-    keyVal = xdr.ScVal.scvVec([
-      xdr.ScVal.scvSymbol("External"),
-      xdr.ScVal.scvAddress(Address.fromString(signerId.values[0]).toScAddress()),
-      xdr.ScVal.scvBytes(signerId.values[1]),
-    ]);
-  }
-
-  const sigDataScVal = xdr.ScVal.scvMap([
-    new xdr.ScMapEntry({
-      key: xdr.ScVal.scvSymbol("authenticator_data"),
-      val: xdr.ScVal.scvBytes(sigData.authenticator_data),
-    }),
-    new xdr.ScMapEntry({
-      key: xdr.ScVal.scvSymbol("client_data"),
-      val: xdr.ScVal.scvBytes(sigData.client_data),
-    }),
-    new xdr.ScMapEntry({
-      key: xdr.ScVal.scvSymbol("signature"),
-      val: xdr.ScVal.scvBytes(sigData.signature),
-    }),
-  ]);
-
-  const sigDataXdrBytes = sigDataScVal.toXDR();
-  const sigVal = xdr.ScVal.scvBytes(sigDataXdrBytes);
-
-  return new xdr.ScMapEntry({
-    key: keyVal,
-    val: sigVal,
-  });
 }

@@ -1,4 +1,5 @@
-import type { contract } from "@stellar/stellar-sdk";
+import type { contract, xdr } from "@stellar/stellar-sdk";
+import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type {
   SmartAccountConfig,
   StorageAdapter,
@@ -16,8 +17,9 @@ import type {
   Client as SmartAccountClient,
   Signer as ContractSigner,
   ContextRuleType,
-  WebAuthnSigData,
+  ContextRule,
 } from "smart-account-kit-bindings";
+import type { WebAuthnSigData } from "../contract-types";
 
 // Sub-manager Type Definitions
 
@@ -68,8 +70,11 @@ export interface ContextRuleManager {
   /** Get a context rule by ID */
   get(contextRuleId: number): ReturnType<SmartAccountClient["get_context_rule"]>;
 
-  /** Get all context rules of a specific type */
-  getAll(contextRuleType: ContextRuleType): ReturnType<SmartAccountClient["get_context_rules"]>;
+  /** Get all active context rules of a specific type. Requires the indexer. */
+  getAll(contextRuleType: ContextRuleType): Promise<ContextRule[]>;
+
+  /** Get all active context rules. Requires the indexer. */
+  list(): Promise<ContextRule[]>;
 
   /** Remove a context rule */
   remove(contextRuleId: number): ReturnType<SmartAccountClient["remove_context_rule"]>;
@@ -196,6 +201,11 @@ export interface CredentialManager {
 export interface MultiSignerOptions {
   /** Logger function */
   onLog?: (message: string, type?: "info" | "success" | "error") => void;
+  /** Resolve smart-account context rule IDs for each auth entry. */
+  resolveContextRuleIds?: (
+    entry: xdr.SorobanAuthorizationEntry,
+    index: number
+  ) => number[] | Promise<number[]>;
 }
 
 /** Multi-signer management interface */
@@ -236,7 +246,7 @@ export interface MultiSignerManager {
   ): Promise<TransactionResult>;
 
   /**
-   * Get all available signers from on-chain context rules.
+   * Get all available signers from active context rules. Requires the indexer.
    */
   getAvailableSigners(): Promise<ContractSigner[]>;
 

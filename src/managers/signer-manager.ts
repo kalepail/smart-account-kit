@@ -4,22 +4,25 @@
  * Manages signers (passkeys and delegated accounts) for context rules.
  */
 
-import base64url from "base64url";
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/browser";
 import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import type { SmartAccountEventEmitter } from "../events";
 import type { StorageAdapter, StoredCredential } from "../types";
 import { buildKeyData } from "../utils";
-import { SECP256R1_PUBLIC_KEY_SIZE } from "../constants";
+import { signersEqual } from "../builders";
 
 /** Dependencies required by SignerManager */
 export interface SignerManagerDeps {
   /** Get the connected wallet client, throws if not connected */
   requireWallet: () => {
     wallet: {
-      add_signer: (args: { context_rule_id: number; signer: ContractSigner }) => Promise<AssembledTransaction<null>>;
-      remove_signer: (args: { context_rule_id: number; signer: ContractSigner }) => Promise<AssembledTransaction<null>>;
+      add_signer: (args: { context_rule_id: number; signer: ContractSigner }) => Promise<AssembledTransaction<number>>;
+      get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<{
+        signer_ids: number[];
+        signers: ContractSigner[];
+      }>>;
+      remove_signer: (args: { context_rule_id: number; signer_id: number }) => Promise<AssembledTransaction<null>>;
     };
     contractId: string;
   };
@@ -120,20 +123,18 @@ export class SignerManager {
    */
   async remove(contextRuleId: number, signer: ContractSigner) {
     const { wallet } = this.deps.requireWallet();
+    const rule = (await wallet.get_context_rule({
+      context_rule_id: contextRuleId,
+    })).result;
+    const signerIndex = rule.signers.findIndex((candidate) => signersEqual(candidate, signer));
 
-    // If it's an External signer (passkey), remove from local storage
-    if (signer.tag === "External") {
-      const keyData = signer.values[1] as Buffer;
-      // Only try to delete if keyData contains a credential ID suffix
-      if (keyData.length > SECP256R1_PUBLIC_KEY_SIZE) {
-        const credentialId = base64url.encode(keyData.slice(SECP256R1_PUBLIC_KEY_SIZE));
-        await this.deps.storage.delete(credentialId);
-      }
+    if (signerIndex === -1) {
+      throw new Error(`Signer not found on context rule ${contextRuleId}`);
     }
 
     return wallet.remove_signer({
       context_rule_id: contextRuleId,
-      signer,
+      signer_id: rule.signer_ids[signerIndex],
     });
   }
 

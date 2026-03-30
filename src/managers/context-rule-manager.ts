@@ -8,6 +8,8 @@
 
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type { Signer as ContractSigner, ContextRuleType, ContextRule } from "smart-account-kit-bindings";
+import type { ContractDetailsResponse } from "../indexer";
+import { getFilteredContextRules, listContextRules } from "../kit/context-rules";
 
 /** Dependencies required by ContextRuleManager */
 export interface ContextRuleManagerDeps {
@@ -21,13 +23,13 @@ export interface ContextRuleManagerDeps {
         signers: ContractSigner[];
         policies: Map<string, unknown>;
       }) => Promise<AssembledTransaction<ContextRule>>;
-      get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule | undefined>>;
-      get_context_rules: (args: { context_rule_type: ContextRuleType }) => Promise<AssembledTransaction<ContextRule[]>>;
+      get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule>>;
       remove_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<null>>;
       update_context_rule_name: (args: { context_rule_id: number; name: string }) => Promise<AssembledTransaction<ContextRule>>;
       update_context_rule_valid_until: (args: { context_rule_id: number; valid_until: number | undefined }) => Promise<AssembledTransaction<ContextRule>>;
     };
   };
+  getContractDetailsFromIndexer?: () => Promise<ContractDetailsResponse | null>;
 }
 
 /**
@@ -96,6 +98,15 @@ export class ContextRuleManager {
   }
 
   /**
+   * List all active context rules by enumerating them from the contract.
+   */
+  async list() {
+    return listContextRules(this.deps.requireWallet().wallet, {
+      getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
+    });
+  }
+
+  /**
    * Get all context rules of a specific type.
    *
    * @param contextRuleType - The type of rules to retrieve (Default, CallContract, CreateContract)
@@ -103,8 +114,8 @@ export class ContextRuleManager {
    * @throws Error if not connected to a wallet
    */
   async getAll(contextRuleType: ContextRuleType) {
-    return this.deps.requireWallet().wallet.get_context_rules({
-      context_rule_type: contextRuleType,
+    return getFilteredContextRules(this.deps.requireWallet().wallet, contextRuleType, {
+      getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
     });
   }
 

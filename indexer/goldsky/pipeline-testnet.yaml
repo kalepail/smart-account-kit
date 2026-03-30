@@ -8,12 +8,16 @@
 #
 # Events indexed:
 # - context_rule_added: When a new context rule is created with signers
-# - context_rule_updated: When a context rule's metadata is updated
+# - context_rule_meta_updated: When a context rule's metadata is updated
 # - context_rule_removed: When a context rule is deleted
 # - signer_added: When a signer is added to a context rule
 # - signer_removed: When a signer is removed from a context rule
+# - signer_registered: When a signer enters the global registry
+# - signer_deregistered: When a signer leaves the global registry
 # - policy_added: When a policy is added to a context rule
 # - policy_removed: When a policy is removed from a context rule
+# - policy_registered: When a policy enters the global registry
+# - policy_deregistered: When a policy leaves the global registry
 #
 # Deployment:
 #   goldsky pipeline apply ./pipeline-testnet.yaml --status ACTIVE
@@ -42,12 +46,16 @@ transforms:
         data,
         CASE
           WHEN topics LIKE '%context_rule_added%' THEN 'context_rule_added'
-          WHEN topics LIKE '%context_rule_updated%' THEN 'context_rule_updated'
+          WHEN topics LIKE '%context_rule_meta_updated%' THEN 'context_rule_meta_updated'
           WHEN topics LIKE '%context_rule_removed%' THEN 'context_rule_removed'
           WHEN topics LIKE '%signer_added%' THEN 'signer_added'
           WHEN topics LIKE '%signer_removed%' THEN 'signer_removed'
+          WHEN topics LIKE '%signer_registered%' THEN 'signer_registered'
+          WHEN topics LIKE '%signer_deregistered%' THEN 'signer_deregistered'
           WHEN topics LIKE '%policy_added%' THEN 'policy_added'
           WHEN topics LIKE '%policy_removed%' THEN 'policy_removed'
+          WHEN topics LIKE '%policy_registered%' THEN 'policy_registered'
+          WHEN topics LIKE '%policy_deregistered%' THEN 'policy_deregistered'
           ELSE 'unknown'
         END AS event_type,
         transaction_hash
@@ -56,12 +64,16 @@ transforms:
         in_successful_contract_call = true
         AND (
           topics LIKE '%context_rule_added%'
-          OR topics LIKE '%context_rule_updated%'
+          OR topics LIKE '%context_rule_meta_updated%'
           OR topics LIKE '%context_rule_removed%'
           OR topics LIKE '%signer_added%'
           OR topics LIKE '%signer_removed%'
+          OR topics LIKE '%signer_registered%'
+          OR topics LIKE '%signer_deregistered%'
           OR topics LIKE '%policy_added%'
           OR topics LIKE '%policy_removed%'
+          OR topics LIKE '%policy_registered%'
+          OR topics LIKE '%policy_deregistered%'
         )
     primary_key: id
 

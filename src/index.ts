@@ -63,19 +63,14 @@ export type {
   // Context Rules
   ContextRule,
   ContextRuleType,
-  Meta as ContextRuleMeta,
-
-  // WebAuthn signature data (contract format)
+  AuthPayload,
+} from "smart-account-kit-bindings";
+export type {
   WebAuthnSigData,
-
-  // Signatures
-  Signatures,
-
-  // Policy types
   SimpleThresholdAccountParams,
   WeightedThresholdAccountParams,
   SpendingLimitAccountParams,
-} from "smart-account-kit-bindings";
+} from "./contract-types";
 
 // SignerId is the same type as Signer - used for signature map keys
 export type ContractSignerId = Signer;

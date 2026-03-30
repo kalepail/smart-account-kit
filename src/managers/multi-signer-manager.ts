@@ -17,11 +17,24 @@ import {
 const { assembleTransaction } = rpcModule;
 import type { Keypair, Transaction, rpc } from "@stellar/stellar-sdk";
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
-import type { Signer as ContractSigner, ContextRuleType } from "smart-account-kit-bindings";
+import type {
+  Client as SmartAccountClient,
+  Signer as ContractSigner,
+  ContextRuleType,
+} from "smart-account-kit-bindings";
+import type { ContractDetailsResponse } from "../indexer";
 import type { ExternalSignerManager } from "../external-signers";
 import type { SelectedSigner, SubmissionOptions, TransactionResult } from "../types";
 import { BASE_FEE, AUTH_ENTRY_EXPIRATION_BUFFER } from "../constants";
 import { getCredentialIdFromSigner, collectUniqueSigners } from "../builders";
+import {
+  buildAuthDigest,
+  buildSignaturePayload,
+  readAuthPayload,
+  upsertAuthPayloadSigner,
+  writeAuthPayload,
+} from "../kit/auth-payload";
+import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
 
 /** Type guard for transaction result with status and hash properties */
 interface SendTransactionResult {
@@ -42,6 +55,11 @@ function isSendTransactionResult(value: unknown): value is SendTransactionResult
 export interface MultiSignerOptions {
   /** Logger function */
   onLog?: (message: string, type?: "info" | "success" | "error") => void;
+  /** Resolve smart-account context rule IDs for each auth entry. */
+  resolveContextRuleIds?: (
+    entry: xdr.SorobanAuthorizationEntry,
+    index: number
+  ) => number[] | Promise<number[]>;
 }
 
 /** Dependencies required by MultiSignerManager */
@@ -51,7 +69,11 @@ export interface MultiSignerManagerDeps {
   /** Check if connected to a wallet */
   isConnected: () => boolean;
   /** Get context rules */
-  getRules: (contextRuleType: ContextRuleType) => Promise<{ result?: Array<{ signers: ContractSigner[] }> }>;
+  getRules: (contextRuleType: ContextRuleType) => Promise<Array<{ signers: ContractSigner[] }>>;
+  /** Get indexed contract details for active rule discovery */
+  getContractDetailsFromIndexer?: () => Promise<ContractDetailsResponse | null>;
+  /** Get connected wallet client */
+  requireWallet: () => { wallet: SmartAccountClient };
   /** External signer manager for wallet signing */
   externalSigners: ExternalSignerManager;
   /** RPC server */
@@ -67,7 +89,12 @@ export interface MultiSignerManagerDeps {
   /** Sign an auth entry with passkey */
   signAuthEntry: (
     entry: xdr.SorobanAuthorizationEntry,
-    options?: { credentialId?: string; expiration?: number }
+    options?: {
+      credentialId?: string;
+      expiration?: number;
+      contextRuleIds?: number[];
+      signer?: ContractSigner;
+    }
   ) => Promise<xdr.SorobanAuthorizationEntry>;
   /** Send transaction and poll for result */
   sendAndPoll: (tx: Transaction) => Promise<TransactionResult>;
@@ -92,7 +119,7 @@ export class MultiSignerManager {
   constructor(private deps: MultiSignerManagerDeps) {}
 
   /**
-   * Get available signers from on-chain context rules.
+   * Get available signers from active context rules.
    */
   async getAvailableSigners(): Promise<ContractSigner[]> {
     if (!this.deps.isConnected()) {
@@ -104,7 +131,7 @@ export class MultiSignerManager {
         tag: "Default",
         values: undefined,
       });
-      const defaultRules = defaultRulesResult.result || [];
+      const defaultRules = defaultRulesResult || [];
 
       // Collect all signers from all rules, then deduplicate
       const allSigners = defaultRules.flatMap((rule) => rule.signers);
@@ -249,7 +276,7 @@ export class MultiSignerManager {
       const { sequence } = await this.deps.rpc.getLatestLedger();
       const expiration = sequence + AUTH_ENTRY_EXPIRATION_BUFFER;
 
-      for (const entry of authEntries) {
+      for (const [authEntryIndex, entry] of authEntries.entries()) {
         const credentials = entry.credentials();
 
         if (credentials.switch().name !== "sorobanCredentialsAddress") {
@@ -271,37 +298,37 @@ export class MultiSignerManager {
             signedEntry = await this.deps.signAuthEntry(signedEntry, {
               credentialId: passkeySigner?.credentialId,
               expiration,
+              contextRuleIds: options?.resolveContextRuleIds
+                ? await options.resolveContextRuleIds(signedEntry, authEntryIndex)
+                : undefined,
+              signer: passkeySigner?.signer as ContractSigner | undefined,
             });
           }
 
           // Add delegated signers to signature map
+          const authPayload = readAuthPayload(signedEntry.credentials().address().signature());
+          if (authPayload.context_rule_ids.length === 0) {
+            const selectedContractSigners = selectedSigners
+              .map(({ signer }) => signer)
+              .filter((signer): signer is ContractSigner => signer !== undefined);
+            authPayload.context_rule_ids = await resolveContextRuleIdsForEntry(
+              this.deps.requireWallet().wallet,
+              signedEntry,
+              selectedContractSigners,
+              {
+                getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
+              }
+            );
+          }
+
           for (const walletSigner of walletSigners) {
             if (!walletSigner.walletAddress) continue;
-
-            const delegatedSignerKey = xdr.ScVal.scvVec([
-              xdr.ScVal.scvSymbol("Delegated"),
-              xdr.ScVal.scvAddress(Address.fromString(walletSigner.walletAddress).toScAddress()),
-            ]);
-
-            const ourSig = signedEntry.credentials().address().signature();
-            const emptyBytes = xdr.ScVal.scvBytes(Buffer.alloc(0));
-
-            if (ourSig.switch().name === "scvVoid") {
-              signedEntry.credentials().address().signature(
-                xdr.ScVal.scvVec([
-                  xdr.ScVal.scvMap([
-                    new xdr.ScMapEntry({ key: delegatedSignerKey, val: emptyBytes }),
-                  ]),
-                ])
-              );
-            } else {
-              const sigMap = ourSig.vec()?.[0].map();
-              if (sigMap) {
-                sigMap.push(new xdr.ScMapEntry({ key: delegatedSignerKey, val: emptyBytes }));
-                sigMap.sort((a, b) => a.key().toXDR("hex").localeCompare(b.key().toXDR("hex")));
-              }
+            if (!walletSigner.signer) {
+              throw new Error(`Missing contract signer metadata for ${walletSigner.walletAddress}`);
             }
+            upsertAuthPayloadSigner(authPayload, walletSigner.signer as ContractSigner, Buffer.alloc(0));
           }
+          signedEntry.credentials().address().signature(writeAuthPayload(authPayload));
 
           signedAuthEntries.push(signedEntry);
 
@@ -309,15 +336,15 @@ export class MultiSignerManager {
           if (walletSigners.length > 0) {
             onLog(`Creating auth entries for ${walletSigners.length} delegated signer(s)...`);
 
-            const smartAccountPreimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-              new xdr.HashIdPreimageSorobanAuthorization({
-                networkId: hash(Buffer.from(this.deps.networkPassphrase)),
-                nonce: signedEntry.credentials().address().nonce(),
-                signatureExpirationLedger: expiration,
-                invocation: signedEntry.rootInvocation(),
-              })
+            const signaturePayload = buildSignaturePayload(
+              this.deps.networkPassphrase,
+              signedEntry,
+              expiration
             );
-            const signaturePayload = hash(smartAccountPreimage.toXDR());
+            const authDigest = buildAuthDigest(
+              signaturePayload,
+              authPayload.context_rule_ids
+            );
 
             for (const walletSigner of walletSigners) {
               if (!walletSigner.walletAddress) continue;
@@ -331,7 +358,7 @@ export class MultiSignerManager {
                   new xdr.InvokeContractArgs({
                     contractAddress: Address.fromString(contractId).toScAddress(),
                     functionName: "__check_auth",
-                    args: [xdr.ScVal.scvBytes(signaturePayload)],
+                    args: [xdr.ScVal.scvBytes(authDigest)],
                   })
                 ),
                 subInvocations: [],

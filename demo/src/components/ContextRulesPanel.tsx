@@ -61,11 +61,10 @@ export function ContextRulesPanel({
     setLoading(true);
     try {
       // Fetch Default context rules
-      const defaultRulesResult = await kit.rules.getAll({
+      const defaultRules = await kit.rules.getAll({
         tag: "Default",
         values: undefined,
       });
-      const defaultRules = defaultRulesResult.result || [];
 
       // Note: In a full implementation, you'd also fetch CallContract and CreateContract rules
       // For now, just showing Default rules as that's the most common case

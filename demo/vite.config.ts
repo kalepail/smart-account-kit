@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
@@ -10,7 +11,7 @@ export default defineConfig({
   resolve: {
     alias: {
       // Buffer polyfill
-      buffer: "buffer",
+      buffer: fileURLToPath(new URL("./node_modules/buffer/index.js", import.meta.url)),
     },
     // Ensure symlinks are resolved to prevent duplicate module instances
     preserveSymlinks: false,

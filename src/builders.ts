@@ -11,10 +11,12 @@ import { Address } from "@stellar/stellar-sdk";
 import type {
   Signer,
   ContextRuleType,
+} from "smart-account-kit-bindings";
+import type {
   SimpleThresholdAccountParams,
   WeightedThresholdAccountParams,
   SpendingLimitAccountParams,
-} from "smart-account-kit-bindings";
+} from "./contract-types";
 import { buildKeyData } from "./utils";
 import { ValidationError, SmartAccountErrorCode } from "./errors";
 import { SECP256R1_PUBLIC_KEY_SIZE } from "./constants";

@@ -22,6 +22,11 @@ import {
 } from "../constants";
 import { validateAddress, validateAmount, xlmToStroops, stroopsToXlm } from "../utils";
 
+type ResolveContextRuleIds = (
+  entry: xdr.SorobanAuthorizationEntry,
+  index: number
+) => number[] | Promise<number[]>;
+
 export function getSubmissionMethod(
   relayer: RelayerClient | null,
   options?: SubmissionOptions
@@ -212,7 +217,11 @@ export async function signResimulateAndPrepare(
     deployerKeypair: Keypair;
     signAuthEntry: (
       entry: xdr.SorobanAuthorizationEntry,
-      options?: { credentialId?: string; expiration?: number }
+      options?: {
+        credentialId?: string;
+        expiration?: number;
+        contextRuleIds?: number[];
+      }
     ) => Promise<xdr.SorobanAuthorizationEntry>;
   },
   hostFunc: xdr.HostFunction,
@@ -220,13 +229,17 @@ export async function signResimulateAndPrepare(
   options?: {
     credentialId?: string;
     expiration?: number;
+    resolveContextRuleIds?: ResolveContextRuleIds;
   }
 ): Promise<Transaction> {
   const signedAuthEntries: xdr.SorobanAuthorizationEntry[] = [];
-  for (const authEntry of authEntries) {
+  for (const [index, authEntry] of authEntries.entries()) {
     const signedEntry = await deps.signAuthEntry(authEntry, {
       credentialId: options?.credentialId,
       expiration: options?.expiration,
+      contextRuleIds: options?.resolveContextRuleIds
+        ? await options.resolveContextRuleIds(authEntry, index)
+        : undefined,
     });
     signedAuthEntries.push(signedEntry);
   }
@@ -274,13 +287,18 @@ export async function sign(
     calculateExpiration: () => Promise<number>;
     signAuthEntry: (
       entry: xdr.SorobanAuthorizationEntry,
-      options?: { credentialId?: string; expiration?: number }
+      options?: {
+        credentialId?: string;
+        expiration?: number;
+        contextRuleIds?: number[];
+      }
     ) => Promise<xdr.SorobanAuthorizationEntry>;
   },
   transaction: contract.AssembledTransaction<unknown>,
   options?: {
     credentialId?: string;
     expiration?: number;
+    resolveContextRuleIds?: ResolveContextRuleIds;
   }
 ): Promise<contract.AssembledTransaction<unknown>> {
   const contractId = deps.getContractId();
@@ -295,7 +313,15 @@ export async function sign(
     address: contractId,
     authorizeEntry: async (entry: xdr.SorobanAuthorizationEntry) => {
       const clone = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-      return deps.signAuthEntry(clone, { credentialId, expiration });
+      const authEntries = transaction.simulationData?.result?.auth || [];
+      const entryIndex = authEntries.findIndex((authEntry) => authEntry.toXDR("base64") === entry.toXDR("base64"));
+      return deps.signAuthEntry(clone, {
+        credentialId,
+        expiration,
+        contextRuleIds: entryIndex >= 0 && options?.resolveContextRuleIds
+          ? await options.resolveContextRuleIds(clone, entryIndex)
+          : undefined,
+      });
     },
   });
 
@@ -308,7 +334,11 @@ export async function signAndSubmit(
     signResimulateAndPrepare: (
       hostFunc: xdr.HostFunction,
       authEntries: xdr.SorobanAuthorizationEntry[],
-      options?: { credentialId?: string; expiration?: number }
+      options?: {
+        credentialId?: string;
+        expiration?: number;
+        resolveContextRuleIds?: ResolveContextRuleIds;
+      }
     ) => Promise<Transaction>;
     shouldUseFeeSponsoring: (options?: SubmissionOptions) => boolean;
     hasSourceAccountAuth: (transaction: Transaction) => boolean;
@@ -320,6 +350,7 @@ export async function signAndSubmit(
     credentialId?: string;
     expiration?: number;
     forceMethod?: SubmissionMethod;
+    resolveContextRuleIds?: ResolveContextRuleIds;
   }
 ): Promise<TransactionResult> {
   if (!deps.getContractId()) {
@@ -349,11 +380,15 @@ export async function signAndSubmit(
       return { success: false, hash: "", error: "No simulation data or auth entries" };
     }
 
-    const preparedTx = await deps.signResimulateAndPrepare(
-      invokeOp.func,
-      simData.result.auth,
-      { credentialId: options?.credentialId, expiration: options?.expiration }
-    );
+      const preparedTx = await deps.signResimulateAndPrepare(
+        invokeOp.func,
+        simData.result.auth,
+        {
+          credentialId: options?.credentialId,
+          expiration: options?.expiration,
+          resolveContextRuleIds: options?.resolveContextRuleIds,
+        }
+      );
 
     const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
     if (!deps.shouldUseFeeSponsoring(submissionOpts) || deps.hasSourceAccountAuth(preparedTx)) {

@@ -144,14 +144,76 @@ WHERE e.event_type = 'context_rule_added'
 -- ============================================================================
 
 CREATE OR REPLACE VIEW contract_summary AS
+WITH latest_context_rule_events AS (
+  SELECT DISTINCT ON (contract_id, (topics::jsonb->1->>'u32'))
+    contract_id,
+    (topics::jsonb->1->>'u32')::int as context_rule_id,
+    event_type,
+    ledger_sequence
+  FROM smart_account_signer_events
+  WHERE event_type IN ('context_rule_added', 'context_rule_removed')
+  ORDER BY contract_id, (topics::jsonb->1->>'u32'), ledger_sequence DESC
+),
+active_context_rules AS (
+  SELECT
+    contract_id,
+    context_rule_id
+  FROM latest_context_rule_events
+  WHERE event_type != 'context_rule_removed'
+),
+latest_signer_events AS (
+  SELECT DISTINCT ON (
+    ps.contract_id,
+    ps.context_rule_id,
+    ps.signer_type,
+    COALESCE(ps.signer_address, ''),
+    COALESCE(ps.credential_id, '')
+  )
+    ps.contract_id,
+    ps.context_rule_id,
+    ps.signer_type,
+    ps.signer_address,
+    ps.credential_id,
+    ps.event_type,
+    ps.ledger_sequence
+  FROM processed_signers ps
+  JOIN active_context_rules acr
+    ON acr.contract_id = ps.contract_id
+   AND acr.context_rule_id = ps.context_rule_id
+  ORDER BY
+    ps.contract_id,
+    ps.context_rule_id,
+    ps.signer_type,
+    COALESCE(ps.signer_address, ''),
+    COALESCE(ps.credential_id, ''),
+    ps.ledger_sequence DESC
+),
+active_signers AS (
+  SELECT *
+  FROM latest_signer_events
+  WHERE event_type IN ('context_rule_added', 'signer_added')
+),
+contract_ledgers AS (
+  SELECT
+    contract_id,
+    MIN(ledger_sequence) as first_seen_ledger,
+    MAX(ledger_sequence) as last_seen_ledger
+  FROM smart_account_signer_events
+  GROUP BY contract_id
+)
 SELECT
-  contract_id,
-  COUNT(DISTINCT context_rule_id) as context_rule_count,
-  COUNT(*) FILTER (WHERE signer_type = 'External' AND event_type != 'signer_removed') as external_signer_count,
-  COUNT(*) FILTER (WHERE signer_type = 'Delegated' AND event_type != 'signer_removed') as delegated_signer_count,
-  COUNT(*) FILTER (WHERE signer_type = 'Native' AND event_type != 'signer_removed') as native_signer_count,
-  MIN(ledger_sequence) as first_seen_ledger,
-  MAX(ledger_sequence) as last_seen_ledger,
-  array_agg(DISTINCT context_rule_id ORDER BY context_rule_id) as context_rule_ids
-FROM processed_signers
-GROUP BY contract_id;
+  cl.contract_id,
+  COUNT(DISTINCT acr.context_rule_id) as context_rule_count,
+  COUNT(*) FILTER (WHERE asg.signer_type = 'External') as external_signer_count,
+  COUNT(*) FILTER (WHERE asg.signer_type = 'Delegated') as delegated_signer_count,
+  COUNT(*) FILTER (WHERE asg.signer_type = 'Native') as native_signer_count,
+  cl.first_seen_ledger,
+  cl.last_seen_ledger,
+  COALESCE(array_agg(DISTINCT acr.context_rule_id ORDER BY acr.context_rule_id), ARRAY[]::int[]) as context_rule_ids
+FROM contract_ledgers cl
+LEFT JOIN active_context_rules acr
+  ON acr.contract_id = cl.contract_id
+LEFT JOIN active_signers asg
+  ON asg.contract_id = cl.contract_id
+ AND asg.context_rule_id = acr.context_rule_id
+GROUP BY cl.contract_id, cl.first_seen_ledger, cl.last_seen_ledger;

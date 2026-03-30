@@ -42,8 +42,14 @@ export const ERROR_MESSAGES = {
 
 export const EVENT_TYPES = {
   CONTEXT_RULE_ADDED: "context_rule_added",
+  CONTEXT_RULE_META_UPDATED: "context_rule_meta_updated",
   CONTEXT_RULE_REMOVED: "context_rule_removed",
   SIGNER_ADDED: "signer_added",
+  SIGNER_REMOVED: "signer_removed",
+  SIGNER_REGISTERED: "signer_registered",
+  SIGNER_DEREGISTERED: "signer_deregistered",
   POLICY_ADDED: "policy_added",
+  POLICY_REGISTERED: "policy_registered",
   POLICY_REMOVED: "policy_removed",
+  POLICY_DEREGISTERED: "policy_deregistered",
 } as const;

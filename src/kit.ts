@@ -432,6 +432,7 @@ export class SmartAccountKit {
 
     this.rules = new ContextRuleManagerClass({
       requireWallet: () => this.requireWallet(),
+      getContractDetailsFromIndexer: () => this.getActiveContractDetailsFromIndexer(),
     });
 
     this.policies = new PolicyManagerClass({
@@ -467,6 +468,8 @@ export class SmartAccountKit {
       getContractId: () => this._contractId,
       isConnected: () => this.isConnected,
       getRules: (contextRuleType) => this.rules.getAll(contextRuleType),
+      getContractDetailsFromIndexer: () => this.getActiveContractDetailsFromIndexer(),
+      requireWallet: () => this.requireWallet(),
       externalSigners: this.externalSigners,
       rpc: this.rpc,
       networkPassphrase: this.networkPassphrase,
@@ -565,9 +568,10 @@ export class SmartAccountKit {
    * Get detailed information about a smart account contract from the indexer.
    *
    * Returns the current state including active context rules, signers, and policies.
-   * This is useful for displaying contract details without making on-chain calls.
+   * This is useful for displaying contract details and discovering active rule IDs.
    *
-   * Note: For real-time data, use `kit.rules.getAll()` instead which queries on-chain.
+   * Note: the SDK relies on the indexer for active rule discovery because the
+   * contract does not expose an iterator for active rule IDs.
    *
    * @param contractId - Smart account contract address (C...)
    * @returns Contract details or null if not found/indexer unavailable
@@ -576,6 +580,14 @@ export class SmartAccountKit {
     contractId: string
   ): Promise<ContractDetailsResponse | null> {
     return getContractDetailsFromIndexer(this.indexer, contractId);
+  }
+
+  private async getActiveContractDetailsFromIndexer(): Promise<ContractDetailsResponse | null> {
+    if (!this._contractId) {
+      return null;
+    }
+
+    return getContractDetailsFromIndexer(this.indexer, this._contractId);
   }
 
   // ==========================================================================
@@ -911,6 +923,10 @@ export class SmartAccountKit {
     options?: {
       credentialId?: string;
       expiration?: number;
+      resolveContextRuleIds?: (
+        entry: xdr.SorobanAuthorizationEntry,
+        index: number
+      ) => number[] | Promise<number[]>;
     }
   ): Promise<contract.AssembledTransaction<T>> {
     const signed = await sign(
@@ -946,6 +962,10 @@ export class SmartAccountKit {
     options?: {
       credentialId?: string;
       expiration?: number;
+      resolveContextRuleIds?: (
+        entry: xdr.SorobanAuthorizationEntry,
+        index: number
+      ) => number[] | Promise<number[]>;
       /** Force a specific submission method (relayer or rpc) */
       forceMethod?: SubmissionMethod;
     }
@@ -985,6 +1005,7 @@ export class SmartAccountKit {
     options?: {
       credentialId?: string;
       expiration?: number;
+      contextRuleIds?: number[];
     }
   ): Promise<xdr.SorobanAuthorizationEntry> {
     return signAuthEntry(
@@ -994,7 +1015,6 @@ export class SmartAccountKit {
         webAuthn: this.webAuthn,
         networkPassphrase: this.networkPassphrase,
         storage: this.storage,
-        webauthnVerifierAddress: this.webauthnVerifierAddress,
         calculateExpiration: () => this.calculateExpiration(),
         getCredentialId: () => this._credentialId,
         requireWallet: () => this.requireWallet(),
@@ -1088,6 +1108,65 @@ export class SmartAccountKit {
       amount,
       options
     );
+  }
+
+  /**
+   * Build a smart-account mediated contract call.
+   *
+   * This wraps the generated `wallet.execute(...)` method and returns the
+   * assembled transaction so callers can inspect, sign, or compose around it.
+   *
+   * For the common "build + sign + submit" flow, prefer `executeAndSubmit()`.
+   *
+   * @param target - Target contract address
+   * @param targetFn - Function name to invoke on the target contract
+   * @param targetArgs - Arguments to pass to the target contract function
+   * @returns Assembled transaction for the smart-account `execute` call
+   */
+  async execute(
+    target: string,
+    targetFn: string,
+    targetArgs: Array<unknown>
+  ): Promise<Awaited<ReturnType<SmartAccountClient["execute"]>>> {
+    const { wallet } = this.requireWallet();
+
+    return wallet.execute({
+      target,
+      target_fn: targetFn,
+      target_args: targetArgs,
+    });
+  }
+
+  /**
+   * Build, sign, re-simulate, and submit a smart-account mediated contract call.
+   *
+   * This is the high-level convenience path for arbitrary smart-account
+   * executions, equivalent to:
+   * 1. `kit.execute(...)`
+   * 2. `kit.signAndSubmit(...)`
+   *
+   * @param target - Target contract address
+   * @param targetFn - Function name to invoke on the target contract
+   * @param targetArgs - Arguments to pass to the target contract function
+   * @param options - Signing and submission options
+   * @returns Transaction result
+   */
+  async executeAndSubmit(
+    target: string,
+    targetFn: string,
+    targetArgs: Array<unknown>,
+    options?: {
+      credentialId?: string;
+      expiration?: number;
+      resolveContextRuleIds?: (
+        entry: xdr.SorobanAuthorizationEntry,
+        index: number
+      ) => number[] | Promise<number[]>;
+      forceMethod?: SubmissionMethod;
+    }
+  ): Promise<TransactionResult> {
+    const transaction = await this.execute(target, targetFn, targetArgs);
+    return this.signAndSubmit(transaction, options);
   }
 
   // ==========================================================================
@@ -1246,6 +1325,8 @@ export class SmartAccountKit {
       {
         getContractId: () => this._contractId,
         externalSigners: this.externalSigners,
+        requireWallet: () => this.requireWallet(),
+        getContractDetailsFromIndexer: () => this.getActiveContractDetailsFromIndexer(),
         rpc: this.rpc,
         networkPassphrase: this.networkPassphrase,
         timeoutInSeconds: this.timeoutInSeconds,

@@ -232,6 +232,17 @@ export function ContextRuleBuilder({
   const [signerPickerOpen, setSignerPickerOpen] = useState(false);
   const [pendingSubmit, setPendingSubmit] = useState(false);
 
+  const weightedThresholdEnabled = Boolean(
+    import.meta.env.VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS?.trim()
+  );
+  const visiblePolicies = useMemo(
+    () =>
+      availablePolicies.filter(
+        (policy) => policy.type !== "weighted_threshold" || weightedThresholdEnabled
+      ),
+    [availablePolicies, weightedThresholdEnabled]
+  );
+
   const isEditing = !!editingRule;
 
   /**
@@ -322,7 +333,7 @@ export function ContextRuleBuilder({
           const smartAccountAddress = kit.contractId;
 
           for (const policyAddress of editingRule.policies) {
-            const knownPolicy = availablePolicies.find((p) => p.address === policyAddress);
+            const knownPolicy = visiblePolicies.find((p) => p.address === policyAddress);
 
             if (knownPolicy && smartAccountAddress) {
               // Query on-chain params for known policy types
@@ -1445,8 +1456,8 @@ export function ContextRuleBuilder({
             )}
 
             {/* Add policy dropdown */}
-            {availablePolicies.length > 0 && (() => {
-              const unselectedPolicies = availablePolicies.filter(
+            {visiblePolicies.length > 0 && (() => {
+              const unselectedPolicies = visiblePolicies.filter(
                 (p) => !selectedPolicies.some((sp) => sp.policy.address === p.address)
               );
               // Auto-select first available policy if none selected
@@ -1470,7 +1481,7 @@ export function ContextRuleBuilder({
                     <button
                       className="small"
                       onClick={() => {
-                        const policy = availablePolicies.find(p => p.address === effectiveSelection);
+                        const policy = visiblePolicies.find(p => p.address === effectiveSelection);
                         if (policy) {
                           setSelectedPolicies([
                             ...selectedPolicies,
@@ -1497,7 +1508,7 @@ export function ContextRuleBuilder({
               );
             })()}
 
-            {availablePolicies.length === 0 && (
+            {visiblePolicies.length === 0 && (
               <div className="form-hint" style={{ fontStyle: "italic" }}>
                 No policy contracts configured. Enable policies in the Configuration section.
               </div>

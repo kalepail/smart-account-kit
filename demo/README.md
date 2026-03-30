@@ -6,25 +6,26 @@ A basic Vite + React frontend application for testing the Smart Account Kit SDK 
 
 - **Wallet Creation**: Create a new smart wallet with a passkey as the primary signer
 - **Wallet Connection**: Connect to an existing wallet using stored or discoverable passkeys
-- **Contract Discovery**: Automatically discover smart accounts via indexer when connecting
+- **Contract Discovery**: Automatically discover smart accounts via indexer when connecting, with a fallback to the derived contract ID path if no indexed match is found
 - **Context Rule Management**: Create, view, and edit context rules with signers and policies
 - **Multi-Signer Support**: Add passkey and delegated (G-address) signers to context rules
-- **Policy Support**: Configure threshold, weighted threshold, and spending limit policies
+- **Policy Support**: Configure threshold and spending limit policies, with weighted threshold available when configured
 - **External Wallet Integration**: Connect Freighter or other Stellar wallets for delegated signing
 - **Token Transfer**: Build and sign XLM transfer transactions with multi-signer support
 
-## Deployed Contracts (Testnet)
+## Demo Defaults
 
-The following contracts are already deployed and pre-configured in the demo:
+The checked-in `.env.example` shows the current default deployment set used by the demo. Your local `.env` can override any of these values:
 
-| Contract | Address/Hash |
-|----------|--------------|
-| **Smart Account WASM Hash** | `a12e8fa9621efd20315753bd4007d974390e31fbcb4a7ddc4dd0a0dec728bf2e` |
-| **WebAuthn Verifier** | `CCQKLVCZYLMM67RZVCPHMDTT7UEJNLYSIQ57GYWRNDECZGDVB7I6G23Y` |
+| Contract | Default value |
+|----------|---------------|
+| **Smart Account WASM Hash** | `3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c` |
+| **WebAuthn Verifier** | `CATPTBRWVMH5ZCIKO5HN2F4FMPXVZEXC56RKGHRXCM7EEZGGXK7PICEH` |
+| **Ed25519 Verifier** | `CAIKK32K3BZJYTWVTXHZFPIEEDBR6YCVTGPABH4UQUQ4XFA3OLYXG27G` |
 | **Native XLM Token** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| **Threshold Policy** | `CDQEUI5I6OANOUU72EUMASMYFTNZSUSYZZB746QTJOFJGTXCRRR4FHRD` |
-| **Spending Limit Policy** | `CBTH7MG5QFEAEEANZ47Y64PPV733F5K4MGVITQNYMWHDMISNBGCIJSFE` |
-| **Weighted Threshold Policy** | `CD2AVNAKJIROTEZ6MZAXGML55Q3AFVRL72YXNURHT5VJES2WXNPT7MQE` |
+| **Threshold Policy** | `CDDQLFG7CV74QHWPSP6NZIPNBR2PPCMTUVYCJF4P3ONDYHODRFGR7LWC` |
+| **Spending Limit Policy** | `CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4` |
+| **Weighted Threshold Policy** | Optional. Set `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` to expose it in the policy picker. |
 
 ## Setup
 
@@ -38,7 +39,7 @@ pnpm dev
 
 Open `http://localhost:5173` in your browser.
 
-The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed.
+The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI.
 
 ## Usage
 
@@ -102,3 +103,4 @@ demo/
 - WebAuthn requires HTTPS in production (localhost works for development)
 - Transactions auto-submit to Stellar testnet and wait for confirmation
 - Contract addresses configurable via `.env` (see `.env.example`)
+- Contract discovery prefers the indexer and falls back to the derived contract ID path when no indexed match is found

@@ -1,14 +1,15 @@
 # Smart Account Indexer
 
-Indexes smart account signer events from Stellar to enable reverse lookups from passkey credentials to contract IDs.
+Indexes smart account signer events from Stellar to enable reverse lookups from passkey credentials to contract IDs and to support indexer-backed rule discovery for the SDK.
 
 ## Overview
 
-When a user authenticates with a passkey, the indexer enables discovering all smart account contracts they have access to. This is essential because:
+When a user authenticates with a passkey, the indexer enables discovering all smart account contracts they have access to. The SDK also relies on this indexer surface for active context-rule discovery after removals. This is essential because:
 
 1. A single passkey can be a signer on multiple smart accounts
 2. Passkeys added as secondary signers don't have a deterministic contract address
 3. Users need to discover their accounts without knowing contract IDs upfront
+4. The contract exposes individual rule lookups, but not a stable iterator over currently active rule IDs
 
 ## Architecture
 
@@ -83,7 +84,8 @@ Find contracts by G-address (delegated signer) or C-address (verifier).
 ```
 GET /api/contract/:contractId
 ```
-Get full contract details including signers and policies per context rule.
+Get full contract details including active signers and policies per context rule.
+This is the endpoint the SDK uses to rebuild active rule state for `rules.list()` and `rules.getAll()`.
 
 ### Stats
 ```
@@ -102,17 +104,24 @@ Trigger immediate polling of testnet events.
 | Event | Description |
 |-------|-------------|
 | `context_rule_added` | New context rule with signers and policies |
+| `context_rule_meta_updated` | Context rule metadata updated |
 | `context_rule_removed` | Context rule deleted |
 | `signer_added` | Signer added to existing rule |
 | `signer_removed` | Signer removed from rule |
+| `signer_registered` | Signer registered in the global registry |
+| `signer_deregistered` | Signer deregistered from the global registry |
 | `policy_added` | Policy added to existing rule |
 | `policy_removed` | Policy removed from rule |
+| `policy_registered` | Policy registered in the global registry |
+| `policy_deregistered` | Policy deregistered from the global registry |
 
 ## SDK Integration
 
 The indexer client is integrated into the Smart Account Kit SDK and can be used in two ways:
 1. Via `kit.indexer` property (auto-configured for known networks)
 2. Via direct `IndexerClient` import for standalone use
+
+The contract-detail API is the important bit for wallet flows: it turns the raw event stream into current active rule state so the SDK can resolve rule IDs without guessing after deletions.
 
 ```typescript
 import { SmartAccountKit, IndexedDBStorage } from 'smart-account-kit';

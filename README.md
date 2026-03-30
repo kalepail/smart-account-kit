@@ -130,11 +130,19 @@ import { SmartAccountKit } from 'smart-account-kit';
 | `sign(transaction, options?)` | Sign auth entries (use `signAndSubmit` instead) |
 | `signAndSubmit(transaction, options?)` | Sign, re-simulate, and submit (recommended) |
 | `signAuthEntry(authEntry, options?)` | Sign a single auth entry |
+| `execute(target, targetFn, targetArgs)` | Build a smart-account mediated contract call |
+| `executeAndSubmit(target, targetFn, targetArgs, options?)` | Build, sign, and submit a smart-account mediated contract call |
 | `fundWallet(nativeTokenContract)` | Fund via Friendbot (testnet) |
 | `transfer(tokenContract, recipient, amount)` | Direct token transfer |
 | `getContractDetailsFromIndexer(contractId)` | Get contract details from indexer |
 | `convertPolicyParams(params)` | Convert policy params to ScVal |
 | `buildPoliciesScVal(policies)` | Build policies ScVal for context rules |
+
+#### Wallet Lifecycle
+
+`createWallet()` creates and deploys a new smart account tied to a freshly generated passkey. `connectWallet()` restores or prompts into an existing wallet, `authenticatePasskey()` gives you passkey auth without connecting, and `disconnect()` only clears session state.
+
+For transactions, `signAndSubmit()` is the default for smart-account auth flows, `executeAndSubmit()` is the preferred path for arbitrary smart-account mediated contract calls, and `sign()` / `signAuthEntry()` remain available when you need to inspect or compose around signed auth entries directly.
 
 #### Sub-Manager Properties
 
@@ -169,9 +177,21 @@ await kit.connectWallet({ contractId: 'C...' });    // Connect with specific con
 // Transfer tokens
 const result = await kit.transfer('CTOKEN...', 'GRECIPIENT...', 100);
 
+// Build an arbitrary smart-account mediated call
+const tx = await kit.execute('CTARGET...', 'set_config', [owner, threshold]);
+
+// Or build + sign + submit in one step
+const execResult = await kit.executeAndSubmit('CTARGET...', 'set_config', [owner, threshold]);
+
 // Disconnect
 await kit.disconnect();
 ```
+
+### Raw Wallet Escape Hatch
+
+The generated contract client remains available as `kit.wallet` after connection. Use it when you need exact contract parity or one of the raw methods that the SDK intentionally does not wrap: `upgrade`, `batch_add_signer`, `get_signer_id`, `get_policy_id`, and `get_context_rules_count`.
+
+The default rule is simple: if the SDK adds orchestration, session handling, signer resolution, or submission logic, keep the wrapper. If the method is just a thin contract call, use `kit.wallet` directly.
 
 ---
 
@@ -200,10 +220,12 @@ const { credentialId, transaction } = await kit.signers.addPasskey(
 // Add a delegated signer (Stellar account)
 await kit.signers.addDelegated(0, 'GABC...');
 
-// Remove a signer
+// Remove a signer by value; the SDK resolves signer IDs internally
 await kit.signers.remove(0, signer);
 await kit.signers.removePasskey(0, 'credential-id');
 ```
+
+`batch_add_signer` stays on the raw wallet client because the SDK does not add enough ergonomics or cross-cutting behavior to justify another wrapper.
 
 #### ContextRuleManager (`kit.rules`)
 
@@ -213,7 +235,8 @@ Manage context rules.
 |--------|-------------|
 | `add(contextType, name, signers, policies)` | Create rule |
 | `get(contextRuleId)` | Get single rule |
-| `getAll(contextRuleType)` | Get all rules of type |
+| `list()` | List all active rules via indexer-backed rule discovery |
+| `getAll(contextRuleType)` | Get active rules of a type via indexer-backed rule discovery |
 | `remove(contextRuleId)` | Delete rule |
 | `updateName(contextRuleId, name)` | Update rule name |
 | `updateExpiration(contextRuleId, ledger)` | Update expiration ledger |
@@ -222,10 +245,15 @@ Manage context rules.
 // Add a new context rule
 await kit.rules.add(contextType, 'Rule Name', signers, policies);
 
-// Get context rules
-const rule = await kit.rules.get(0);
+// Get active context rules (requires indexer access)
+const rule = (await kit.rules.get(0)).result;
+const rules = await kit.rules.list();
 const allRules = await kit.rules.getAll(contextType);
+```
 
+These discovery helpers are indexer-backed by design because the contract exposes `get_context_rule(id)` and `get_context_rules_count()`, but not an iterator over active rule IDs after deletions.
+
+```typescript
 // Update rules
 await kit.rules.updateName(0, 'New Name');
 await kit.rules.updateExpiration(0, expirationLedger);
@@ -285,6 +313,8 @@ await kit.credentials.syncAll();
 await kit.credentials.delete('credential-id');
 ```
 
+Credential lifecycle notes: `create()` and `save()` create local pending credentials, `deploy()` moves a credential into a connected wallet flow, `markFailed()` preserves a credential for retry, `markDeployed()` removes a successfully deployed credential, and `delete()` is for pending credentials that never deployed.
+
 #### MultiSignerManager (`kit.multiSigners`)
 
 Multi-signer transaction flows.
@@ -292,7 +322,7 @@ Multi-signer transaction flows.
 | Method | Description |
 |--------|-------------|
 | `transfer(tokenContract, recipient, amount, selectedSigners)` | Multi-sig transfer |
-| `getAvailableSigners()` | Get all signers from rules |
+| `getAvailableSigners()` | Get all signers from active rules via indexer-backed rule discovery |
 | `extractCredentialId(signer)` | Get credential ID from signer |
 | `signerMatchesCredential(signer, credentialId)` | Check if signer matches credential |
 | `signerMatchesAddress(signer, address)` | Check if signer matches address |
@@ -301,7 +331,7 @@ Multi-signer transaction flows.
 | `operation(assembledTx, selectedSigners, options?)` | Execute generic multi-sig operation |
 
 ```typescript
-// Get all available signers
+// Get all available signers (requires indexer access)
 const signers = await kit.multiSigners.getAvailableSigners();
 
 // Check if multi-sig is needed
@@ -318,6 +348,8 @@ if (kit.multiSigners.needsMultiSigner(signers)) {
   );
 }
 ```
+
+Multi-signer guidance: use `buildSelectedSigners()` to assemble the signer set, then pass `resolveContextRuleIds` when a transaction can match more than one rule or when you want to pin the auth context explicitly. `getAvailableSigners()` is indexer-backed for the same reason as `kit.rules.list()`.
 
 ---
 
@@ -407,9 +439,8 @@ import type {
   ContractSignerId,                // Signer ID type
   ContextRule,                     // Context rule structure
   ContextRuleType,                 // Rule type enum
-  ContextRuleMeta,                 // Rule metadata (alias: Meta)
+  AuthPayload,                     // Smart-account auth payload
   WebAuthnSigData,                 // WebAuthn signature format
-  Signatures,                      // Signature map type
   SimpleThresholdAccountParams,    // M-of-N multisig params
   WeightedThresholdAccountParams,  // Weighted voting params
   SpendingLimitAccountParams,      // Time-limited spending params
@@ -818,14 +849,12 @@ npm login
 # Bump version (updates package.json)
 pnpm version patch  # or minor, major
 
-# Publish (runs build:all automatically via prepublishOnly)
+# Publish
 pnpm publish
 
 # Or publish with specific tag
 pnpm publish --tag beta
 ```
-
-**Note:** The `prepublishOnly` script automatically runs `pnpm run build:all` before publishing.
 
 ## Related
 

@@ -4,7 +4,7 @@ Cloudflare Worker that serves REST API endpoints for querying indexed smart acco
 
 ## Overview
 
-This worker queries a PostgreSQL database populated by the Goldsky indexing pipeline. It enables reverse lookups from credential IDs and addresses to smart account contracts.
+This worker queries a PostgreSQL database populated by the Goldsky indexing pipeline. It enables reverse lookups from credential IDs and addresses to smart account contracts and provides the active-rule views the SDK uses for indexer-backed rule discovery.
 
 ## API Endpoints
 
@@ -13,7 +13,7 @@ This worker queries a PostgreSQL database populated by the Goldsky indexing pipe
 | `GET /` | Health check |
 | `GET /api/lookup/:credentialId` | Find contracts by passkey credential ID |
 | `GET /api/lookup/address/:address` | Find contracts by G-address or C-address |
-| `GET /api/contract/:contractId` | Get contract details with signers and policies |
+| `GET /api/contract/:contractId` | Get contract details with active signers and policies |
 | `GET /api/contract/:contractId/signers` | Get all signers for a contract |
 | `GET /api/credentials` | List all credential IDs (debugging) |
 | `GET /api/stats` | Get indexer statistics |
@@ -53,7 +53,9 @@ psql $DATABASE_URL -f schema.sql
 This creates:
 - `processed_signers` - View that parses signer data from raw events
 - `processed_policies` - View that parses policy data from raw events
-- `contract_summary` - Aggregated statistics per contract
+- `contract_summary` - Aggregated statistics per contract and active context-rule ids
+
+The SDK uses the contract-detail endpoint and summary view to resolve active rule IDs without relying on contract iteration after deletions.
 
 ## Local Development
 

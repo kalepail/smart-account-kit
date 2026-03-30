@@ -4,7 +4,7 @@
 
 ## Overview
 
-These pipelines filter Stellar contract events for smart account operations and sink them to PostgreSQL. The indexed data enables reverse lookups from signer credentials to contract IDs.
+These pipelines filter Stellar contract events for smart account operations and sink them to PostgreSQL. The indexed data enables reverse lookups from signer credentials to contract IDs and preserves the registry lifecycle events needed to reconstruct current active signer and policy state.
 
 ## Files
 
@@ -18,12 +18,18 @@ These pipelines filter Stellar contract events for smart account operations and 
 | Event | Description |
 |-------|-------------|
 | `context_rule_added` | New context rule created with signers and policies |
-| `context_rule_updated` | Context rule metadata updated |
+| `context_rule_meta_updated` | Context rule metadata updated |
 | `context_rule_removed` | Context rule deleted |
 | `signer_added` | Signer added to existing rule |
 | `signer_removed` | Signer removed from rule |
+| `signer_registered` | Signer registered in the global registry |
+| `signer_deregistered` | Signer deregistered from the global registry |
 | `policy_added` | Policy added to existing rule |
 | `policy_removed` | Policy removed from rule |
+| `policy_registered` | Policy registered in the global registry |
+| `policy_deregistered` | Policy deregistered from the global registry |
+
+The SDK and handler depend on these events being present together. The rule views only stay correct when Goldsky retains both the context-rule lifecycle and the global signer/policy registry lifecycle.
 
 ## Deployment
 

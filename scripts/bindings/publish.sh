@@ -7,6 +7,7 @@
 # Options:
 #   --minor     Bump minor version (default is patch)
 #   --major     Bump major version
+#   --version   Publish an exact bindings version
 #   --otp       npm OTP for 2FA
 #   --dry-run   Show what would happen without publishing
 
@@ -20,11 +21,13 @@ BINDINGS_DIR="$KIT_DIR/packages/smart-account-kit-bindings"
 BUMP_TYPE="patch"
 OTP=""
 DRY_RUN=false
+EXACT_VERSION=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --minor) BUMP_TYPE="minor"; shift ;;
         --major) BUMP_TYPE="major"; shift ;;
+        --version) EXACT_VERSION="$2"; shift 2 ;;
         --otp) OTP="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
         *) echo "Unknown option: $1"; exit 1 ;;
@@ -41,6 +44,16 @@ NC='\033[0m'
 echo -e "${BLUE}Publishing smart-account-kit-bindings${NC}"
 echo ""
 
+if [ -n "$EXACT_VERSION" ] && [ "$BUMP_TYPE" != "patch" ]; then
+    echo -e "${RED}Error: --version cannot be combined with --minor or --major${NC}"
+    exit 1
+fi
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo -e "${RED}Error: Working tree is not clean. Commit or stash changes before publishing.${NC}"
+    exit 1
+fi
+
 # Check npm auth
 NPM_USER=$(npm whoami 2>/dev/null || echo "")
 if [ -z "$NPM_USER" ]; then
@@ -53,15 +66,23 @@ echo -e "Logged in as: ${GREEN}$NPM_USER${NC}"
 NPM_VERSION=$(npm view smart-account-kit-bindings version 2>/dev/null || echo "0.0.0")
 echo -e "Current npm version: ${YELLOW}$NPM_VERSION${NC}"
 
-# Bump version
-IFS='.' read -r MAJOR MINOR PATCH <<< "$NPM_VERSION"
-case $BUMP_TYPE in
-    patch) NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))" ;;
-    minor) NEW_VERSION="$MAJOR.$((MINOR + 1)).0" ;;
-    major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
-esac
+if [ -n "$EXACT_VERSION" ]; then
+    NEW_VERSION="$EXACT_VERSION"
+else
+    # Bump version
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$NPM_VERSION"
+    case $BUMP_TYPE in
+        patch) NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+        minor) NEW_VERSION="$MAJOR.$((MINOR + 1)).0" ;;
+        major) NEW_VERSION="$((MAJOR + 1)).0.0" ;;
+    esac
+fi
 
-echo -e "New version: ${GREEN}$NEW_VERSION${NC} ($BUMP_TYPE)"
+if [ -n "$EXACT_VERSION" ]; then
+    echo -e "Bindings version: ${GREEN}$NEW_VERSION${NC} (explicit)"
+else
+    echo -e "New version: ${GREEN}$NEW_VERSION${NC} ($BUMP_TYPE)"
+fi
 echo ""
 
 if [ "$DRY_RUN" = true ]; then

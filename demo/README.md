@@ -27,6 +27,20 @@ The checked-in `.env.example` shows the current default deployment set used by t
 | **Spending Limit Policy** | `CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4` |
 | **Weighted Threshold Policy** | Optional. Set `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` to expose it in the policy picker. |
 
+The demo does not pin a default smart-account contract ID. Smart accounts are deployed per wallet from the uploaded WASM hash because deployment requires constructor args for `signers` and `policies`.
+
+### Uploaded WASM Hashes
+
+These are the latest uploaded testnet artifacts corresponding to the deployed contracts above:
+
+| Contract | Uploaded WASM hash |
+|----------|--------------------|
+| **Smart Account** | `3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c` |
+| **WebAuthn Verifier** | `d84af9e7c31afece287fee8276ef7d6a64b236d596c043594c003e0f4032d1c7` |
+| **Ed25519 Verifier** | `e88b7989f8c5e69d6a72cda8419844ef2753ab249fef422f31436c5c32e28623` |
+| **Threshold Policy** | `5c87cedc0e485152a084c4b5435bdec88e41304a4316e82e37a84910715639f6` |
+| **Spending Limit Policy** | `eca96954a8e76e366e74fbc95eced11666c939e130a5cc302b8363622e931018` |
+
 ## Setup
 
 ```bash

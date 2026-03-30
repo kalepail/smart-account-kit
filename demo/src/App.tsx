@@ -21,10 +21,10 @@ import { ContextRulesPanel, ContextRuleBuilder, ActiveSignerDisplay, SignerPicke
 const CONFIG = {
   rpcUrl: import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org",
   networkPassphrase: import.meta.env.VITE_NETWORK_PASSPHRASE || Networks.TESTNET,
-  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "a12e8fa9621efd20315753bd4007d974390e31fbcb4a7ddc4dd0a0dec728bf2e",
-  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CBSHV66WG7UV6FQVUTB67P3DZUEJ2KJ5X6JKQH5MFRAAFNFJUAJVXJYV",
+  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c",
+  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CATPTBRWVMH5ZCIKO5HN2F4FMPXVZEXC56RKGHRXCM7EEZGGXK7PICEH",
   nativeTokenContract: import.meta.env.VITE_NATIVE_TOKEN_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-  ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CDGMOL3BP6Y6LYOXXTRNXBNJ2SLNTQ47BGG3LOS2OBBE657E3NYCN54B",
+  ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CAIKK32K3BZJYTWVTXHZFPIEEDBR6YCVTGPABH4UQUQ4XFA3OLYXG27G",
   // Relayer fee sponsoring (optional)
   relayerUrl: import.meta.env.VITE_RELAYER_URL || "",
 };
@@ -35,21 +35,21 @@ const KNOWN_POLICIES = [
     type: "threshold" as const,
     name: "Threshold (M-of-N)",
     description: "Requires M signatures out of N total signers",
-    address: import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || "CCT4MMN5MJ6O2OU6LXPYTCVORQ2QVTBMDJ7MYBZQ2ULSYQVUIYP4IFYD",
+    address: import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || "CDDQLFG7CV74QHWPSP6NZIPNBR2PPCMTUVYCJF4P3ONDYHODRFGR7LWC",
   },
   {
     type: "spending_limit" as const,
     name: "Spending Limit",
     description: "Limits spending to a maximum amount per time period",
-    address: import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || "CBMMWY54XOV6JJHSWCMKWWPXVRXASR5U26UJMLZDN4SP6CFFTVZARPTY",
+    address: import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || "CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4",
   },
   {
     type: "weighted_threshold" as const,
     name: "Weighted Threshold",
     description: "Requires minimum total weight from signers with different voting weights",
-    address: import.meta.env.VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS || "CBYDQ5XUBP7G24FI3LLGLW56QZCIEUSVRPX7FVOUCKHJQQ6DTF6BQGBZ",
+    address: import.meta.env.VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS || "",
   },
-];
+].filter((policy) => Boolean(policy.address));
 
 type LogEntry = {
   message: string;

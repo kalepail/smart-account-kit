@@ -2,13 +2,19 @@
 
 ## Scope
 
-This repo now targets the regenerated smart-account contract surface from the uploaded testnet WASM hash:
+This repo now targets the regenerated smart-account contract surface from the latest uploaded testnet WASM set:
 
 - Smart account WASM hash: `3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c`
+- WebAuthn verifier WASM hash: `d84af9e7c31afece287fee8276ef7d6a64b236d596c043594c003e0f4032d1c7`
+- Ed25519 verifier WASM hash: `e88b7989f8c5e69d6a72cda8419844ef2753ab249fef422f31436c5c32e28623`
+- Threshold policy WASM hash: `5c87cedc0e485152a084c4b5435bdec88e41304a4316e82e37a84910715639f6`
+- Spending-limit policy WASM hash: `eca96954a8e76e366e74fbc95eced11666c939e130a5cc302b8363622e931018`
 - WebAuthn verifier: `CATPTBRWVMH5ZCIKO5HN2F4FMPXVZEXC56RKGHRXCM7EEZGGXK7PICEH`
 - Ed25519 verifier: `CAIKK32K3BZJYTWVTXHZFPIEEDBR6YCVTGPABH4UQUQ4XFA3OLYXG27G`
 - Threshold policy: `CDDQLFG7CV74QHWPSP6NZIPNBR2PPCMTUVYCJF4P3ONDYHODRFGR7LWC`
 - Spending-limit policy: `CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4`
+
+There is intentionally no checked-in smart-account contract ID in the default config. Smart-account deployment is parameterized and requires constructor args for `signers` and `policies`, so the repo defaults to the uploaded smart-account WASM hash.
 
 This is a clean-cut migration. The SDK no longer preserves the legacy `Signatures` tuple flow or the removed `get_context_rules(...)` contract method.
 

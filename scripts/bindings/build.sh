@@ -2,11 +2,12 @@
 
 # Build Script for Smart Account Kit Bindings
 #
-# Generates TypeScript bindings from deployed contracts and builds the package.
+# Generates TypeScript bindings from the configured smart-account target and builds the package.
 #
 # Prerequisites:
 # - Stellar CLI installed (`stellar --version`)
 # - Configuration in demo/.env (VITE_* variables)
+# - Use VITE_ACCOUNT_WASM_HASH for the default repo flow; VITE_ACCOUNT_CONTRACT_ID is optional when targeting a specific deployed smart account instance
 
 set -e
 

@@ -781,18 +781,26 @@ Key variables in `demo/.env`:
 - `VITE_RPC_URL` - Stellar RPC endpoint
 - `VITE_NETWORK_PASSPHRASE` - Network passphrase
 - `VITE_ACCOUNT_WASM_HASH` - Smart account contract WASM hash
+- `VITE_WEBAUTHN_VERIFIER_ADDRESS` - Deployed WebAuthn verifier contract
+- `VITE_ED25519_VERIFIER_ADDRESS` - Deployed Ed25519 verifier contract
+- `VITE_THRESHOLD_POLICY_ADDRESS` - Deployed threshold policy contract
+- `VITE_SPENDING_LIMIT_POLICY_ADDRESS` - Deployed spending-limit policy contract
+- `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` - Optional deployed weighted-threshold policy contract
 
 ### Getting Contract WASM Hashes
 
 The Smart Account Kit uses contracts from [OpenZeppelin's stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts). You can:
 
 1. **Use pre-deployed testnet contracts** (recommended for development):
-   - The `demo/.env.example` includes testnet WASM hashes that are ready to use
+   - The `demo/.env.example` includes the current uploaded smart-account WASM hash plus the current deployed verifier and policy addresses
+   - The default setup intentionally uses the smart-account WASM hash instead of a fixed smart-account contract ID because smart-account deployment requires constructor args (`signers` and `policies`)
 
 2. **Deploy your own contracts**:
    - Clone [stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts)
    - Build and deploy the contracts
    - Use the resulting WASM hashes or contract IDs
+
+Current checked-in testnet defaults live in `demo/.env.example`.
 
 ### Build Commands
 

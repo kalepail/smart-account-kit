@@ -60,6 +60,6 @@ This is a clean-cut migration. The SDK no longer preserves the legacy `Signature
 
 ## Current State
 
-The migration is complete for the current repo state. The SDK is aligned to the regenerated contract surface, the signing flow uses `AuthPayload`, indexer-backed rule discovery is documented as a requirement, the remaining raw contract methods are intentionally left on `kit.wallet` rather than wrapped, and demo-specific formatting helpers are no longer part of the package root API.
+The migration is complete for the current repo state. The SDK is aligned to the regenerated contract surface, the signing flow uses `AuthPayload`, indexer-backed rule discovery is documented as a requirement, the remaining raw contract methods are intentionally left on `kit.wallet` rather than wrapped, and the root package continues to export the helper utilities that the demo and downstream consumers rely on.
 
 Any future cleanup should be treated as normal product work rather than migration debt.

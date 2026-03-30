@@ -503,10 +503,10 @@ const spendingParams = createSpendingLimitParams(
 import {
   getCredentialIdFromSigner,  // Extract credential ID from signer
   signersEqual,               // Compare two signers
+  truncateAddress,            // Display helper
+  formatSignerForDisplay,     // Display helper
 } from 'smart-account-kit';
 ```
-
-Display helpers used by the demo were moved out of the package root and now live in the demo app itself.
 
 ---
 

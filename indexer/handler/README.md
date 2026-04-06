@@ -31,7 +31,10 @@ This worker queries a PostgreSQL database populated by the Goldsky indexing pipe
 # Install dependencies
 pnpm install
 
-# Set database connection string
+# Local dev secret file for `wrangler dev`
+cp .dev.vars.example .dev.vars
+
+# Set deployed database connection string
 wrangler secret put DATABASE_URL
 
 # Deploy to Cloudflare (testnet)

@@ -1,0 +1,6 @@
+# Smart Account Relayer Proxy local overrides
+# Copy to .dev.vars only if you want to override the defaults from wrangler.toml
+# during `wrangler dev`.
+
+NETWORK="testnet"
+RELAYER_BASE_URL="https://channels.openzeppelin.com/testnet"

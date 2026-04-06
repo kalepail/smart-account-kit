@@ -35,19 +35,31 @@ Stellar Network → Goldsky Pipeline → PostgreSQL → Cloudflare Worker API �
 ### Configuration
 
 ```bash
-# Copy the example environment file
-cp .env.example .env.dev  # For testnet
-cp .env.example .env.prod # For mainnet
+# Optional shared config record for Goldsky/database values
+cp .env.example .env.dev  # For testnet notes
+cp .env.example .env.prod # For mainnet notes
 
-# Edit with your database credentials and Goldsky API key
+# Local handler secrets for `wrangler dev`
+cp handler/.dev.vars.example handler/.dev.vars
+
+# Demo UI defaults
+cp demo/.env.example demo/.env
 ```
+
+Use the files for these purposes:
+
+- `indexer/.env.example`: shared record of database and Goldsky settings; not loaded automatically by Wrangler.
+- `indexer/handler/.dev.vars.example`: local Worker secrets for `wrangler dev`.
+- `indexer/relayer-proxy/.dev.vars.example`: optional local overrides for relayer Worker vars during `wrangler dev`.
+- `indexer/demo/.env.example`: Vite env defaults for the standalone indexer demo.
 
 ### Cloudflare Worker
 
 ```bash
 cd handler
 pnpm install
-wrangler secret put DATABASE_URL  # PostgreSQL connection string
+cp .dev.vars.example .dev.vars    # for local `wrangler dev`
+wrangler secret put DATABASE_URL  # PostgreSQL connection string for deployed testnet worker
 wrangler deploy
 ```
 
@@ -209,6 +221,10 @@ wrangler kv namespace create API_KEYS --env production
 # Update wrangler.toml with production KV namespace ID
 wrangler deploy --env production
 ```
+
+The relayer proxy keeps its non-secret runtime config in `wrangler.toml` (`NETWORK`
+and `RELAYER_BASE_URL`). The checked-in `.dev.vars.example` is only for optional
+local overrides.
 
 ### Relayer Proxy API Endpoints
 

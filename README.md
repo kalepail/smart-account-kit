@@ -781,11 +781,14 @@ Key variables in `demo/.env`:
 - `VITE_RPC_URL` - Stellar RPC endpoint
 - `VITE_NETWORK_PASSPHRASE` - Network passphrase
 - `VITE_ACCOUNT_WASM_HASH` - Smart account contract WASM hash
+- `VITE_ACCOUNT_CONTRACT_ID` - Optional contract ID for regenerating bindings from a deployed instance instead of a WASM hash
 - `VITE_WEBAUTHN_VERIFIER_ADDRESS` - Deployed WebAuthn verifier contract
 - `VITE_ED25519_VERIFIER_ADDRESS` - Deployed Ed25519 verifier contract
+- `VITE_NATIVE_TOKEN_CONTRACT` - Native XLM SAC contract used by the demo
 - `VITE_THRESHOLD_POLICY_ADDRESS` - Deployed threshold policy contract
 - `VITE_SPENDING_LIMIT_POLICY_ADDRESS` - Deployed spending-limit policy contract
 - `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` - Optional deployed weighted-threshold policy contract
+- `VITE_RELAYER_URL` - Optional relayer proxy URL for fee-sponsored transactions
 
 ### Getting Contract WASM Hashes
 

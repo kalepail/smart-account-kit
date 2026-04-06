@@ -6,6 +6,7 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ES2022"],
+    "types": ["node"],
     "resolveJsonModule": true,
     "noEmit": true,
     "esModuleInterop": true,

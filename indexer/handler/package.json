@@ -10,11 +10,12 @@
     "types": "wrangler types"
   },
   "dependencies": {
-    "hono": "^4.11.1",
-    "postgres": "^3.4.7"
+    "hono": "^4.12.11",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "wrangler": "^4.56.0"
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.80.0"
   }
 }

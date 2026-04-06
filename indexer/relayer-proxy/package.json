@@ -8,11 +8,11 @@
     "deploy:production": "wrangler deploy --env production"
   },
   "dependencies": {
-    "@openzeppelin/relayer-plugin-channels": "^0.14.0",
-    "hono": "^4.12.3"
+    "@openzeppelin/relayer-plugin-channels": "^0.20.0",
+    "hono": "^4.12.11"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "wrangler": "^4.69.0"
+    "typescript": "^6.0.2",
+    "wrangler": "^4.80.0"
   }
 }

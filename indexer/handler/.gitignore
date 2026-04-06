@@ -8,4 +8,5 @@ dist
 .wrangler
 
 # Cloudflare secrets
-.dev.vars
+.dev.vars*
+!.dev.vars.example

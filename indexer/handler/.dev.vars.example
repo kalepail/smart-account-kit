@@ -1,0 +1,8 @@
+# Smart Account Indexer handler local secrets
+# Copy to .dev.vars for `wrangler dev`.
+#
+# For deployed environments, keep using Wrangler secrets instead:
+#   wrangler secret put DATABASE_URL
+#   wrangler secret put DATABASE_URL --env production
+
+DATABASE_URL="postgresql://user:password@host:5432/database"

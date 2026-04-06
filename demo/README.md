@@ -27,7 +27,7 @@ The checked-in `.env.example` shows the current default deployment set used by t
 | **Spending Limit Policy** | `CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4` |
 | **Weighted Threshold Policy** | Optional. Set `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` to expose it in the policy picker. |
 
-The demo does not pin a default smart-account contract ID. Smart accounts are deployed per wallet from the uploaded WASM hash because deployment requires constructor args for `signers` and `policies`.
+The demo does not pin a default smart-account contract ID. Smart accounts are deployed per wallet from the uploaded WASM hash because deployment requires constructor args for `signers` and `policies`. If you need to regenerate bindings from a specific deployed instance for debugging, you can set `VITE_ACCOUNT_CONTRACT_ID` locally in `.env`.
 
 ### Uploaded WASM Hashes
 
@@ -53,7 +53,7 @@ pnpm dev
 
 Open `http://localhost:5173` in your browser.
 
-The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI.
+The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI, and leave `VITE_RELAYER_URL` blank if you do not want fee-sponsored submissions.
 
 ## Usage
 

@@ -431,7 +431,6 @@ import type {
 ```typescript
 import type {
   ContractSigner,                  // On-chain signer type (alias: Signer)
-  ContractSignerId,                // Signer ID type
   ContextRule,                     // Context rule structure
   ContextRuleType,                 // Rule type enum
   AuthPayload,                     // Smart-account auth payload

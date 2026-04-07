@@ -243,13 +243,15 @@ Manage context rules.
 // Add a new context rule
 await kit.rules.add(contextType, 'Rule Name', signers, policies);
 
-// Get active context rules (requires indexer access)
+// Read a specific rule directly from chain
 const rule = (await kit.rules.get(0)).result;
+
+// Active rule discovery requires indexer access
 const rules = await kit.rules.list();
 const allRules = await kit.rules.getAll(contextType);
 ```
 
-These discovery helpers are indexer-backed by design because the contract exposes `get_context_rule(id)` and `get_context_rules_count()`, but not an iterator over active rule IDs after deletions.
+`kit.rules.get()` reads a specific rule directly from the contract. `kit.rules.list()` and `kit.rules.getAll()` are indexer-backed by design because the contract exposes `get_context_rule(id)` and `get_context_rules_count()`, but not an iterator over active rule IDs after deletions.
 
 ```typescript
 // Update rules
@@ -429,7 +431,6 @@ import type {
 ```typescript
 import type {
   ContractSigner,                  // On-chain signer type (alias: Signer)
-  ContractSignerId,                // Signer ID type
   ContextRule,                     // Context rule structure
   ContextRuleType,                 // Rule type enum
   AuthPayload,                     // Smart-account auth payload
@@ -698,7 +699,7 @@ import type {
 #### Using via SmartAccountKit (Recommended)
 
 ```typescript
-// Indexer is auto-configured for testnet
+// Indexer is auto-configured for testnet/mainnet
 const kit = new SmartAccountKit({ /* config */ });
 
 // Discover contracts by credential ID
@@ -720,10 +721,11 @@ if (kit.indexer) {
 #### Using IndexerClient Directly
 
 ```typescript
-// Create client for a specific network
+// Create client for a known Stellar network
 const indexer = IndexerClient.forNetwork('Test SDF Network ; September 2015');
+const mainnetIndexer = IndexerClient.forNetwork('Public Global Stellar Network ; September 2015');
 
-// Or with custom URL
+// Or with a custom URL
 const indexer = new IndexerClient({
   baseUrl: 'https://smart-account-indexer.sdf-ecosystem.workers.dev',
   timeout: 10000,

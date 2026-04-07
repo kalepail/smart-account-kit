@@ -10,7 +10,6 @@ import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import type { SmartAccountEventEmitter } from "../events";
 import type { StorageAdapter, StoredCredential } from "../types";
 import { buildKeyData } from "../utils";
-import { signersEqual } from "../signer-utils";
 
 /** Dependencies required by SignerManager */
 export interface SignerManagerDeps {
@@ -18,10 +17,7 @@ export interface SignerManagerDeps {
   requireWallet: () => {
     wallet: {
       add_signer: (args: { context_rule_id: number; signer: ContractSigner }) => Promise<AssembledTransaction<number>>;
-      get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<{
-        signer_ids: number[];
-        signers: ContractSigner[];
-      }>>;
+      get_signer_id: (args: { signer: ContractSigner }) => Promise<AssembledTransaction<number>>;
       remove_signer: (args: { context_rule_id: number; signer_id: number }) => Promise<AssembledTransaction<null>>;
     };
     contractId: string;
@@ -123,18 +119,17 @@ export class SignerManager {
    */
   async remove(contextRuleId: number, signer: ContractSigner) {
     const { wallet } = this.deps.requireWallet();
-    const rule = (await wallet.get_context_rule({
-      context_rule_id: contextRuleId,
+    const signerId = (await wallet.get_signer_id({
+      signer,
     })).result;
-    const signerIndex = rule.signers.findIndex((candidate) => signersEqual(candidate, signer));
 
-    if (signerIndex === -1) {
+    if (signerId === undefined || signerId === null) {
       throw new Error(`Signer not found on context rule ${contextRuleId}`);
     }
 
     return wallet.remove_signer({
       context_rule_id: contextRuleId,
-      signer_id: rule.signer_ids[signerIndex],
+      signer_id: signerId,
     });
   }
 }

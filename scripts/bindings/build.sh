@@ -42,8 +42,20 @@ fi
 # Map VITE_ variables
 STELLAR_RPC_URL="${STELLAR_RPC_URL:-$VITE_RPC_URL}"
 STELLAR_NETWORK_PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-$VITE_NETWORK_PASSPHRASE}"
+STELLAR_NETWORK="${STELLAR_NETWORK:-${VITE_NETWORK:-}}"
 ACCOUNT_WASM_HASH="${ACCOUNT_WASM_HASH:-$VITE_ACCOUNT_WASM_HASH}"
 ACCOUNT_CONTRACT_ID="${ACCOUNT_CONTRACT_ID:-$VITE_ACCOUNT_CONTRACT_ID}"
+
+if [ -z "$STELLAR_NETWORK" ]; then
+    case "$STELLAR_NETWORK_PASSPHRASE" in
+        "Test SDF Network ; September 2015")
+            STELLAR_NETWORK="testnet"
+            ;;
+        "Public Global Stellar Network ; September 2015")
+            STELLAR_NETWORK="mainnet"
+            ;;
+    esac
+fi
 
 # Validate
 if ! command -v stellar &> /dev/null; then
@@ -65,8 +77,12 @@ fi
 echo -e "${YELLOW}Generating TypeScript bindings...${NC}"
 
 STELLAR_CMD="stellar contract bindings typescript"
-STELLAR_CMD="$STELLAR_CMD --rpc-url \"$STELLAR_RPC_URL\""
-STELLAR_CMD="$STELLAR_CMD --network-passphrase \"$STELLAR_NETWORK_PASSPHRASE\""
+if [ -n "$STELLAR_NETWORK" ]; then
+    STELLAR_CMD="$STELLAR_CMD --network \"$STELLAR_NETWORK\""
+else
+    STELLAR_CMD="$STELLAR_CMD --rpc-url \"$STELLAR_RPC_URL\""
+    STELLAR_CMD="$STELLAR_CMD --network-passphrase \"$STELLAR_NETWORK_PASSPHRASE\""
+fi
 
 if [ -n "$ACCOUNT_WASM_HASH" ]; then
     STELLAR_CMD="$STELLAR_CMD --wasm-hash $ACCOUNT_WASM_HASH"
@@ -106,7 +122,7 @@ pkg.files = ['dist'];
 pkg.author = 'OpenZeppelin';
 pkg.license = 'MIT';
 pkg.repository = { type: 'git', url: 'https://github.com/kalepail/smart-account-kit' };
-pkg.peerDependencies = { '@stellar/stellar-sdk': '>=14.0.0' };
+pkg.peerDependencies = { '@stellar/stellar-sdk': '15.0.1' };
 pkg.publishConfig = { registry: 'https://registry.npmjs.org/', access: 'public' };
 if (pkg.dependencies && pkg.dependencies['@stellar/stellar-sdk']) {
     delete pkg.dependencies['@stellar/stellar-sdk'];

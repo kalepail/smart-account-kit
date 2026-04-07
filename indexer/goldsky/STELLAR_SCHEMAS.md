@@ -1,5 +1,6 @@
 # Goldsky Turbo Stellar Mainnet Dataset Schemas
 
+> **Status:** Historical snapshot only. The authoritative live versions in this repo are the Turbo YAMLs in this directory plus `schema-inspect.yaml`, and the authoritative upstream reference is the current Goldsky Stellar source documentation.
 > **Version:** 1.1.0
 > **Last Verified:** 2025-12-23
 > **Source:** Extracted directly from Goldsky internal SQL transforms via `goldsky turbo logs`

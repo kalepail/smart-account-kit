@@ -29,7 +29,8 @@ Stellar Network → Goldsky Pipeline → PostgreSQL → Cloudflare Worker API �
 ### Prerequisites
 
 - Wrangler CLI (`pnpm add -g wrangler`)
-- Goldsky CLI (for mainnet pipeline management)
+- Goldsky CLI
+- Goldsky Turbo CLI extension
 - PostgreSQL database (e.g., Neon, Supabase, or self-hosted)
 
 ### Configuration
@@ -61,19 +62,32 @@ pnpm install
 cp .dev.vars.example .dev.vars    # for local `wrangler dev`
 wrangler secret put DATABASE_URL  # PostgreSQL connection string for deployed testnet worker
 wrangler deploy
+
+# Mainnet
+wrangler secret put DATABASE_URL --env production
+wrangler deploy --env production
 ```
 
-### Goldsky Pipeline (Mainnet)
+### Goldsky Pipelines
 
 ```bash
 cd goldsky
-goldsky pipeline create smart-account-signers --definition-path ./pipeline.yaml
-goldsky pipeline start smart-account-signers
+
+# Install Turbo extension if needed
+goldsky turbo
+
+# Testnet: Turbo on stellar_testnet.events v1.2.0, start_at earliest
+goldsky turbo apply ./pipeline-testnet.yaml
+
+# Mainnet: Turbo on stellar_mainnet.events v1.2.0, start_at 60343871
+goldsky turbo apply ./pipeline-mainnet.yaml
 ```
 
 ## API Endpoints
 
-**Base URL**: `https://smart-account-indexer.sdf-ecosystem.workers.dev`
+**Testnet URL**: `https://smart-account-indexer.sdf-ecosystem.workers.dev`
+
+**Mainnet URL**: `https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev`
 
 ### Health Check
 ```
@@ -105,12 +119,6 @@ GET /api/stats
 ```
 Get indexer statistics (event counts, unique contracts, etc.).
 
-### Manual Poll (Testnet)
-```
-POST /api/poll
-```
-Trigger immediate polling of testnet events.
-
 ## Events Indexed
 
 | Event | Description |
@@ -135,6 +143,8 @@ The indexer client is integrated into the Smart Account Kit SDK and can be used 
 
 The contract-detail API is the important bit for wallet flows: it turns the raw event stream into current active rule state so the SDK can resolve rule IDs without guessing after deletions.
 
+For this project, testnet intentionally uses `start_at: earliest` so it replays all events still available in the current testnet history, including events from before the pipeline was first deployed.
+
 ```typescript
 import { SmartAccountKit, IndexedDBStorage } from 'smart-account-kit';
 
@@ -144,7 +154,7 @@ const kit = new SmartAccountKit({
   accountWasmHash: '...',
   webauthnVerifierAddress: 'C...',
   storage: new IndexedDBStorage(),
-  // Indexer auto-configured for testnet
+  // Indexer auto-configured for testnet/mainnet
 });
 
 // Step 1: Authenticate with passkey (prompts user to select)
@@ -189,6 +199,9 @@ curl https://smart-account-indexer.sdf-ecosystem.workers.dev/api/stats
 
 # Lookup credential
 curl https://smart-account-indexer.sdf-ecosystem.workers.dev/api/lookup/<credential-id-hex>
+
+# Mainnet health check
+curl https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev/
 ```
 
 ## Relayer Proxy

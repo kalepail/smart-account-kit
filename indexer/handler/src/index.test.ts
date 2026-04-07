@@ -205,6 +205,54 @@ describe("handler routes", () => {
     });
   });
 
+  it("returns active context rules even when signers and policies resolve empty", async () => {
+    currentSqlClient = createSqlClient([
+      [
+        {
+          contract_id: "CEMPTY",
+          context_rule_count: 1,
+          external_signer_count: 0,
+          delegated_signer_count: 0,
+          native_signer_count: 0,
+          first_seen_ledger: 10,
+          last_seen_ledger: 10,
+          context_rule_ids: [0],
+        },
+      ],
+      [],
+      [],
+      [],
+    ]);
+
+    const response = await app.fetch(
+      new Request("http://localhost/api/contract/CEMPTY"),
+      { DATABASE_URL: "postgres://example" } as any,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      contractId: "CEMPTY",
+      summary: {
+        contract_id: "CEMPTY",
+        context_rule_count: 1,
+        external_signer_count: 0,
+        delegated_signer_count: 0,
+        native_signer_count: 0,
+        first_seen_ledger: 10,
+        last_seen_ledger: 10,
+        context_rule_ids: [0],
+      },
+      contextRules: [
+        {
+          context_rule_id: 0,
+          signers: [],
+          policies: [],
+        },
+      ],
+    });
+  });
+
   it("returns lookup and stats payloads from the indexed views", async () => {
     currentSqlClient = createSqlClient([
       [

@@ -59,6 +59,7 @@ This creates:
 - `contract_summary` - Aggregated statistics per contract and active context-rule ids
 
 The SDK uses the contract-detail endpoint and summary view to resolve active rule IDs without relying on contract iteration after deletions.
+Those views are intentionally the compatibility layer between Goldsky dataset evolution and the SDK's stable indexer API.
 
 ## Local Development
 

@@ -3,6 +3,7 @@ import {
   SmartAccountKit,
   IndexedDBStorage,
   getCredentialIdFromSigner,
+  collectUniqueSigners,
   StellarWalletsKitAdapter,
   type StoredCredential,
   type SelectedSigner,
@@ -21,10 +22,10 @@ import { ContextRulesPanel, ContextRuleBuilder, ActiveSignerDisplay, SignerPicke
 const CONFIG = {
   rpcUrl: import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org",
   networkPassphrase: import.meta.env.VITE_NETWORK_PASSPHRASE || Networks.TESTNET,
-  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c",
-  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CATPTBRWVMH5ZCIKO5HN2F4FMPXVZEXC56RKGHRXCM7EEZGGXK7PICEH",
+  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611",
+  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU",
   nativeTokenContract: import.meta.env.VITE_NATIVE_TOKEN_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-  ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CAIKK32K3BZJYTWVTXHZFPIEEDBR6YCVTGPABH4UQUQ4XFA3OLYXG27G",
+  ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CCJOUKLCZVCXS4VIBBEA7S3SPWZQS5DPE5A4YG67RA3Z7E3SJZAUJFQA",
   // Relayer fee sponsoring (optional)
   relayerUrl: import.meta.env.VITE_RELAYER_URL || "",
 };
@@ -35,13 +36,13 @@ const KNOWN_POLICIES = [
     type: "threshold" as const,
     name: "Threshold (M-of-N)",
     description: "Requires M signatures out of N total signers",
-    address: import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || "CDDQLFG7CV74QHWPSP6NZIPNBR2PPCMTUVYCJF4P3ONDYHODRFGR7LWC",
+    address: import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || "CB2WQXF2XXDGUV2CTVQ23RLN3ESI3IY5KKX3KVXWBNRTTWDHZM76NVKJ",
   },
   {
     type: "spending_limit" as const,
     name: "Spending Limit",
     description: "Limits spending to a maximum amount per time period",
-    address: import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || "CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4",
+    address: import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || "CBBZ2XP4LBDEO2EELTZKJSPQZDREFKCULL6CKIUQO53S42RZABOYQUK3",
   },
   {
     type: "weighted_threshold" as const,
@@ -50,6 +51,24 @@ const KNOWN_POLICIES = [
     address: import.meta.env.VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS || "",
   },
 ].filter((policy) => Boolean(policy.address));
+
+function buildDemoStorageName(
+  networkPassphrase: string,
+  accountWasmHash: string,
+  webauthnVerifierAddress: string
+): string {
+  const networkKey = networkPassphrase
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return [
+    "smart-account-kit-demo",
+    networkKey,
+    accountWasmHash.slice(0, 16),
+    webauthnVerifierAddress.slice(0, 16).toLowerCase(),
+  ].join(":");
+}
 
 type LogEntry = {
   message: string;
@@ -101,6 +120,50 @@ function App() {
   const [discoveredContracts, setDiscoveredContracts] = useState<IndexedContractSummary[]>([]);
   const [showContractPicker, setShowContractPicker] = useState(false);
   const [pendingCredentialForPicker, setPendingCredentialForPicker] = useState<string | null>(null);
+
+  const ensureCurrentWalletShape = useCallback(async (
+    kitInstance: SmartAccountKit,
+    contractId: string,
+    activeCredentialId?: string | null
+  ) => {
+    const details = await kitInstance.getContractDetailsFromIndexer(contractId);
+    if (!details) {
+      return;
+    }
+
+    if (!kitInstance.wallet) {
+      return;
+    }
+
+    const rules = await kitInstance.rules.list();
+
+    if (details.contextRules.length > 0 && rules.length === 0) {
+      throw new Error("Failed to decode active context rules for the restored wallet");
+    }
+
+    if (!activeCredentialId) {
+      return;
+    }
+
+    const activeSigner = rules
+      .flatMap((rule) => rule.signers)
+      .find((signer) => getCredentialIdFromSigner(signer) === activeCredentialId);
+
+    if (!activeSigner) {
+      throw new Error("The authenticated passkey is not an active signer on this wallet");
+    }
+
+    if (activeSigner.tag !== "External") {
+      throw new Error("The authenticated signer is not a current WebAuthn signer");
+    }
+
+    const verifierAddress = activeSigner.values[0];
+    if (verifierAddress !== webauthnVerifier) {
+      throw new Error(
+        `This wallet uses an older WebAuthn verifier (${verifierAddress}) instead of the current demo verifier (${webauthnVerifier})`
+      );
+    }
+  }, [webauthnVerifier]);
 
   // Refresh connected wallets from SDK (includes both wallet and keypair signers)
   const refreshConnectedWallets = useCallback(() => {
@@ -187,11 +250,10 @@ function App() {
   // Fetch all unique signers from on-chain context rules using SDK
   const fetchAllSigners = useCallback(async (kitInstance: SmartAccountKit, activeCredId: string | null) => {
     try {
-      // Use SDK's multiSigners to get deduplicated signers from all rules
-      const uniqueSigners = await kitInstance.multiSigners.getAvailableSigners();
+      const rules = await kitInstance.rules.list();
+      const uniqueSigners = collectUniqueSigners(rules.flatMap((rule) => rule.signers));
       setAllSigners(uniqueSigners);
 
-      // Find the active signer based on credential ID
       if (activeCredId) {
         const active = uniqueSigners.find((s) => {
           const credId = getCredentialIdFromSigner(s);
@@ -218,6 +280,14 @@ function App() {
 
     const initKit = async () => {
       try {
+        const storage = new IndexedDBStorage(
+          buildDemoStorageName(
+            CONFIG.networkPassphrase,
+            accountWasmHash,
+            webauthnVerifier
+          )
+        );
+
         // Create and initialize the wallet adapter
         const walletAdapter = new StellarWalletsKitAdapter({
           network: CONFIG.networkPassphrase,
@@ -229,7 +299,7 @@ function App() {
           networkPassphrase: CONFIG.networkPassphrase,
           accountWasmHash,
           webauthnVerifierAddress: webauthnVerifier,
-          storage: new IndexedDBStorage(),
+          storage,
           rpName: "Smart Account Kit Demo",
           externalWallet: walletAdapter,
           // Enable Relayer fee sponsoring if URL is configured
@@ -284,19 +354,28 @@ function App() {
       const result = await kit.connectWallet();
 
       if (result) {
-        log(`Session restored: ${result.contractId.slice(0, 10)}...`, "success");
-        setContractId(result.contractId);
-        setCredentialIdState(result.credentialId);
-        setIsConnected(true);
-        fetchBalance(result.contractId);
-        fetchAllSigners(kit, result.credentialId);
+        try {
+          await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
+          log(`Session restored: ${result.contractId.slice(0, 10)}...`, "success");
+          setContractId(result.contractId);
+          setCredentialIdState(result.credentialId);
+          setIsConnected(true);
+          fetchBalance(result.contractId);
+          fetchAllSigners(kit, result.credentialId);
+        } catch (error) {
+          await kit.disconnect();
+          log(
+            `Stored wallet is not compatible with the current demo contract surface. Create a fresh wallet with the current demo config. ${error}`,
+            "error"
+          );
+        }
       }
     };
 
     autoConnect().catch((error) => {
       log(`Auto-connect failed: ${error}`, "error");
     });
-  }, [kit, configValid, isConnected, autoConnectAttempted, log, fetchBalance, fetchAllSigners]);
+  }, [kit, configValid, isConnected, autoConnectAttempted, log, fetchBalance, fetchAllSigners, ensureCurrentWalletShape]);
 
   const handleCreateWallet = async () => {
     if (!kit) return;
@@ -367,6 +446,7 @@ function App() {
         });
 
         if (result) {
+          await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
           log(`Contract ID: ${result.contractId}`, "success");
           setContractId(result.contractId);
           setCredentialIdState(result.credentialId);
@@ -384,6 +464,7 @@ function App() {
       });
 
       if (result) {
+        await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
         log(`Contract ID: ${result.contractId}`, "success");
         setContractId(result.contractId);
         setCredentialIdState(result.credentialId);
@@ -392,6 +473,7 @@ function App() {
         fetchAllSigners(kit, result.credentialId);
       }
     } catch (error) {
+      await kit.disconnect().catch(() => undefined);
       log(`Failed to connect: ${error}`, "error");
     } finally {
       setLoading(null);
@@ -414,6 +496,7 @@ function App() {
       });
 
       if (result) {
+        await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
         log(`Connected to: ${result.contractId}`, "success");
         setContractId(result.contractId);
         setCredentialIdState(result.credentialId);
@@ -422,6 +505,7 @@ function App() {
         fetchAllSigners(kit, result.credentialId);
       }
     } catch (error) {
+      await kit.disconnect().catch(() => undefined);
       log(`Failed to connect: ${error}`, "error");
     } finally {
       setLoading(null);
@@ -609,11 +693,13 @@ function App() {
 
   // Modal handlers
   const handleAddRule = () => {
+    log("Opening context rule builder...");
     setEditingRule(null);
     setRuleBuilderOpen(true);
   };
 
   const handleEditRule = (rule: ContextRule) => {
+    log(`Editing context rule ${rule.id}...`);
     setEditingRule(rule);
     setRuleBuilderOpen(true);
   };

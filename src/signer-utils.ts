@@ -1,3 +1,4 @@
+import base64url from "base64url";
 import type { Signer } from "smart-account-kit-bindings";
 import { SECP256R1_PUBLIC_KEY_SIZE } from "./constants";
 
@@ -6,13 +7,13 @@ export function getCredentialIdFromSigner(signer: Signer): string | null {
     return null;
   }
 
-  const keyData = signer.values[1] as Buffer;
+  const keyData = Buffer.from(signer.values[1] as Buffer | Uint8Array);
   if (keyData.length <= SECP256R1_PUBLIC_KEY_SIZE) {
     return null;
   }
 
   const credentialId = keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
-  return credentialId.toString("base64url");
+  return base64url.encode(credentialId);
 }
 
 export function signersEqual(a: Signer, b: Signer): boolean {
@@ -25,8 +26,8 @@ export function signersEqual(a: Signer, b: Signer): boolean {
   if (a.tag === "External" && b.tag === "External") {
     const aVerifier = a.values[0] as string;
     const bVerifier = b.values[0] as string;
-    const aKey = a.values[1] as Buffer;
-    const bKey = b.values[1] as Buffer;
+    const aKey = Buffer.from(a.values[1] as Buffer | Uint8Array);
+    const bKey = Buffer.from(b.values[1] as Buffer | Uint8Array);
     return aVerifier === bVerifier && aKey.equals(bKey);
   }
 
@@ -38,7 +39,7 @@ export function getSignerKey(signer: Signer): string {
     return `delegated:${signer.values[0]}`;
   }
 
-  const keyData = signer.values[1] as Buffer;
+  const keyData = Buffer.from(signer.values[1] as Buffer | Uint8Array);
   return `external:${signer.values[0]}:${keyData.toString("hex")}`;
 }
 

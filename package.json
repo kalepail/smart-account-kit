@@ -22,6 +22,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "agent-browser:webauthn": "node scripts/agent-browser-webauthn-helper.mjs",
     "prebuild": "node scripts/sync-version.js",
     "build": "tsc",
     "build:all": "./scripts/build.sh",
@@ -30,6 +31,9 @@
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist packages/smart-account-kit-bindings/dist",
     "test": "vitest",
+    "test:e2e:browser:full": "bash scripts/browser-full-e2e-audit.sh",
+    "test:e2e:testnet-passkey:onchain": "SKIP_INDEXER=true bash scripts/testnet-passkey-smoke.sh",
+    "test:e2e:testnet-passkey": "bash scripts/testnet-passkey-smoke.sh",
     "release": "./scripts/publish.sh",
     "release:bindings": "./scripts/bindings/publish.sh"
   },

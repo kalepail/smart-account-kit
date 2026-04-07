@@ -6,7 +6,7 @@ import { makeAccount, makeDelegatedSigner } from "./test-utils";
 function makeDeps() {
   const wallet = {
     add_signer: vi.fn(),
-    get_context_rule: vi.fn(),
+    get_signer_id: vi.fn(),
     remove_signer: vi.fn(),
   };
   const storage = {
@@ -94,15 +94,10 @@ describe("SignerManager", () => {
     expect(result).toEqual({ result: 44 });
   });
 
-  it("removes a signer by resolving the signer id from the rule", async () => {
+  it("removes a signer by resolving the global signer id", async () => {
     const deps = makeDeps();
     const signer = makeDelegatedSigner(7);
-    deps.wallet.get_context_rule.mockResolvedValue({
-      result: {
-        signers: [signer],
-        signer_ids: [55],
-      },
-    });
+    deps.wallet.get_signer_id.mockResolvedValue({ result: 55 });
     deps.wallet.remove_signer.mockResolvedValue({ result: null });
     const manager = new SignerManager({
       ...deps,
@@ -112,6 +107,7 @@ describe("SignerManager", () => {
 
     const result = await manager.remove(3, signer);
 
+    expect(deps.wallet.get_signer_id).toHaveBeenCalledWith({ signer });
     expect(deps.wallet.remove_signer).toHaveBeenCalledWith({
       context_rule_id: 3,
       signer_id: 55,

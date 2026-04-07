@@ -25,7 +25,6 @@ import {
   shouldUseFeeSponsoring,
   sign,
   signAndSubmit,
-  transfer,
 } from "./tx-ops";
 
 function makeAccount(seedByte: number): Keypair {
@@ -354,77 +353,6 @@ describe("tx-ops", () => {
       success: true,
       hash: "fund-hash",
       amount: 10_000 - FRIENDBOT_RESERVE_XLM,
-    });
-  });
-
-  it("transfer validates self-transfers and returns a successful result for the happy path", async () => {
-    const deployer = makeAccount(8);
-    const recipient = makeAccount(9).publicKey();
-    const sendAndPollMock = vi.fn().mockResolvedValue({
-      success: true,
-      hash: "transfer-hash",
-    });
-    const signResimulateAndPrepare = vi.fn().mockResolvedValue({
-      sign: vi.fn(),
-    });
-
-    const rejected = await transfer(
-      {
-        getContractId: () => recipient,
-        rpc: {
-          getAccount: vi.fn(),
-          simulateTransaction: vi.fn(),
-        } as never,
-        networkPassphrase: "Test SDF Network ; September 2015",
-        timeoutInSeconds: 30,
-        deployerKeypair: deployer,
-        shouldUseFeeSponsoring: () => true,
-        hasSourceAccountAuth: () => false,
-        sendAndPoll: sendAndPollMock,
-        signResimulateAndPrepare,
-      },
-      makeContractAddress("token"),
-      recipient,
-      1
-    );
-
-    expect(rejected.success).toBe(false);
-    expect(rejected.error).toBe("Cannot transfer to self");
-    expect(signResimulateAndPrepare).not.toHaveBeenCalled();
-
-    const sourceAccount = new Account(deployer.publicKey(), "1");
-    const authEntries = [makeSourceAccountEntry(), makeAddressEntry(recipient)];
-    const result = await transfer(
-      {
-        getContractId: () => makeContractAddress("contract"),
-        rpc: {
-          getAccount: vi.fn().mockResolvedValue(sourceAccount),
-          simulateTransaction: vi.fn().mockResolvedValue({
-            result: { auth: authEntries },
-            latestLedger: 200,
-          }),
-        } as never,
-        networkPassphrase: "Test SDF Network ; September 2015",
-        timeoutInSeconds: 30,
-        deployerKeypair: deployer,
-        shouldUseFeeSponsoring: () => true,
-        hasSourceAccountAuth: () => false,
-        sendAndPoll: sendAndPollMock,
-        signResimulateAndPrepare,
-      },
-      makeContractAddress("token"),
-      recipient,
-      2.5,
-      { credentialId: "cred-id", forceMethod: "relayer" }
-    );
-
-    expect(signResimulateAndPrepare).toHaveBeenCalledWith(expect.any(Object), authEntries, {
-      credentialId: "cred-id",
-    });
-    expect(sendAndPollMock).toHaveBeenCalledWith(expect.any(Object), { forceMethod: "relayer" });
-    expect(result).toEqual({
-      success: true,
-      hash: "transfer-hash",
     });
   });
 });

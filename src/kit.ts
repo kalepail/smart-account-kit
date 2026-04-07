@@ -113,13 +113,18 @@ import {
   sign,
   signAndSubmit,
   fundWallet,
-  transfer,
+  buildTokenTransferTargetArgs,
   hasSourceAccountAuth,
   signResimulateAndPrepare,
   shouldUseFeeSponsoring,
   sendAndPoll,
 } from "./kit/tx-ops";
 import { convertPolicyParams, buildPoliciesScVal } from "./kit/policies-ops";
+import {
+  findWebAuthnSignerForCredential,
+  resolveContextRuleIdsForEntry,
+} from "./kit/context-rules";
+import { validateAddress, validateAmount, xlmToStroops } from "./utils";
 
 
 /**
@@ -178,6 +183,10 @@ export class SmartAccountKit {
   private readonly webauthnVerifierAddress: string;
   private readonly timeoutInSeconds: number;
   private readonly signatureExpirationLedgers: number;
+  private readonly probeRuleIds?: {
+    maxRuleId?: number;
+    maxConsecutiveMisses?: number;
+  };
 
   // WebAuthn configuration
   private readonly rpId?: string;
@@ -295,7 +304,7 @@ export class SmartAccountKit {
    * The indexer enables reverse lookups from signer credentials to contracts,
    * which is essential for discovering which contracts a user has access to.
    *
-   * This is automatically configured for known networks (testnet) if not
+   * This is automatically configured for known networks (testnet and mainnet) if not
    * explicitly disabled via `indexerUrl: false` in the config.
    *
    * @example
@@ -403,6 +412,12 @@ export class SmartAccountKit {
 
     // Event emitter (initialized first as other managers may use it)
     this.events = new SmartAccountEventEmitter();
+    this.probeRuleIds = config.contextRuleProbe?.enabled === false
+      ? undefined
+      : {
+          maxRuleId: config.contextRuleProbe?.maxRuleId,
+          maxConsecutiveMisses: config.contextRuleProbe?.maxConsecutiveMisses,
+        };
 
     // External signer manager - unified interface for G-address signers
     // Use localStorage for wallet persistence if available (browser environment)
@@ -425,7 +440,11 @@ export class SmartAccountKit {
 
     this.rules = new ContextRuleManagerClass({
       requireWallet: () => this.requireWallet(),
+      rpc: this.rpc,
+      networkPassphrase: this.networkPassphrase,
+      timeoutInSeconds: this.timeoutInSeconds,
       getContractDetailsFromIndexer: () => this.getActiveContractDetailsFromIndexer(),
+      probeRuleIds: this.probeRuleIds,
     });
 
     this.policies = new PolicyManagerClass({
@@ -916,6 +935,12 @@ export class SmartAccountKit {
       ) => number[] | Promise<number[]>;
     }
   ): Promise<contract.AssembledTransaction<T>> {
+    const resolvedOptions = {
+      ...options,
+      resolveContextRuleIds: options?.resolveContextRuleIds ?? ((entry: xdr.SorobanAuthorizationEntry) =>
+        this.resolveConnectedContextRuleIds(entry, options?.credentialId)),
+    };
+
     const signed = await sign(
       {
         getContractId: () => this._contractId,
@@ -924,7 +949,7 @@ export class SmartAccountKit {
         signAuthEntry: (entry, signOptions) => this.signAuthEntry(entry, signOptions),
       },
       transaction,
-      options
+      resolvedOptions
     );
 
     return signed as contract.AssembledTransaction<T>;
@@ -957,6 +982,12 @@ export class SmartAccountKit {
       forceMethod?: SubmissionMethod;
     }
   ): Promise<TransactionResult> {
+    const resolvedOptions = {
+      ...options,
+      resolveContextRuleIds: options?.resolveContextRuleIds ?? ((entry: xdr.SorobanAuthorizationEntry) =>
+        this.resolveConnectedContextRuleIds(entry, options?.credentialId)),
+    };
+
     return signAndSubmit(
       {
         getContractId: () => this._contractId,
@@ -970,7 +1001,7 @@ export class SmartAccountKit {
         deployerKeypair: this.deployerKeypair,
       },
       transaction,
-      options
+      resolvedOptions
     );
   }
 
@@ -1005,6 +1036,8 @@ export class SmartAccountKit {
         calculateExpiration: () => this.calculateExpiration(),
         getCredentialId: () => this._credentialId,
         requireWallet: () => this.requireWallet(),
+        rpc: this.rpc,
+        timeoutInSeconds: this.timeoutInSeconds,
       },
       entry,
       options
@@ -1075,26 +1108,50 @@ export class SmartAccountKit {
       forceMethod?: SubmissionMethod;
     }
   ): Promise<TransactionResult> {
-    return transfer(
-      {
-        getContractId: () => this._contractId,
-        rpc: this.rpc,
-        networkPassphrase: this.networkPassphrase,
-        timeoutInSeconds: this.timeoutInSeconds,
-        deployerKeypair: this.deployerKeypair,
-        shouldUseFeeSponsoring: (submissionOptions) =>
-          this.shouldUseFeeSponsoring(submissionOptions),
-        hasSourceAccountAuth: (preparedTx) => this.hasSourceAccountAuth(preparedTx),
-        sendAndPoll: (preparedTx, submissionOptions) =>
-          this.sendAndPoll(preparedTx, submissionOptions),
-        signResimulateAndPrepare: (hostFunc, authEntries, signOptions) =>
-          this.signResimulateAndPrepare(hostFunc, authEntries, signOptions),
-      },
-      tokenContract,
-      recipient,
-      amount,
-      options
-    );
+    const contractId = this._contractId;
+    if (!contractId) {
+      return { success: false, hash: "", error: "Not connected to a wallet" };
+    }
+
+    try {
+      validateAddress(tokenContract, "tokenContract");
+      validateAddress(recipient, "recipient");
+      validateAmount(amount, "amount");
+    } catch (err) {
+      return {
+        success: false,
+        hash: "",
+        error: err instanceof Error ? err.message : "Validation failed",
+      };
+    }
+
+    if (recipient === contractId) {
+      return {
+        success: false,
+        hash: "",
+        error: "Cannot transfer to self",
+      };
+    }
+
+    try {
+      const amountInStroops = xlmToStroops(amount);
+      const { wallet } = this.requireWallet();
+      const transaction = await this.execute(tokenContract, "transfer", [
+        ...buildTokenTransferTargetArgs(wallet, contractId, recipient, amountInStroops),
+      ]);
+      return this.signAndSubmit(transaction, {
+        credentialId: options?.credentialId,
+        resolveContextRuleIds: (entry) =>
+          this.resolveConnectedContextRuleIds(entry, options?.credentialId),
+        forceMethod: options?.forceMethod,
+      });
+    } catch (err) {
+      return {
+        success: false,
+        hash: "",
+        error: err instanceof Error ? err.message : "Unknown error",
+      };
+    }
   }
 
   /**
@@ -1192,6 +1249,10 @@ export class SmartAccountKit {
     options?: {
       credentialId?: string;
       expiration?: number;
+      resolveContextRuleIds?: (
+        entry: xdr.SorobanAuthorizationEntry,
+        index: number
+      ) => number[] | Promise<number[]>;
     }
   ): Promise<Transaction> {
     return signResimulateAndPrepare(
@@ -1206,6 +1267,29 @@ export class SmartAccountKit {
       authEntries,
       options
     );
+  }
+
+  private async resolveConnectedContextRuleIds(
+    entry: xdr.SorobanAuthorizationEntry,
+    credentialIdOverride?: string
+  ): Promise<number[]> {
+    const credentialId = credentialIdOverride ?? this._credentialId;
+    if (!credentialId) {
+      throw new Error("No connected credential available to resolve context rule IDs");
+    }
+
+    const { wallet, contractId } = this.requireWallet();
+    const discoveryDeps = {
+      getContractDetailsFromIndexer: () => this.getContractDetailsFromIndexer(contractId),
+      probeRuleIds: this.probeRuleIds,
+      rpc: this.rpc,
+      contractId,
+      networkPassphrase: this.networkPassphrase,
+      timeoutInSeconds: this.timeoutInSeconds,
+    };
+    const signer = await findWebAuthnSignerForCredential(wallet, credentialId, discoveryDeps);
+
+    return resolveContextRuleIdsForEntry(wallet, entry, [signer], discoveryDeps);
   }
 
   /**

@@ -40,8 +40,44 @@ WITH parsed_events AS (
     e.data::jsonb as data_json
   FROM smart_account_signer_events e
 ),
--- Signers from context_rule_added events (inline signers array)
-context_rule_signers AS (
+-- Latest signer registry rows keyed by signer_id.
+-- Current contracts emit signer references by ID, then publish the signer
+-- payload separately via signer_registered events.
+signer_registry_events AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.event_type,
+    (pe.topics_json->1->>'u32')::int as signer_id,
+    (
+      SELECT elem->'val'->'vec'
+      FROM jsonb_array_elements(pe.data_json->'map') elem
+      WHERE elem->'key'->>'symbol' = 'signer'
+    ) as signer_vec
+  FROM parsed_events pe
+  WHERE pe.event_type IN ('signer_registered', 'signer_deregistered')
+),
+latest_signer_registry AS (
+  SELECT DISTINCT ON (contract_id, signer_id)
+    contract_id,
+    signer_id,
+    event_type,
+    signer_vec,
+    ledger_sequence
+  FROM signer_registry_events
+  ORDER BY contract_id, signer_id, ledger_sequence DESC
+),
+registered_signers AS (
+  SELECT
+    contract_id,
+    signer_id,
+    signer_vec
+  FROM latest_signer_registry
+  WHERE event_type = 'signer_registered'
+),
+-- Legacy context_rule_added shape with inline signers array.
+context_rule_inline_signers AS (
   SELECT
     pe.id,
     pe.contract_id,
@@ -59,8 +95,27 @@ context_rule_signers AS (
   jsonb_array_elements(signers.signers_vec) as signer_elem
   WHERE pe.event_type = 'context_rule_added'
 ),
--- Signers from signer_added/signer_removed events (single signer)
-single_signer_events AS (
+-- Current context_rule_added shape with signer_ids references.
+context_rule_signer_ids AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.transaction_hash,
+    pe.event_type,
+    (pe.topics_json->1->'u32')::int as context_rule_id,
+    (signer_id_elem->>'u32')::int as signer_id
+  FROM parsed_events pe,
+  LATERAL (
+    SELECT elem->'val'->'vec' as signer_ids_vec
+    FROM jsonb_array_elements(pe.data_json->'map') elem
+    WHERE elem->'key'->>'symbol' = 'signer_ids'
+  ) signer_ids,
+  jsonb_array_elements(signer_ids.signer_ids_vec) as signer_id_elem
+  WHERE pe.event_type = 'context_rule_added'
+),
+-- Legacy signer_added/signer_removed shape with inline signer payload.
+single_inline_signer_events AS (
   SELECT
     pe.id,
     pe.contract_id,
@@ -72,11 +127,51 @@ single_signer_events AS (
   FROM parsed_events pe
   WHERE pe.event_type IN ('signer_added', 'signer_removed')
 ),
--- Combine both sources
-all_signers AS (
-  SELECT * FROM context_rule_signers
+-- Current signer_added/signer_removed shape with signer_id in the payload.
+single_signer_id_events AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.transaction_hash,
+    pe.event_type,
+    (pe.topics_json->1->'u32')::int as context_rule_id,
+    (
+      SELECT (elem->'val'->>'u32')::int
+      FROM jsonb_array_elements(pe.data_json->'map') elem
+      WHERE elem->'key'->>'symbol' = 'signer_id'
+    ) as signer_id
+  FROM parsed_events pe
+  WHERE pe.event_type IN ('signer_added', 'signer_removed')
+),
+inline_signers AS (
+  SELECT * FROM context_rule_inline_signers
   UNION ALL
-  SELECT * FROM single_signer_events
+  SELECT * FROM single_inline_signer_events
+),
+id_based_signers AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.transaction_hash,
+    pe.event_type,
+    pe.context_rule_id,
+    rs.signer_vec
+  FROM (
+    SELECT * FROM context_rule_signer_ids
+    UNION ALL
+    SELECT * FROM single_signer_id_events
+  ) pe
+  JOIN registered_signers rs
+    ON rs.contract_id = pe.contract_id
+   AND rs.signer_id = pe.signer_id
+  WHERE pe.signer_id IS NOT NULL
+),
+all_signers AS (
+  SELECT * FROM inline_signers
+  UNION ALL
+  SELECT * FROM id_based_signers
 )
 SELECT
   id,
@@ -102,41 +197,156 @@ FROM all_signers;
 -- ============================================================================
 
 CREATE OR REPLACE VIEW processed_policies AS
--- Policies from policy_added/policy_removed events
+WITH parsed_events AS (
+  SELECT
+    e.id,
+    e.contract_id,
+    e.ledger_sequence,
+    e.transaction_hash,
+    e.event_type,
+    e.topics::jsonb as topics_json,
+    e.data::jsonb as data_json
+  FROM smart_account_signer_events e
+),
+policy_registry_events AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.event_type,
+    (pe.topics_json->1->>'u32')::int as policy_id,
+    (
+      SELECT elem->'val'->>'address'
+      FROM jsonb_array_elements(pe.data_json->'map') elem
+      WHERE elem->'key'->>'symbol' = 'policy'
+    ) as policy_address
+  FROM parsed_events pe
+  WHERE pe.event_type IN ('policy_registered', 'policy_deregistered')
+),
+latest_policy_registry AS (
+  SELECT DISTINCT ON (contract_id, policy_id)
+    contract_id,
+    policy_id,
+    event_type,
+    policy_address,
+    ledger_sequence
+  FROM policy_registry_events
+  ORDER BY contract_id, policy_id, ledger_sequence DESC
+),
+registered_policies AS (
+  SELECT
+    contract_id,
+    policy_id,
+    policy_address
+  FROM latest_policy_registry
+  WHERE event_type = 'policy_registered'
+),
+-- Current policy_added/policy_removed shape keyed by policy_id.
+policy_id_events AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.transaction_hash,
+    pe.event_type,
+    (pe.topics_json->1->>'u32')::int as context_rule_id,
+    (
+      SELECT (elem->'val'->>'u32')::int
+      FROM jsonb_array_elements(pe.data_json->'map') elem
+      WHERE elem->'key'->>'symbol' = 'policy_id'
+    ) as policy_id,
+    (
+      SELECT elem->'val'
+      FROM jsonb_array_elements(pe.data_json->'map') elem
+      WHERE elem->'key'->>'symbol' = 'install_param'
+    ) as install_params
+  FROM parsed_events pe
+  WHERE pe.event_type IN ('policy_added', 'policy_removed')
+),
+legacy_inline_policies AS (
+  SELECT
+    e.id,
+    e.contract_id,
+    e.ledger_sequence,
+    e.transaction_hash,
+    'context_rule_added' as event_type,
+    (e.topics::jsonb->1->>'u32')::int as context_rule_id,
+    policy_elem->>'address' as policy_address,
+    NULL::jsonb as install_params
+  FROM smart_account_signer_events e,
+  LATERAL (
+    SELECT elem->'val'->'vec' as policies_vec
+    FROM jsonb_array_elements(e.data::jsonb->'map') elem
+    WHERE elem->'key'->>'symbol' = 'policies'
+  ) policies,
+  jsonb_array_elements(policies.policies_vec) as policy_elem
+  WHERE e.event_type = 'context_rule_added'
+    AND policies.policies_vec IS NOT NULL
+    AND jsonb_array_length(policies.policies_vec) > 0
+),
+context_rule_policy_ids AS (
+  SELECT
+    pe.id,
+    pe.contract_id,
+    pe.ledger_sequence,
+    pe.transaction_hash,
+    pe.event_type,
+    (pe.topics_json->1->>'u32')::int as context_rule_id,
+    (policy_id_elem->>'u32')::int as policy_id,
+    NULL::jsonb as install_params
+  FROM parsed_events pe,
+  LATERAL (
+    SELECT elem->'val'->'vec' as policy_ids_vec
+    FROM jsonb_array_elements(pe.data_json->'map') elem
+    WHERE elem->'key'->>'symbol' = 'policy_ids'
+  ) policy_ids,
+  jsonb_array_elements(policy_ids.policy_ids_vec) as policy_id_elem
+  WHERE pe.event_type = 'context_rule_added'
+),
+resolved_policy_ids AS (
+  SELECT
+    e.id,
+    e.contract_id,
+    e.ledger_sequence,
+    e.transaction_hash,
+    e.event_type,
+    e.context_rule_id,
+    rp.policy_address,
+    e.install_params
+  FROM (
+    SELECT * FROM policy_id_events
+    UNION ALL
+    SELECT * FROM context_rule_policy_ids
+  ) e
+  JOIN registered_policies rp
+    ON rp.contract_id = e.contract_id
+   AND rp.policy_id = e.policy_id
+  WHERE e.policy_id IS NOT NULL
+)
+-- Policies from current and legacy shapes
 SELECT
-  e.id,
-  e.contract_id,
-  e.ledger_sequence,
-  e.transaction_hash,
-  e.event_type,
-  (e.topics::jsonb->1->>'u32')::int as context_rule_id,
-  (SELECT elem->'val'->>'address' FROM jsonb_array_elements(e.data::jsonb->'map') elem WHERE elem->'key'->>'symbol' = 'policy') as policy_address,
-  (SELECT elem->'val' FROM jsonb_array_elements(e.data::jsonb->'map') elem WHERE elem->'key'->>'symbol' = 'install_param') as install_params
-FROM smart_account_signer_events e
-WHERE e.event_type IN ('policy_added', 'policy_removed')
+  id,
+  contract_id,
+  ledger_sequence,
+  transaction_hash,
+  event_type,
+  context_rule_id,
+  policy_address,
+  install_params
+FROM resolved_policy_ids
 
 UNION ALL
 
--- Inline policies from context_rule_added events
 SELECT
-  e.id,
-  e.contract_id,
-  e.ledger_sequence,
-  e.transaction_hash,
-  'context_rule_added' as event_type,
-  (e.topics::jsonb->1->>'u32')::int as context_rule_id,
-  policy_elem->>'address' as policy_address,
-  NULL::jsonb as install_params
-FROM smart_account_signer_events e,
-LATERAL (
-  SELECT elem->'val'->'vec' as policies_vec
-  FROM jsonb_array_elements(e.data::jsonb->'map') elem
-  WHERE elem->'key'->>'symbol' = 'policies'
-) policies,
-jsonb_array_elements(policies.policies_vec) as policy_elem
-WHERE e.event_type = 'context_rule_added'
-  AND policies.policies_vec IS NOT NULL
-  AND jsonb_array_length(policies.policies_vec) > 0;
+  id,
+  contract_id,
+  ledger_sequence,
+  transaction_hash,
+  event_type,
+  context_rule_id,
+  policy_address,
+  install_params
+FROM legacy_inline_policies;
 
 -- ============================================================================
 -- STEP 4: Live view for contract summary

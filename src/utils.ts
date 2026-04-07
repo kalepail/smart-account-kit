@@ -219,8 +219,34 @@ export async function extractPublicKeyFromAttestation(
 
   // Try to get the public key from the response directly
   if (response.publicKey) {
-    publicKey = base64url.toBuffer(response.publicKey);
-    publicKey = publicKey.slice(publicKey.length - SECP256R1_PUBLIC_KEY_SIZE);
+    const encodedPublicKey = base64url.toBuffer(response.publicKey);
+
+    if (
+      encodedPublicKey.length === SECP256R1_PUBLIC_KEY_SIZE &&
+      encodedPublicKey[0] === UNCOMPRESSED_PUBKEY_PREFIX
+    ) {
+      publicKey = encodedPublicKey;
+    } else if (typeof crypto?.subtle !== "undefined") {
+      try {
+        const imported = await crypto.subtle.importKey(
+          "spki",
+          new Uint8Array(encodedPublicKey),
+          { name: "ECDSA", namedCurve: "P-256" },
+          true,
+          []
+        );
+        const rawKey = await crypto.subtle.exportKey("raw", imported);
+        publicKey = Buffer.from(new Uint8Array(rawKey));
+      } catch {
+        publicKey = encodedPublicKey.slice(
+          encodedPublicKey.length - SECP256R1_PUBLIC_KEY_SIZE
+        );
+      }
+    } else {
+      publicKey = encodedPublicKey.slice(
+        encodedPublicKey.length - SECP256R1_PUBLIC_KEY_SIZE
+      );
+    }
   }
 
   // Validate it's a proper uncompressed EC point

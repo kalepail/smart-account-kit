@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
-    "@stellar/stellar-sdk": "^15.0.1"
+    "@stellar/stellar-sdk": "^15.0.1",
+    "smart-account-kit": "workspace:^"
   },
   "devDependencies": {
     "typescript": "^6.0.2",

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { AuthPayload, Signer } from "smart-account-kit-bindings";
 import {
   buildAuthDigest,
+  buildAddressSignatureScVal,
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
@@ -70,5 +71,21 @@ describe("auth-payload", () => {
       ])
     );
     expect(digestA).toEqual(expected);
+  });
+
+  it("builds a canonical address-signature ScVal envelope", () => {
+    const publicKey = Keypair.fromRawEd25519Seed(Buffer.alloc(32, 3)).rawPublicKey();
+    const signature = Buffer.from("deadbeef", "hex");
+
+    const scVal = buildAddressSignatureScVal(publicKey, signature);
+    const items = scVal.vec();
+    expect(items).toHaveLength(1);
+
+    const entries = items?.[0].map();
+    expect(entries).toHaveLength(2);
+    expect(entries?.[0].key().sym().toString()).toBe("public_key");
+    expect(Buffer.from(entries?.[0].val().bytes() ?? [])).toEqual(Buffer.from(publicKey));
+    expect(entries?.[1].key().sym().toString()).toBe("signature");
+    expect(Buffer.from(entries?.[1].val().bytes() ?? [])).toEqual(signature);
   });
 });

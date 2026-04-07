@@ -201,6 +201,15 @@ app.get("/api/contract/:contractId", async (c) => {
     // Group signers and policies by context rule, excluding removed rules
     const contextRules: Record<number, any> = {};
 
+    for (const ruleId of summary.context_rule_ids) {
+      if (removedRuleIds.has(ruleId)) continue;
+      contextRules[ruleId] = {
+        context_rule_id: ruleId,
+        signers: [],
+        policies: [],
+      };
+    }
+
     for (const signer of signers) {
       const ruleId = signer.context_rule_id;
       // Skip signers from removed context rules

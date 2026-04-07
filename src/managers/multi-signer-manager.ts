@@ -35,13 +35,14 @@ import {
 } from "../signer-utils";
 import {
   buildAuthDigest,
+  buildAddressSignatureScVal,
   buildSignaturePayload,
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
 } from "../kit/auth-payload";
 import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
-import { buildTokenTransferHostFunction, simulateHostFunction } from "../kit/tx-ops";
+import { buildTokenTransferTargetArgs } from "../kit/tx-ops";
 import { validateAddress, validateAmount, xlmToStroops } from "../utils";
 
 export interface MultiSignerOptions {
@@ -135,24 +136,6 @@ export class MultiSignerManager {
     return selected;
   }
 
-  private buildAddressSignatureScVal(address: string, signatureBase64: string): xdr.ScVal {
-    const signatureBytes = Buffer.from(signatureBase64, "base64");
-    const publicKeyBytes = Address.fromString(address).toScAddress().accountId().ed25519();
-
-    return xdr.ScVal.scvVec([
-      xdr.ScVal.scvMap([
-        new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("public_key"),
-          val: xdr.ScVal.scvBytes(publicKeyBytes),
-        }),
-        new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("signature"),
-          val: xdr.ScVal.scvBytes(signatureBytes),
-        }),
-      ]),
-    ]);
-  }
-
   private async signWalletAddressAuthEntry(
     entry: xdr.SorobanAuthorizationEntry,
     authAddress: string,
@@ -176,7 +159,10 @@ export class MultiSignerManager {
     );
 
     signedEntry.credentials().address().signature(
-      this.buildAddressSignatureScVal(authAddress, signedAuthEntry)
+      buildAddressSignatureScVal(
+        Address.fromString(authAddress).toScAddress().accountId().ed25519(),
+        Buffer.from(signedAuthEntry, "base64")
+      )
     );
 
     return signedEntry;
@@ -248,15 +234,30 @@ export class MultiSignerManager {
 
         let signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
         signedEntry.credentials().address().signatureExpirationLedger(expiration);
+        const selectedContractSigners = selectedSigners
+          .map(({ signer }) => signer)
+          .filter((signer): signer is ContractSigner => signer !== undefined);
+        const resolvedContextRuleIds = options?.resolveContextRuleIds
+          ? await options.resolveContextRuleIds(signedEntry, authEntryIndex)
+          : await resolveContextRuleIdsForEntry(
+            this.deps.requireWallet().wallet,
+            signedEntry,
+            selectedContractSigners,
+            {
+              getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
+              rpc: this.deps.rpc,
+              contractId,
+              networkPassphrase: this.deps.networkPassphrase,
+              timeoutInSeconds: this.deps.timeoutInSeconds,
+            }
+          );
 
         for (const [index, passkeySigner] of passkeySigners.entries()) {
           onLog(`Signing with passkey ${index + 1}/${passkeySigners.length}...`);
           signedEntry = await this.deps.signAuthEntry(signedEntry, {
             credentialId: passkeySigner.credentialId,
             expiration,
-            contextRuleIds: options?.resolveContextRuleIds
-              ? await options.resolveContextRuleIds(signedEntry, authEntryIndex)
-              : undefined,
+            contextRuleIds: resolvedContextRuleIds,
             signer: passkeySigner.signer as ContractSigner | undefined,
           });
         }
@@ -274,17 +275,7 @@ export class MultiSignerManager {
 
         const authPayload = readAuthPayload(signedEntry.credentials().address().signature());
         if (authPayload.context_rule_ids.length === 0) {
-          const selectedContractSigners = selectedSigners
-            .map(({ signer }) => signer)
-            .filter((signer): signer is ContractSigner => signer !== undefined);
-          authPayload.context_rule_ids = await resolveContextRuleIdsForEntry(
-            this.deps.requireWallet().wallet,
-            signedEntry,
-            selectedContractSigners,
-            {
-              getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
-            }
-          );
+          authPayload.context_rule_ids = resolvedContextRuleIds;
         }
 
         for (const walletSigner of walletSigners) {
@@ -345,9 +336,9 @@ export class MultiSignerManager {
                   address: Address.fromString(walletSigner.walletAddress).toScAddress(),
                   nonce: delegatedNonce,
                   signatureExpirationLedger: expiration,
-                  signature: this.buildAddressSignatureScVal(
-                    walletSigner.walletAddress,
-                    walletSignatureBase64
+                  signature: buildAddressSignatureScVal(
+                    Address.fromString(walletSigner.walletAddress).toScAddress().accountId().ed25519(),
+                    Buffer.from(walletSignatureBase64, "base64")
                   ),
                 })
               ),
@@ -482,27 +473,16 @@ export class MultiSignerManager {
     }
 
     const amountInStroops = xlmToStroops(amount);
-    const hostFunc = buildTokenTransferHostFunction(
-      tokenContract,
-      contractId,
-      recipient,
-      amountInStroops
-    );
-
     try {
-      const { authEntries } = await simulateHostFunction(
-        {
-          rpc: this.deps.rpc,
-          networkPassphrase: this.deps.networkPassphrase,
-          timeoutInSeconds: this.deps.timeoutInSeconds,
-          deployerKeypair: this.deps.deployerKeypair,
-        },
-        hostFunc
-      );
+      const { wallet } = this.deps.requireWallet();
+      const assembledTx = await wallet.execute({
+        target: tokenContract,
+        target_fn: "transfer",
+        target_args: buildTokenTransferTargetArgs(wallet, contractId, recipient, amountInStroops),
+      } as Parameters<SmartAccountClient["execute"]>[0]);
 
-      return this.submitWithSelectedSigners(
-        hostFunc,
-        authEntries,
+      return this.operation(
+        assembledTx,
         selectedSigners,
         options
       );

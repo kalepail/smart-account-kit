@@ -19,13 +19,13 @@ The checked-in `.env.example` shows the current default deployment set used by t
 
 | Contract | Default value |
 |----------|---------------|
-| **Smart Account WASM Hash** | `3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c` |
-| **WebAuthn Verifier** | `CATPTBRWVMH5ZCIKO5HN2F4FMPXVZEXC56RKGHRXCM7EEZGGXK7PICEH` |
-| **Ed25519 Verifier** | `CAIKK32K3BZJYTWVTXHZFPIEEDBR6YCVTGPABH4UQUQ4XFA3OLYXG27G` |
+| **Smart Account WASM Hash** | `8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611` |
+| **WebAuthn Verifier** | `CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU` |
+| **Ed25519 Verifier** | `CCJOUKLCZVCXS4VIBBEA7S3SPWZQS5DPE5A4YG67RA3Z7E3SJZAUJFQA` |
 | **Native XLM Token** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| **Threshold Policy** | `CDDQLFG7CV74QHWPSP6NZIPNBR2PPCMTUVYCJF4P3ONDYHODRFGR7LWC` |
-| **Spending Limit Policy** | `CBYLPYZGLQ6JVY2IQ5P23QLQPR3KAMMKMZLNWG6RUUKJDNYGPLVHK7U4` |
-| **Weighted Threshold Policy** | Optional. Set `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` to expose it in the policy picker. |
+| **Threshold Policy** | `CB2WQXF2XXDGUV2CTVQ23RLN3ESI3IY5KKX3KVXWBNRTTWDHZM76NVKJ` |
+| **Spending Limit Policy** | `CBBZ2XP4LBDEO2EELTZKJSPQZDREFKCULL6CKIUQO53S42RZABOYQUK3` |
+| **Weighted Threshold Policy** | `CCF65VXVORNOZBRR3EG3GZYSFS3ALDG44CDYN5T5KRWKYX6RXLKLXER4` |
 
 The demo does not pin a default smart-account contract ID. Smart accounts are deployed per wallet from the uploaded WASM hash because deployment requires constructor args for `signers` and `policies`.
 
@@ -35,11 +35,12 @@ These are the latest uploaded testnet artifacts corresponding to the deployed co
 
 | Contract | Uploaded WASM hash |
 |----------|--------------------|
-| **Smart Account** | `3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c` |
-| **WebAuthn Verifier** | `d84af9e7c31afece287fee8276ef7d6a64b236d596c043594c003e0f4032d1c7` |
-| **Ed25519 Verifier** | `e88b7989f8c5e69d6a72cda8419844ef2753ab249fef422f31436c5c32e28623` |
-| **Threshold Policy** | `5c87cedc0e485152a084c4b5435bdec88e41304a4316e82e37a84910715639f6` |
-| **Spending Limit Policy** | `eca96954a8e76e366e74fbc95eced11666c939e130a5cc302b8363622e931018` |
+| **Smart Account** | `8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611` |
+| **WebAuthn Verifier** | `f83d679f0ead1836b255a0f4160b9766065436a3b1afb9b15d73b646d68c0725` |
+| **Ed25519 Verifier** | `2c1dae0a0fd609d818df05fff5deff91c7565151d82b6259a61d03c8edfdeeca` |
+| **Threshold Policy** | `967dc8b1b2840a77e216243c60a7766c0fe737e6d6db47d7b210f3bf589f681a` |
+| **Spending Limit Policy** | `dfe58cb65409c25084706e71fde3a12dfadbafb93db3d3225fe8919f488d8cc8` |
+| **Weighted Threshold Policy** | `c16f644b40b3bcb0bc5371fe5949ccd51226179adeac8429e75a6e5a6ac68c6e` |
 
 ## Setup
 
@@ -54,6 +55,25 @@ pnpm dev
 Open `http://localhost:5173` in your browser.
 
 The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI.
+
+The SDK now auto-configures the hosted indexer for both Stellar testnet and mainnet when you use a known network passphrase. This demo still ships with testnet defaults, so a mainnet run also needs mainnet RPC and contract env values.
+
+## Agent-Browser Passkey Testing
+
+This repo includes a helper for enabling a Chromium virtual authenticator on a live `agent-browser` session, so passkey flows can be smoke-tested without switching away from `agent-browser`.
+
+```bash
+# 1. Start the demo and open it with agent-browser
+pnpm --filter smart-account-kit-demo exec vite --host 127.0.0.1 --port 5173
+agent-browser --session demo-passkey open http://127.0.0.1:5173
+
+# 2. Run your agent-browser steps while the helper keeps a virtual authenticator attached
+pnpm agent-browser:webauthn run --session demo-passkey -- \
+  bash -lc 'agent-browser --session demo-passkey snapshot -i && \
+    agent-browser --session demo-passkey click @e8'
+```
+
+The helper attaches to the current page target over Chrome DevTools Protocol, keeps the virtual authenticator alive while the wrapped command runs, and removes it automatically afterward.
 
 ## Usage
 

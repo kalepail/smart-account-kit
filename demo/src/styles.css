@@ -560,7 +560,7 @@ button.small .spinner {
   overflow: hidden;
 }
 
-.context-rule-item.expanded {
+.context-rule-item[open] {
   border-color: #3b82f6;
 }
 
@@ -569,12 +569,31 @@ button.small .spinner {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background 0.2s;
+  list-style: none;
 }
 
 .rule-header:hover {
   background: #1f1f23;
+}
+
+.rule-header:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.rule-header::-webkit-details-marker {
+  display: none;
+}
+
+.context-rule-item[open] .expand-icon {
+  transform: rotate(45deg);
 }
 
 .rule-main {
@@ -621,6 +640,7 @@ button.small .spinner {
   font-size: 1.2rem;
   width: 20px;
   text-align: center;
+  transition: transform 0.2s ease;
 }
 
 .rule-details {

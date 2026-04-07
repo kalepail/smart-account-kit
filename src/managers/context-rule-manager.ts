@@ -7,9 +7,10 @@
  */
 
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
+import type { rpc } from "@stellar/stellar-sdk";
 import type { Signer as ContractSigner, ContextRuleType, ContextRule } from "smart-account-kit-bindings";
 import type { ContractDetailsResponse } from "../indexer";
-import { getFilteredContextRules, listContextRules } from "../kit/context-rules";
+import { getFilteredContextRules, listContextRules, readContextRule } from "../kit/context-rules";
 
 /** Dependencies required by ContextRuleManager */
 export interface ContextRuleManagerDeps {
@@ -28,8 +29,16 @@ export interface ContextRuleManagerDeps {
       update_context_rule_name: (args: { context_rule_id: number; name: string }) => Promise<AssembledTransaction<ContextRule>>;
       update_context_rule_valid_until: (args: { context_rule_id: number; valid_until: number | undefined }) => Promise<AssembledTransaction<ContextRule>>;
     };
+    contractId: string;
   };
+  rpc: rpc.Server;
+  networkPassphrase: string;
+  timeoutInSeconds: number;
   getContractDetailsFromIndexer?: () => Promise<ContractDetailsResponse | null>;
+  probeRuleIds?: {
+    maxRuleId?: number;
+    maxConsecutiveMisses?: number;
+  };
 }
 
 /**
@@ -88,21 +97,33 @@ export class ContextRuleManager {
    * Get a context rule by its ID.
    *
    * @param contextRuleId - The numeric ID of the rule to retrieve
-   * @returns Assembled transaction that returns the rule (or undefined if not found)
+   * @returns Object containing the resolved rule
    * @throws Error if not connected to a wallet
    */
   async get(contextRuleId: number) {
-    return this.deps.requireWallet().wallet.get_context_rule({
-      context_rule_id: contextRuleId,
-    });
+    const { wallet, contractId } = this.deps.requireWallet();
+    return {
+      result: await readContextRule(wallet, contextRuleId, {
+        rpc: this.deps.rpc,
+        contractId,
+        networkPassphrase: this.deps.networkPassphrase,
+        timeoutInSeconds: this.deps.timeoutInSeconds,
+      }),
+    };
   }
 
   /**
    * List all active context rules by enumerating them from the contract.
    */
   async list() {
-    return listContextRules(this.deps.requireWallet().wallet, {
+    const { wallet, contractId } = this.deps.requireWallet();
+    return listContextRules(wallet, {
       getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
+      probeRuleIds: this.deps.probeRuleIds,
+      rpc: this.deps.rpc,
+      contractId,
+      networkPassphrase: this.deps.networkPassphrase,
+      timeoutInSeconds: this.deps.timeoutInSeconds,
     });
   }
 
@@ -114,8 +135,14 @@ export class ContextRuleManager {
    * @throws Error if not connected to a wallet
    */
   async getAll(contextRuleType: ContextRuleType) {
-    return getFilteredContextRules(this.deps.requireWallet().wallet, contextRuleType, {
+    const { wallet, contractId } = this.deps.requireWallet();
+    return getFilteredContextRules(wallet, contextRuleType, {
       getContractDetailsFromIndexer: this.deps.getContractDetailsFromIndexer,
+      probeRuleIds: this.deps.probeRuleIds,
+      rpc: this.deps.rpc,
+      contractId,
+      networkPassphrase: this.deps.networkPassphrase,
+      timeoutInSeconds: this.deps.timeoutInSeconds,
     });
   }
 

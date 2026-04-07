@@ -9,11 +9,14 @@
  * 5. Allow user to select which contract to connect to
  */
 
-import { startAuthentication } from "@simplewebauthn/browser";
 import { rpc, xdr, Address, scValToNative } from "@stellar/stellar-sdk";
+import { MemoryStorage, SmartAccountKit } from "smart-account-kit";
 import {
+  DEFAULT_ACCOUNT_WASM_HASH,
   DEFAULT_INDEXER_URL,
+  DEFAULT_NETWORK_PASSPHRASE,
   DEFAULT_RPC_URL,
+  DEFAULT_WEBAUTHN_VERIFIER_ADDRESS,
   LEDGERS_PER_DAY,
   STROOPS_PER_XLM,
   truncateAddress,
@@ -61,9 +64,12 @@ let selectedContract: string | null = null;
 let discoveredContracts: SmartAccountInfo[] = [];
 let currentCredentialId: string | null = null;
 let currentSignerAddress: string | null = null;
+let authKit: SmartAccountKit | null = null;
+let authKitConfigKey: string | null = null;
 
 // DOM Elements
 const authBtn = document.getElementById("auth-btn") as HTMLButtonElement;
+const contractLookupBtn = document.getElementById("contract-lookup-btn") as HTMLButtonElement;
 const lookupBtn = document.getElementById("lookup-btn") as HTMLButtonElement;
 const addressLookupBtn = document.getElementById("address-lookup-btn") as HTMLButtonElement;
 const backBtn = document.getElementById("back-btn") as HTMLButtonElement;
@@ -71,6 +77,7 @@ const statusEl = document.getElementById("status") as HTMLDivElement;
 const contractsList = document.getElementById("contracts-list") as HTMLDivElement;
 const contractDetailsSection = document.getElementById("contract-details-section") as HTMLDivElement;
 const contractDetailsEl = document.getElementById("contract-details") as HTMLDivElement;
+const contractIdInput = document.getElementById("contract-id") as HTMLInputElement;
 const publicKeyInput = document.getElementById("public-key") as HTMLInputElement;
 const stellarAddressInput = document.getElementById("stellar-address") as HTMLInputElement;
 const indexerUrlInput = document.getElementById("indexer-url") as HTMLInputElement;
@@ -96,6 +103,35 @@ function hideStatus() {
 
 /** Alias for backward compatibility */
 const truncateContractId = truncateAddress;
+
+function getAuthKit(): SmartAccountKit {
+  const configKey = [
+    rpcUrlInput.value,
+    indexerUrlInput.value,
+    window.location.hostname,
+  ].join("|");
+
+  if (authKit && authKitConfigKey === configKey) {
+    return authKit;
+  }
+
+  authKit = new SmartAccountKit({
+    rpcUrl: rpcUrlInput.value,
+    networkPassphrase:
+      import.meta.env.VITE_NETWORK_PASSPHRASE || DEFAULT_NETWORK_PASSPHRASE,
+    accountWasmHash:
+      import.meta.env.VITE_ACCOUNT_WASM_HASH || DEFAULT_ACCOUNT_WASM_HASH,
+    webauthnVerifierAddress:
+      import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS ||
+      DEFAULT_WEBAUTHN_VERIFIER_ADDRESS,
+    storage: new MemoryStorage(),
+    rpId: window.location.hostname,
+    rpName: "Smart Account Indexer Demo",
+    indexerUrl: indexerUrlInput.value,
+  });
+  authKitConfigKey = configKey;
+  return authKit;
+}
 
 // ============================================================================
 // Policy RPC Loading
@@ -264,6 +300,35 @@ async function lookupContractsByCredentialId(
   }));
 }
 
+async function lookupContractsByCredentialIdWithRetry(
+  credentialId: string,
+  options?: {
+    attempts?: number;
+    delayMs?: number;
+  }
+): Promise<SmartAccountInfo[]> {
+  const attempts = options?.attempts ?? 20;
+  const delayMs = options?.delayMs ?? 2000;
+
+  let lastContracts: SmartAccountInfo[] = [];
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    lastContracts = await lookupContractsByCredentialId(credentialId);
+    if (lastContracts.length > 0) {
+      return lastContracts;
+    }
+
+    if (attempt < attempts) {
+      showStatus(
+        `Authentication successful! Waiting for indexer sync (${attempt}/${attempts - 1})...`,
+        "info"
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  return lastContracts;
+}
+
 async function lookupContractsByAddress(
   signerAddress: string
 ): Promise<SmartAccountInfo[]> {
@@ -299,6 +364,21 @@ async function getContractDetails(contractId: string): Promise<ContractDetails> 
   }
 
   return await response.json();
+}
+
+async function lookupContractById(contractId: string): Promise<SmartAccountInfo> {
+  const details = await getContractDetails(contractId);
+  const summary = details.summary as any;
+  return {
+    contractId: summary.contract_id,
+    contextRuleCount: parseInt(summary.context_rule_count),
+    externalSignerCount: parseInt(summary.external_signer_count),
+    delegatedSignerCount: parseInt(summary.delegated_signer_count),
+    nativeSignerCount: parseInt(summary.native_signer_count || "0"),
+    firstSeenLedger: parseInt(summary.first_seen_ledger),
+    lastSeenLedger: parseInt(summary.last_seen_ledger),
+    contextRuleIds: summary.context_rule_ids,
+  };
 }
 
 async function enrichWithContractCheck(account: SmartAccountInfo): Promise<SmartAccountInfo> {
@@ -557,32 +637,20 @@ authBtn.addEventListener("click", async () => {
   try {
     hideStatus();
     showStatus("Authenticating with passkey...", "info");
-
-    // Start WebAuthn authentication
-    // Note: In a real app, you'd get these options from your server
-    // For this demo, we use a permissive configuration
-    const authResponse = await startAuthentication({
-      optionsJSON: {
-        challenge: btoa(crypto.randomUUID()),
-        rpId: window.location.hostname,
-        allowCredentials: [], // Allow any credential
-        userVerification: "preferred",
-        timeout: 60000,
-      },
-    });
+    const { credentialId: credentialIdBase64Url } =
+      await getAuthKit().authenticatePasskey();
 
     showStatus("Authentication successful! Looking up contracts...", "info");
 
     // Reset selection for new lookup
     selectedContract = null;
 
-    // The rawId from WebAuthn IS the credential ID we need
-    // Convert from base64url to hex
-    const rawIdBase64 = authResponse.rawId;
-    const rawIdBytes = base64UrlToBytes(rawIdBase64);
+    // Match the SDK flow: convert the authenticated credential into hex
+    // for the indexer lookup API and UI display.
+    const rawIdBytes = base64UrlToBytes(credentialIdBase64Url);
     const credentialIdHex = bytesToHex(rawIdBytes);
 
-    console.log("Credential ID (base64url):", rawIdBase64);
+    console.log("Credential ID (base64url):", credentialIdBase64Url);
     console.log("Credential ID (hex):", credentialIdHex);
 
     // Store for highlighting in contract details
@@ -593,7 +661,7 @@ authBtn.addEventListener("click", async () => {
     publicKeyInput.value = credentialIdHex;
 
     // Automatically look up contracts
-    discoveredContracts = await lookupContractsByCredentialId(credentialIdHex);
+    discoveredContracts = await lookupContractsByCredentialIdWithRetry(credentialIdHex);
 
     if (discoveredContracts.length === 0) {
       showStatus(`No contracts found for credential ID: ${credentialIdHex.slice(0, 16)}...`, "info");
@@ -685,6 +753,36 @@ lookupBtn.addEventListener("click", async () => {
   } catch (error) {
     console.error("Lookup error:", error);
     showStatus(`Lookup failed: ${(error as Error).message}`, "error");
+  }
+});
+
+contractLookupBtn.addEventListener("click", async () => {
+  const contractId = contractIdInput.value.trim();
+
+  if (!contractId) {
+    showStatus("Please enter a contract ID", "error");
+    return;
+  }
+
+  try {
+    hideStatus();
+    showStatus(`Looking up contract ${truncateContractId(contractId)}...`, "info");
+
+    selectedContract = contractId;
+    currentCredentialId = null;
+    currentSignerAddress = null;
+
+    const contract = await lookupContractById(contractId);
+    const enrichedContract = await enrichWithContractCheck(contract);
+    discoveredContracts = [enrichedContract];
+
+    renderContracts(discoveredContracts);
+    await connectToContract(contractId);
+  } catch (error) {
+    console.error("Contract lookup error:", error);
+    showStatus(`Lookup failed: ${(error as Error).message}`, "error");
+    renderContracts([]);
+    hideContractDetails();
   }
 });
 

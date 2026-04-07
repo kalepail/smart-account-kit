@@ -146,7 +146,8 @@ export interface IndexerConfig {
 export const DEFAULT_INDEXER_URLS: Record<string, string> = {
   "Test SDF Network ; September 2015":
     "https://smart-account-indexer.sdf-ecosystem.workers.dev",
-  // Mainnet URL will be added when available
+  "Public Global Stellar Network ; September 2015":
+    "https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev",
 };
 
 /**

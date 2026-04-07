@@ -4,7 +4,7 @@ import { PolicyManager } from "./policy-manager";
 function makeDeps() {
   const wallet = {
     add_policy: vi.fn(),
-    get_context_rule: vi.fn(),
+    get_policy_id: vi.fn(),
     remove_policy: vi.fn(),
   };
 
@@ -30,21 +30,16 @@ describe("PolicyManager", () => {
     expect(result).toEqual({ result: 11 });
   });
 
-  it("removes a policy by resolving the policy id from the rule", async () => {
+  it("removes a policy by resolving the global policy id", async () => {
     const deps = makeDeps();
-    deps.wallet.get_context_rule.mockResolvedValue({
-      result: {
-        policies: ["CPOLICY", "COTHER"],
-        policy_ids: [41, 42],
-      },
-    });
+    deps.wallet.get_policy_id.mockResolvedValue({ result: 42 });
     deps.wallet.remove_policy.mockResolvedValue({ result: null });
     const manager = new PolicyManager(deps);
 
     const result = await manager.remove(9, "COTHER");
 
-    expect(deps.wallet.get_context_rule).toHaveBeenCalledWith({
-      context_rule_id: 9,
+    expect(deps.wallet.get_policy_id).toHaveBeenCalledWith({
+      policy: "COTHER",
     });
     expect(deps.wallet.remove_policy).toHaveBeenCalledWith({
       context_rule_id: 9,
@@ -55,12 +50,7 @@ describe("PolicyManager", () => {
 
   it("throws when the policy is not present on the rule", async () => {
     const deps = makeDeps();
-    deps.wallet.get_context_rule.mockResolvedValue({
-      result: {
-        policies: ["CPOLICY"],
-        policy_ids: [41],
-      },
-    });
+    deps.wallet.get_policy_id.mockResolvedValue({ result: undefined });
     const manager = new PolicyManager(deps);
 
     await expect(manager.remove(9, "CUNKNOWN")).rejects.toThrow(

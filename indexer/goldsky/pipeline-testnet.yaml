@@ -1,7 +1,13 @@
-# Goldsky Mirror Pipeline for Smart Account Kit Event Indexing - TESTNET
+# Goldsky Turbo Pipeline for Smart Account Kit Event Indexing - TESTNET
 #
-# NOTE: Testnet uses Mirror format because Turbo datasets for stellar_testnet
-# are not yet available. Mainnet uses Turbo format (pipeline-mainnet.yaml).
+# Testnet now supports Turbo datasets. Keep this pipeline pinned to the
+# current Turbo dataset version and start from the current month boundary
+# so the indexer can catch up quickly after resets without replaying the
+# entire current testnet epoch.
+#
+# start_at is pinned to the first ledger at or after 2026-04-01T00:00:00Z.
+# Verified against Horizon testnet ledger close times on April 6, 2026:
+# ledger 1,799,808 closed at 2026-04-01T00:00:02Z.
 #
 # This pipeline indexes all smart account events from Stellar to enable
 # reverse lookups from signer public keys to contract IDs and full state tracking.
@@ -20,18 +26,17 @@
 # - policy_deregistered: When a policy leaves the global registry
 #
 # Deployment:
-#   goldsky pipeline apply ./pipeline-testnet.yaml --status ACTIVE
+#   goldsky turbo apply ./pipeline-testnet.yaml
 
 name: smart-account-signers-testnet
-resource_size: s
-apiVersion: 3
+resource_size: xl
 
 sources:
   stellar_events:
     type: dataset
     dataset_name: stellar_testnet.events
-    version: 3.0.0
-    start_at: earliest
+    version: 1.2.0
+    start_at: 1799808
 
 transforms:
   signer_events:
@@ -84,3 +89,4 @@ sinks:
     from: signer_events
     table: smart_account_signer_events
     schema: public
+    primary_key: id

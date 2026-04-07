@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Keypair, Networks, xdr } from "@stellar/stellar-sdk";
+import { Address, Keypair, Networks, xdr } from "@stellar/stellar-sdk";
 import { SmartAccountKit } from "./kit";
 
 function makeAuthEntry(): xdr.SorobanAuthorizationEntry {
@@ -148,6 +148,7 @@ describe("SmartAccountKit top-level surface", () => {
   it("sign forwards credential resolution into signAuthEntry", async () => {
     const authEntry = makeAuthEntry();
     const signAuthEntry = vi.fn(async (entry) => entry);
+    const resolveConnectedContextRuleIds = vi.fn(async () => [3]);
     const transaction = {
       simulationData: {
         result: {
@@ -165,6 +166,7 @@ describe("SmartAccountKit top-level surface", () => {
         _credentialId: "cred-1",
         calculateExpiration: vi.fn(async () => 123),
         signAuthEntry,
+        resolveConnectedContextRuleIds,
       } as unknown as SmartAccountKit,
       transaction,
     );
@@ -175,6 +177,43 @@ describe("SmartAccountKit top-level surface", () => {
       expect.objectContaining({
         credentialId: "cred-1",
         expiration: 123,
+        contextRuleIds: [3],
+      }),
+    );
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined);
+  });
+
+  it("sign defaults context rule resolution to the connected credential", async () => {
+    const authEntry = makeAuthEntry();
+    const signAuthEntry = vi.fn(async (entry) => entry);
+    const resolveConnectedContextRuleIds = vi.fn(async () => [4]);
+    const transaction = {
+      simulationData: {
+        result: {
+          auth: [authEntry],
+        },
+      },
+      signAuthEntries: vi.fn(async ({ authorizeEntry }) => {
+        await authorizeEntry(authEntry);
+      }),
+    };
+
+    await SmartAccountKit.prototype.sign.call(
+      {
+        _contractId: "CABC",
+        _credentialId: "cred-1",
+        calculateExpiration: vi.fn(async () => 123),
+        signAuthEntry,
+        resolveConnectedContextRuleIds,
+      } as unknown as SmartAccountKit,
+      transaction,
+    );
+
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined);
+    expect(signAuthEntry).toHaveBeenCalledWith(
+      expect.any(xdr.SorobanAuthorizationEntry),
+      expect.objectContaining({
+        contextRuleIds: [4],
       }),
     );
   });
@@ -218,5 +257,142 @@ describe("SmartAccountKit top-level surface", () => {
     expect(credentialResult).toEqual([{ contract_id: "C1" }]);
     expect(addressResult).toEqual([{ contract_id: "C2" }]);
     expect(detailsResult).toEqual({ contractId: "C3" });
+  });
+
+  it("transfer routes through execute plus signAndSubmit with context resolution", async () => {
+    const contractId = "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y";
+    const recipient = Keypair.fromRawEd25519Seed(Buffer.alloc(32, 6)).publicKey();
+    const transaction = { built: {} };
+    const execute = vi.fn(async () => transaction);
+    const signAndSubmit = vi.fn(async () => ({ success: true, hash: "transfer-hash" }));
+    const resolveConnectedContextRuleIds = vi.fn(async () => [7]);
+
+    const result = await SmartAccountKit.prototype.transfer.call(
+      {
+        _contractId: contractId,
+        requireWallet: vi.fn(() => ({ wallet: {} })),
+        execute,
+        signAndSubmit,
+        resolveConnectedContextRuleIds,
+      } as unknown as SmartAccountKit,
+      "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y",
+      recipient,
+      1.5,
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y",
+      "transfer",
+      expect.arrayContaining([
+        expect.objectContaining({ switch: expect.any(Function) }),
+        expect.objectContaining({ switch: expect.any(Function) }),
+        expect.objectContaining({ switch: expect.any(Function) }),
+      ])
+    );
+    const [, , targetArgs] = execute.mock.calls[0];
+    expect(targetArgs).toHaveLength(3);
+    expect(targetArgs[0].switch().name).toBe("scvAddress");
+    expect(Address.fromScAddress(targetArgs[0].address()).toString()).toBe(contractId);
+    expect(targetArgs[1].switch().name).toBe("scvAddress");
+    expect(Address.fromScAddress(targetArgs[1].address()).toString()).toBe(recipient);
+    expect(targetArgs[2].switch().name).toBe("scvI128");
+    expect(signAndSubmit).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        credentialId: undefined,
+        forceMethod: undefined,
+        resolveContextRuleIds: expect.any(Function),
+      })
+    );
+    const [, signOptions] = signAndSubmit.mock.calls[0];
+    await expect(signOptions.resolveContextRuleIds(makeAuthEntry(), 0)).resolves.toEqual([7]);
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined);
+    expect(result).toEqual({ success: true, hash: "transfer-hash" });
+  });
+
+  it("transfer propagates credential overrides into context rule resolution", async () => {
+    const contractId = "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y";
+    const recipient = Keypair.fromRawEd25519Seed(Buffer.alloc(32, 8)).publicKey();
+    const transaction = { built: {} };
+    const execute = vi.fn(async () => transaction);
+    const signAndSubmit = vi.fn(async () => ({ success: true, hash: "transfer-hash" }));
+    const resolveConnectedContextRuleIds = vi.fn(async () => [11]);
+
+    await SmartAccountKit.prototype.transfer.call(
+      {
+        _contractId: contractId,
+        requireWallet: vi.fn(() => ({ wallet: {} })),
+        execute,
+        signAndSubmit,
+        resolveConnectedContextRuleIds,
+      } as unknown as SmartAccountKit,
+      contractId,
+      recipient,
+      2,
+      { credentialId: "cred-override" }
+    );
+
+    const [, signOptions] = signAndSubmit.mock.calls[0];
+    await expect(signOptions.resolveContextRuleIds(makeAuthEntry(), 0)).resolves.toEqual([11]);
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(
+      expect.any(xdr.SorobanAuthorizationEntry),
+      "cred-override"
+    );
+  });
+
+  it("signAndSubmit defaults context rule resolution to the requested credential", async () => {
+    const authEntry = makeAuthEntry();
+    const transaction = {
+      built: {
+        operations: [
+          {
+            type: "invokeHostFunction",
+            func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+              new xdr.InvokeContractArgs({
+                contractAddress: Address.fromString("CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y").toScAddress(),
+                functionName: "set_config",
+                args: [],
+              })
+            ),
+          },
+        ],
+      },
+      simulationData: {
+        result: {
+          auth: [authEntry],
+        },
+      },
+    };
+    const txResult = { success: true, hash: "tx-hash" };
+    const resolveConnectedContextRuleIds = vi.fn(async () => [9]);
+    const preparedTx = {
+      sign: vi.fn(),
+    };
+    const signResimulateAndPrepare = vi.fn(async (_func, _auth, signOptions) => {
+      await signOptions.resolveContextRuleIds(authEntry, 0);
+      return preparedTx;
+    });
+    const sendAndPoll = vi.fn(async () => txResult);
+
+    const result = await SmartAccountKit.prototype.signAndSubmit.call(
+      {
+        _contractId: "CABC",
+        signResimulateAndPrepare,
+        shouldUseFeeSponsoring: vi.fn(() => false),
+        hasSourceAccountAuth: vi.fn(() => false),
+        sendAndPoll,
+        deployerKeypair: Keypair.fromRawEd25519Seed(Buffer.alloc(32, 7)),
+        resolveConnectedContextRuleIds,
+      } as unknown as SmartAccountKit,
+      transaction as any,
+      {
+        credentialId: "cred-override",
+      }
+    );
+
+    expect(result).toEqual(txResult);
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), "cred-override");
+    expect(signResimulateAndPrepare).toHaveBeenCalledTimes(1);
+    expect(sendAndPoll).toHaveBeenCalledWith(preparedTx, { forceMethod: undefined });
   });
 });

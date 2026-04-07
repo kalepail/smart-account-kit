@@ -17,10 +17,7 @@ export interface PolicyManagerDeps {
         policy: string;
         install_param: unknown;
       }) => Promise<AssembledTransaction<number>>;
-      get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<{
-        policies: string[];
-        policy_ids: number[];
-      }>>;
+      get_policy_id: (args: { policy: string }) => Promise<AssembledTransaction<number>>;
       remove_policy: (args: {
         context_rule_id: number;
         policy_id: number;
@@ -82,18 +79,17 @@ export class PolicyManager {
    */
   async remove(contextRuleId: number, policyAddress: string) {
     const { wallet } = this.deps.requireWallet();
-    const rule = (await wallet.get_context_rule({
-      context_rule_id: contextRuleId,
+    const policyId = (await wallet.get_policy_id({
+      policy: policyAddress,
     })).result;
-    const policyIndex = rule.policies.findIndex((policy) => policy === policyAddress);
 
-    if (policyIndex === -1) {
+    if (policyId === undefined || policyId === null) {
       throw new Error(`Policy ${policyAddress} not found on context rule ${contextRuleId}`);
     }
 
     return wallet.remove_policy({
       context_rule_id: contextRuleId,
-      policy_id: rule.policy_ids[policyIndex],
+      policy_id: policyId,
     });
   }
 }

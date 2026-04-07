@@ -14,12 +14,14 @@ import type {
   TransactionResult,
 } from "../types";
 import type { RelayerClient } from "../relayer";
+import type { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import {
   BASE_FEE,
   FRIENDBOT_RESERVE_XLM,
   FRIENDBOT_URL,
   LEDGERS_PER_HOUR,
 } from "../constants";
+import { buildAddressSignatureScVal } from "./auth-payload";
 import { validateAddress, validateAmount, xlmToStroops, stroopsToXlm } from "../utils";
 
 type ResolveContextRuleIds = (
@@ -188,6 +190,33 @@ export function buildTokenTransferHostFunction(
       ],
     })
   );
+}
+
+export function buildTokenTransferTargetArgs(
+  wallet: SmartAccountClient | { spec?: { nativeToScVal?: (val: unknown, type: xdr.ScSpecTypeDef) => xdr.ScVal } },
+  fromAddress: string,
+  toAddress: string,
+  amountInStroops: bigint
+): xdr.ScVal[] {
+  const spec = wallet?.spec;
+  if (spec && typeof spec.nativeToScVal === "function") {
+    return [
+      spec.nativeToScVal(fromAddress, xdr.ScSpecTypeDef.scSpecTypeAddress()),
+      spec.nativeToScVal(toAddress, xdr.ScSpecTypeDef.scSpecTypeAddress()),
+      spec.nativeToScVal(amountInStroops, xdr.ScSpecTypeDef.scSpecTypeI128()),
+    ];
+  }
+
+  return [
+    xdr.ScVal.scvAddress(Address.fromString(fromAddress).toScAddress()),
+    xdr.ScVal.scvAddress(Address.fromString(toAddress).toScAddress()),
+    xdr.ScVal.scvI128(
+      new xdr.Int128Parts({
+        lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
+        hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
+      })
+    ),
+  ];
 }
 
 export async function simulateHostFunction(
@@ -556,15 +585,6 @@ export async function fundWallet(
         const payload = hash(preimage.toXDR());
         const signature = tempKeypair.sign(payload);
 
-        const sigEntry = new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("public_key"),
-          val: xdr.ScVal.scvBytes(tempKeypair.rawPublicKey()),
-        });
-        const sigEntrySignature = new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("signature"),
-          val: xdr.ScVal.scvBytes(signature),
-        });
-
         // Create new Address credentials entry to replace source_account
         const addressEntry = new xdr.SorobanAuthorizationEntry({
           credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(
@@ -572,7 +592,10 @@ export async function fundWallet(
               address: Address.fromString(tempKeypair.publicKey()).toScAddress(),
               nonce,
               signatureExpirationLedger: expirationLedger,
-              signature: xdr.ScVal.scvVec([xdr.ScVal.scvMap([sigEntry, sigEntrySignature])]),
+              signature: buildAddressSignatureScVal(
+                tempKeypair.rawPublicKey(),
+                signature
+              ),
             })
           ),
           rootInvocation: entry.rootInvocation(),
@@ -598,18 +621,7 @@ export async function fundWallet(
         const payload = hash(preimage.toXDR());
         const signature = tempKeypair.sign(payload);
 
-        const sigEntry = new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("public_key"),
-          val: xdr.ScVal.scvBytes(tempKeypair.rawPublicKey()),
-        });
-        const sigEntrySignature = new xdr.ScMapEntry({
-          key: xdr.ScVal.scvSymbol("signature"),
-          val: xdr.ScVal.scvBytes(signature),
-        });
-
-        credentials.signature(
-          xdr.ScVal.scvVec([xdr.ScVal.scvMap([sigEntry, sigEntrySignature])])
-        );
+        credentials.signature(buildAddressSignatureScVal(tempKeypair.rawPublicKey(), signature));
 
         signedAuthEntries.push(entry);
         continue;
@@ -652,96 +664,6 @@ export async function fundWallet(
       ...txResult,
       amount: txResult.success ? transferAmount : undefined,
     };
-  } catch (err) {
-    return {
-      success: false,
-      hash: "",
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
-  }
-}
-
-export async function transfer(
-  deps: {
-    getContractId: () => string | undefined;
-    rpc: rpc.Server;
-    networkPassphrase: string;
-    timeoutInSeconds: number;
-    deployerKeypair: Keypair;
-    shouldUseFeeSponsoring: (options?: SubmissionOptions) => boolean;
-    hasSourceAccountAuth: (transaction: Transaction) => boolean;
-    sendAndPoll: (transaction: Transaction, options?: SubmissionOptions) => Promise<TransactionResult>;
-    signResimulateAndPrepare: (
-      hostFunc: xdr.HostFunction,
-      authEntries: xdr.SorobanAuthorizationEntry[],
-      options?: { credentialId?: string; expiration?: number }
-    ) => Promise<Transaction>;
-  },
-  tokenContract: string,
-  recipient: string,
-  amount: number,
-  options?: {
-    credentialId?: string;
-    forceMethod?: SubmissionMethod;
-  }
-): Promise<TransactionResult> {
-  const contractId = deps.getContractId();
-  if (!contractId) {
-    return { success: false, hash: "", error: "Not connected to a wallet" };
-  }
-
-  try {
-    validateAddress(tokenContract, "tokenContract");
-    validateAddress(recipient, "recipient");
-    validateAmount(amount, "amount");
-  } catch (err) {
-    return {
-      success: false,
-      hash: "",
-      error: err instanceof Error ? err.message : "Validation failed",
-    };
-  }
-
-  if (recipient === contractId) {
-    return {
-      success: false,
-      hash: "",
-      error: "Cannot transfer to self",
-    };
-  }
-
-  try {
-    const amountInStroops = xlmToStroops(amount);
-
-    const hostFunc = buildTokenTransferHostFunction(
-      tokenContract,
-      contractId,
-      recipient,
-      amountInStroops
-    );
-
-    const { authEntries } = await simulateHostFunction(
-      {
-        rpc: deps.rpc,
-        networkPassphrase: deps.networkPassphrase,
-        timeoutInSeconds: deps.timeoutInSeconds,
-        deployerKeypair: deps.deployerKeypair,
-      },
-      hostFunc
-    );
-
-    const preparedTx = await deps.signResimulateAndPrepare(
-      hostFunc,
-      authEntries,
-      { credentialId: options?.credentialId }
-    );
-
-    const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-    if (!deps.shouldUseFeeSponsoring(submissionOpts) || deps.hasSourceAccountAuth(preparedTx)) {
-      preparedTx.sign(deps.deployerKeypair);
-    }
-
-    return deps.sendAndPoll(preparedTx, submissionOpts);
   } catch (err) {
     return {
       success: false,

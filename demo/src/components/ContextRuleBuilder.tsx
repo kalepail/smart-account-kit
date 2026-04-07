@@ -19,6 +19,12 @@ import type { ContextRule, Signer, ContextRuleType } from "smart-account-kit-bin
 import type { ConnectedWallet } from "smart-account-kit";
 import { SignerPicker, type SelectedSigner } from "./SignerPicker";
 import { formatSignerForDisplay } from "../utils/sdk";
+import {
+  absoluteValidUntilToLedgerDelta,
+  DEFAULT_EXPIRATION_LEDGER_DELTA,
+  expirationDaysToLedgerDelta,
+  expirationLedgerDeltaToDays,
+} from "../utils/expiration";
 
 // Configuration for RPC
 const RPC_URL = import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org";
@@ -112,6 +118,12 @@ async function queryPolicyParams(
   }
 }
 
+async function getCurrentLedgerSequence(): Promise<number> {
+  const server = new rpc.Server(RPC_URL);
+  const { sequence } = await server.getLatestLedger();
+  return sequence;
+}
+
 /** Policy type definition */
 type PolicyInfo = {
   type: "threshold" | "spending_limit" | "weighted_threshold" | "custom";
@@ -157,6 +169,7 @@ type SignerEntry = {
 
 type SignerAddMode = "existing" | "new_passkey" | "g_address" | "connected_wallet";
 type ContextTypeOption = "default" | "call_contract" | "create_contract";
+const MAX_CONTEXT_RULE_NAME_LENGTH = 20;
 
 /**
  * Format a signer label using SDK utility
@@ -222,7 +235,7 @@ export function ContextRuleBuilder({
 
   // Expiration
   const [hasExpiration, setHasExpiration] = useState(false);
-  const [expirationLedgers, setExpirationLedgers] = useState(LEDGERS_PER_DAY * 30);
+  const [expirationLedgers, setExpirationLedgers] = useState(DEFAULT_EXPIRATION_LEDGER_DELTA);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -323,8 +336,18 @@ export function ContextRuleBuilder({
 
         // Load expiration
         setHasExpiration(!!editingRule.valid_until);
+        setExpirationLedgers(DEFAULT_EXPIRATION_LEDGER_DELTA);
         if (editingRule.valid_until) {
-          setExpirationLedgers(editingRule.valid_until);
+          void getCurrentLedgerSequence()
+            .then((currentLedger) => {
+              setExpirationLedgers(
+                absoluteValidUntilToLedgerDelta(editingRule.valid_until!, currentLedger)
+              );
+            })
+            .catch((loadError) => {
+              console.warn("Failed to resolve current ledger for expiration:", loadError);
+              setExpirationLedgers(DEFAULT_EXPIRATION_LEDGER_DELTA);
+            });
         }
 
         // Load policies from the rule - query on-chain params for each
@@ -628,7 +651,8 @@ export function ContextRuleBuilder({
         }
       }
 
-      // Build policies map - convert params to ScVal for on-chain submission
+      // Build policies map. Known policy types are converted using their own
+      // contract specs before being passed into the smart-account client.
       const policies = new Map<string, unknown>();
 
       for (const sp of selectedPolicies) {
@@ -673,10 +697,12 @@ export function ContextRuleBuilder({
           }
         }
 
-        // Convert to ScVal for known policy types (with sorted fields)
-        if (sp.policy.type === "threshold" || sp.policy.type === "spending_limit" || sp.policy.type === "weighted_threshold") {
-          const scValParams = kit.convertPolicyParams(sp.policy.type, nativeParams);
-          policies.set(sp.policy.address, scValParams);
+        if (
+          sp.policy.type === "threshold" ||
+          sp.policy.type === "spending_limit" ||
+          sp.policy.type === "weighted_threshold"
+        ) {
+          policies.set(sp.policy.address, kit.convertPolicyParams(sp.policy.type, nativeParams));
         } else {
           policies.set(sp.policy.address, nativeParams);
         }
@@ -688,7 +714,9 @@ export function ContextRuleBuilder({
       );
 
       // Calculate expiration
-      const validUntil = hasExpiration ? expirationLedgers : undefined;
+      const validUntil = hasExpiration
+        ? (await getCurrentLedgerSequence()) + expirationLedgers
+        : undefined;
 
       if (isEditing) {
         // Update existing rule
@@ -840,17 +868,16 @@ export function ContextRuleBuilder({
           const addPolicy = async (sp: SelectedPolicy) => {
             const installParams = buildInstallParams(sp);
 
-            // Convert params to ScVal using the contract spec (for known policy types)
-            // This is needed because add_policy uses Val (any) type for install_param
-            let scValParams: unknown;
-            if (sp.policy.type === "threshold" || sp.policy.type === "spending_limit" || sp.policy.type === "weighted_threshold") {
-              scValParams = kit.convertPolicyParams(sp.policy.type, installParams);
-            } else {
-              // Custom policy - pass params as-is
-              scValParams = installParams;
+            let encodedInstallParams: unknown = installParams;
+            if (
+              sp.policy.type === "threshold" ||
+              sp.policy.type === "spending_limit" ||
+              sp.policy.type === "weighted_threshold"
+            ) {
+              encodedInstallParams = kit.convertPolicyParams(sp.policy.type, installParams);
             }
 
-            const tx = await kit.policies.add(ruleId, sp.policy.address, scValParams);
+            const tx = await kit.policies.add(ruleId, sp.policy.address, encodedInstallParams);
             const result = await signAndSubmitWithMultiSigner(tx, selectedSigners);
             if (!result.success) {
               throw new Error(result.error || `Failed to add policy ${sp.policy.name}`);
@@ -929,6 +956,11 @@ export function ContextRuleBuilder({
     // Validation
     if (!name.trim()) {
       setError("Rule name is required.");
+      return;
+    }
+
+    if (name.trim().length > MAX_CONTEXT_RULE_NAME_LENGTH) {
+      setError(`Rule name must be ${MAX_CONTEXT_RULE_NAME_LENGTH} characters or fewer.`);
       return;
     }
 
@@ -1532,9 +1564,9 @@ export function ContextRuleBuilder({
                   <input
                     type="number"
                     min={1}
-                    value={Math.round(expirationLedgers / LEDGERS_PER_DAY)}
+                    value={expirationLedgerDeltaToDays(expirationLedgers)}
                     onChange={(e) =>
-                      setExpirationLedgers((parseInt(e.target.value) || 1) * LEDGERS_PER_DAY)
+                      setExpirationLedgers(expirationDaysToLedgerDelta(parseInt(e.target.value) || 1))
                     }
                     style={{ width: "80px", marginLeft: "8px" }}
                   />

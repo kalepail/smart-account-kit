@@ -11,37 +11,37 @@ sources:
   stellar_transactions:
     type: dataset
     dataset_name: stellar_mainnet.transactions
-    version: 1.1.0
+    version: 1.2.0
     start_at: latest
 
   stellar_transfers:
     type: dataset
     dataset_name: stellar_mainnet.transfers
-    version: 1.1.0
+    version: 1.2.0
     start_at: latest
 
   stellar_events:
     type: dataset
     dataset_name: stellar_mainnet.events
-    version: 1.1.0
+    version: 1.2.0
     start_at: latest
 
   stellar_operations:
     type: dataset
     dataset_name: stellar_mainnet.operations
-    version: 1.1.0
+    version: 1.2.0
     start_at: latest
 
   stellar_ledger_entries:
     type: dataset
     dataset_name: stellar_mainnet.ledger_entries
-    version: 1.1.0
+    version: 1.2.0
     start_at: latest
 
   stellar_ledgers:
     type: dataset
     dataset_name: stellar_mainnet.ledgers
-    version: 1.1.0
+    version: 1.2.0
     start_at: latest
 
   stellar_balances:

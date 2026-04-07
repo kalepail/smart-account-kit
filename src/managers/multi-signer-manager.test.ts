@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const { assembleTransactionMock } = vi.hoisted(() => ({
   assembleTransactionMock: vi.fn(),
 }));
+const { resolveContextRuleIdsForEntryMock } = vi.hoisted(() => ({
+  resolveContextRuleIdsForEntryMock: vi.fn(),
+}));
 
 vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@stellar/stellar-sdk")>();
@@ -14,17 +17,17 @@ vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
   };
 });
 
-vi.mock("../kit/tx-ops", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../kit/tx-ops")>();
+vi.mock("../kit/context-rules", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../kit/context-rules")>();
   return {
     ...actual,
-    simulateHostFunction: vi.fn(),
+    resolveContextRuleIdsForEntry: resolveContextRuleIdsForEntryMock,
   };
 });
 
 import { Account, Address, Keypair, Operation, TransactionBuilder, xdr } from "@stellar/stellar-sdk";
 import { MultiSignerManager } from "./multi-signer-manager";
-import { simulateHostFunction } from "../kit/tx-ops";
+import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
 import {
   makeAccount,
   makeAddressAuthEntry,
@@ -88,6 +91,7 @@ describe("MultiSignerManager", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     assembleTransactionMock.mockReset();
+    resolveContextRuleIdsForEntryMock.mockReset();
   });
 
   it("returns no signers when disconnected and deduplicates connected signers", async () => {
@@ -175,11 +179,20 @@ describe("MultiSignerManager", () => {
     });
   });
 
-  it("builds transfer auth via simulation instead of delegating to the kit", async () => {
+  it("routes multi-signer transfers through wallet.execute", async () => {
     const deps = makeDeps();
+    const assembledTx = {
+      built: makeBuiltTransaction([makeAddressAuthEntry(makeContract(99))]),
+    } as any;
+    const execute = vi.fn(async () => assembledTx);
+    deps.requireWallet.mockReturnValue({
+      wallet: { execute },
+    });
     const manager = new MultiSignerManager(deps);
     const selectedSigners = [makeDelegatedSigner(1)];
-    vi.mocked(simulateHostFunction).mockRejectedValue(new Error("simulation failed"));
+    const operation = vi
+      .spyOn(manager, "operation")
+      .mockResolvedValue({ success: true, hash: "transfer-hash" });
 
     const result = await manager.transfer(
       makeContract(11),
@@ -189,12 +202,29 @@ describe("MultiSignerManager", () => {
       { onLog: vi.fn() }
     );
 
-    expect(simulateHostFunction).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({
-      success: false,
-      hash: "",
-      error: "simulation failed",
+    expect(execute).toHaveBeenCalledWith({
+      target: makeContract(11),
+      target_fn: "transfer",
+      target_args: expect.arrayContaining([
+        expect.objectContaining({ switch: expect.any(Function) }),
+        expect.objectContaining({ switch: expect.any(Function) }),
+        expect.objectContaining({ switch: expect.any(Function) }),
+      ]),
     });
+    const [{ target_args: targetArgs }] = execute.mock.calls[0];
+    expect(targetArgs).toHaveLength(3);
+    expect(targetArgs[0].switch().name).toBe("scvAddress");
+    expect(Address.fromScAddress(targetArgs[0].address()).toString()).toBe(makeContract(99));
+    expect(targetArgs[1].switch().name).toBe("scvAddress");
+    expect(Address.fromScAddress(targetArgs[1].address()).toString()).toBe(makeAccount(2));
+    expect(targetArgs[2].switch().name).toBe("scvI128");
+    expect(operation).toHaveBeenCalledTimes(1);
+    expect(operation).toHaveBeenCalledWith(
+      assembledTx,
+      selectedSigners,
+      expect.objectContaining({ onLog: expect.any(Function) })
+    );
+    expect(result).toEqual({ success: true, hash: "transfer-hash" });
   });
 
   it("fails fast on unsupported external auth entries", async () => {
@@ -316,5 +346,52 @@ describe("MultiSignerManager", () => {
       hash: "",
       error: `Wallet signer ${walletAddress} is missing contract signer metadata. Use buildSelectedSigners() or provide the signer field explicitly.`,
     });
+  });
+
+  it("resolves context rule ids before signing passkey auth entries by default", async () => {
+    const deps = makeDeps();
+    const contractId = deps.getContractId();
+    const preparedTx = { sign: vi.fn() };
+    deps.rpc.getLatestLedger.mockResolvedValue({ sequence: 400 });
+    deps.rpc.getAccount.mockResolvedValue(new Account(deps.deployerPublicKey, "1"));
+    deps.rpc.simulateTransaction.mockResolvedValue({ result: { auth: [] } });
+    deps.sendAndPoll.mockResolvedValue({ success: true, hash: "tx-3" });
+    deps.signAuthEntry.mockImplementation(async (entry, options) => {
+      expect(options?.contextRuleIds).toEqual([12]);
+      return entry;
+    });
+    assembleTransactionMock.mockReturnValue({
+      build: () => preparedTx,
+    });
+    vi.mocked(resolveContextRuleIdsForEntry).mockResolvedValue([12]);
+    const manager = new MultiSignerManager(deps);
+
+    const result = await manager.operation(
+      {
+        built: {
+          operations: [{
+            type: "invokeHostFunction",
+            func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+              new xdr.InvokeContractArgs({
+                contractAddress: Address.fromString(makeContract(44)).toScAddress(),
+                functionName: "ping",
+                args: [],
+              })
+            ),
+            auth: [makeAddressAuthEntry(contractId)],
+          }],
+        },
+      } as any,
+      [{
+        signer: makeExternalSigner(3, 4, 5),
+        type: "passkey",
+        credentialId: Buffer.alloc(20, 5).toString("base64url"),
+      }],
+      {}
+    );
+
+    expect(resolveContextRuleIdsForEntry).toHaveBeenCalledTimes(1);
+    expect(deps.signAuthEntry).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ success: true, hash: "tx-3" });
   });
 });

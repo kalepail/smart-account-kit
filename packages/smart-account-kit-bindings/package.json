@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
+  "version": "0.1.0",
   "name": "smart-account-kit-bindings",
   "type": "module",
   "exports": "./dist/index.js",
@@ -11,7 +11,7 @@
     "buffer": "6.0.3"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^5.6.2"
   },
   "description": "TypeScript bindings for OpenZeppelin Smart Account contracts on Stellar/Soroban",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     "url": "https://github.com/kalepail/smart-account-kit"
   },
   "peerDependencies": {
-    "@stellar/stellar-sdk": ">=14.6.0"
+    "@stellar/stellar-sdk": "15.0.1"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",

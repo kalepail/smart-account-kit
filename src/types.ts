@@ -175,7 +175,7 @@ export interface SmartAccountConfig {
    * Optional indexer URL for contract discovery.
    * The indexer enables reverse lookups from signer credentials to contracts.
    *
-   * If not provided, a default URL will be used for known networks (testnet).
+   * If not provided, a default URL will be used for known networks (testnet/mainnet).
    * Set to `false` to disable indexer integration entirely.
    *
    * @example
@@ -190,6 +190,23 @@ export interface SmartAccountConfig {
    * ```
    */
   indexerUrl?: string | false;
+
+  /**
+   * Optional on-chain probing configuration for current context-rule discovery.
+   *
+   * The SDK still prefers indexer-backed rule ids. When the indexer has not
+   * caught up yet, this probe can enumerate a small low-id range directly from
+   * the contract so freshly deployed current-version wallets can render their
+   * initial rules in UI flows.
+   */
+  contextRuleProbe?: {
+    /** Enable direct low-id probing when indexer-backed discovery is unavailable. Defaults to true. */
+    enabled?: boolean;
+    /** Highest rule id to probe directly on-chain. Defaults to 8. */
+    maxRuleId?: number;
+    /** Stop probing after this many consecutive misses. Defaults to 3. */
+    maxConsecutiveMisses?: number;
+  };
 
   /**
    * Optional Relayer proxy URL for fee-sponsored transaction submission.

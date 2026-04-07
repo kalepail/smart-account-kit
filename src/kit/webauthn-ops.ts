@@ -4,7 +4,7 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
-import { xdr } from "@stellar/stellar-sdk";
+import { rpc, xdr } from "@stellar/stellar-sdk";
 import base64url from "base64url";
 import type { StorageAdapter } from "../types";
 import type {
@@ -47,6 +47,8 @@ type SignAuthEntryDeps = WebAuthnDeps & {
   calculateExpiration: () => Promise<number>;
   getCredentialId: () => string | undefined;
   requireWallet: RequireWallet;
+  rpc: rpc.Server;
+  timeoutInSeconds: number;
 };
 
 export async function createPasskey(
@@ -144,7 +146,17 @@ export async function signAuthEntry(
 
   const { wallet } = deps.requireWallet();
   const credentialIdBuffer = base64url.toBuffer(credentialId);
-  const signer = options?.signer ?? await findWebAuthnSignerInRules(wallet, contextRuleIds, credentialIdBuffer);
+  const signer = options?.signer ?? await findWebAuthnSignerInRules(
+    wallet,
+    contextRuleIds,
+    credentialIdBuffer,
+    {
+      rpc: deps.rpc,
+      contractId: deps.requireWallet().contractId,
+      networkPassphrase: deps.networkPassphrase,
+      timeoutInSeconds: deps.timeoutInSeconds,
+    }
+  );
   const signaturePayload = buildSignaturePayload(
     deps.networkPassphrase,
     normalizedEntry,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { SmartAccountKit, SelectedSigner, AssembledTransaction } from "smart-account-kit";
 import {
   type ConnectedWallet,
@@ -55,22 +55,25 @@ export function ContextRulesPanel({
 }: ContextRulesPanelProps) {
   const [rules, setRules] = useState<ContextRule[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expandedRuleId, setExpandedRuleId] = useState<number | null>(null);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchRules = useCallback(async () => {
+  const fetchRules = useCallback(async (allowRetry = true) => {
     if (!isConnected || !kit.wallet) return;
+
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
 
     setLoading(true);
     try {
-      // Fetch Default context rules
-      const defaultRules = await kit.rules.getAll({
-        tag: "Default",
-        values: undefined,
-      });
-
-      // Note: In a full implementation, you'd also fetch CallContract and CreateContract rules
-      // For now, just showing Default rules as that's the most common case
-      setRules(defaultRules);
+      const activeRules = await kit.rules.list();
+      setRules(activeRules);
+      if (activeRules.length === 0 && allowRetry) {
+        retryTimeoutRef.current = setTimeout(() => {
+          void fetchRules(false);
+        }, 1000);
+      }
     } catch (error) {
       onLog(`Failed to fetch context rules: ${error}`, "error");
     } finally {
@@ -79,7 +82,13 @@ export function ContextRulesPanel({
   }, [kit, isConnected, onLog]);
 
   useEffect(() => {
-    fetchRules();
+    void fetchRules();
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
   }, [fetchRules]);
 
   /**
@@ -163,7 +172,7 @@ export function ContextRulesPanel({
       <div className="section-header">
         <h3>Context Rules (On-Chain)</h3>
         <div style={{ display: "flex", gap: "8px" }}>
-          <button className="small secondary" onClick={fetchRules} disabled={loading}>
+          <button className="small secondary" onClick={() => void fetchRules()} disabled={loading}>
             {loading ? <span className="spinner" /> : "Refresh"}
           </button>
           <button className="small" onClick={onAddRule}>
@@ -188,14 +197,11 @@ export function ContextRulesPanel({
       ) : (
         <div className="context-rules-list">
           {rules.map((rule) => (
-            <div
+            <details
               key={rule.id}
-              className={`context-rule-item ${expandedRuleId === rule.id ? "expanded" : ""}`}
+              className="context-rule-item"
             >
-              <div
-                className="rule-header"
-                onClick={() => setExpandedRuleId(expandedRuleId === rule.id ? null : rule.id)}
-              >
+              <summary className="rule-header">
                 <div className="rule-main">
                   <div className="rule-name">
                     <span className="rule-id">#{rule.id}</span>
@@ -215,68 +221,66 @@ export function ContextRulesPanel({
                       Expires: ledger {rule.valid_until}
                     </span>
                   )}
-                  <span className="expand-icon">{expandedRuleId === rule.id ? "−" : "+"}</span>
+                  <span className="expand-icon" aria-hidden="true">+</span>
+                </div>
+              </summary>
+
+              <div className="rule-details">
+                {/* Signers */}
+                <div className="detail-section">
+                  <div className="detail-section-header">Signers</div>
+                  {rule.signers.length === 0 ? (
+                    <div className="detail-empty">No signers (policy-only rule)</div>
+                  ) : (
+                    <div className="signers-grid">
+                      {rule.signers.map((signer, idx) => {
+                        // Check if this delegated signer matches any connected wallet
+                        const matchingWallet = signer.tag === "Delegated"
+                          ? connectedWallets.find((w) => w.address === signer.values[0])
+                          : undefined;
+
+                        return (
+                          <div key={idx} className={`signer-chip ${matchingWallet ? "connected" : ""}`}>
+                            <span className="signer-type">{getSignerTypeLabel(signer)}</span>
+                            <span className="signer-id">{getSignerIdentifier(signer)}</span>
+                            {matchingWallet && (
+                              <span className="signer-connected-badge">{matchingWallet.walletName}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Policies */}
+                <div className="detail-section">
+                  <div className="detail-section-header">Policies</div>
+                  {rule.policies.length === 0 ? (
+                    <div className="detail-empty">No policies (signer-only rule)</div>
+                  ) : (
+                    <div className="policies-list">
+                      {rule.policies.map((policyAddr, idx) => (
+                        <div key={idx} className="policy-item">
+                          <span className="policy-icon">P</span>
+                          <span className="policy-address">{truncateAddress(policyAddr)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="rule-actions">
+                  <button className="small secondary" onClick={() => onEditRule(rule)}>
+                    Edit Rule
+                  </button>
+                  <button className="small danger" onClick={() => handleRemoveRule(rule.id)}>
+                    Remove Rule
+                  </button>
                 </div>
               </div>
-
-              {expandedRuleId === rule.id && (
-                <div className="rule-details">
-                  {/* Signers */}
-                  <div className="detail-section">
-                    <div className="detail-section-header">Signers</div>
-                    {rule.signers.length === 0 ? (
-                      <div className="detail-empty">No signers (policy-only rule)</div>
-                    ) : (
-                      <div className="signers-grid">
-                        {rule.signers.map((signer, idx) => {
-                          // Check if this delegated signer matches any connected wallet
-                          const matchingWallet = signer.tag === "Delegated"
-                            ? connectedWallets.find((w) => w.address === signer.values[0])
-                            : undefined;
-
-                          return (
-                            <div key={idx} className={`signer-chip ${matchingWallet ? "connected" : ""}`}>
-                              <span className="signer-type">{getSignerTypeLabel(signer)}</span>
-                              <span className="signer-id">{getSignerIdentifier(signer)}</span>
-                              {matchingWallet && (
-                                <span className="signer-connected-badge">{matchingWallet.walletName}</span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Policies */}
-                  <div className="detail-section">
-                    <div className="detail-section-header">Policies</div>
-                    {rule.policies.length === 0 ? (
-                      <div className="detail-empty">No policies (signer-only rule)</div>
-                    ) : (
-                      <div className="policies-list">
-                        {rule.policies.map((policyAddr, idx) => (
-                          <div key={idx} className="policy-item">
-                            <span className="policy-icon">P</span>
-                            <span className="policy-address">{truncateAddress(policyAddr)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="rule-actions">
-                    <button className="small secondary" onClick={() => onEditRule(rule)}>
-                      Edit Rule
-                    </button>
-                    <button className="small danger" onClick={() => handleRemoveRule(rule.id)}>
-                      Remove Rule
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            </details>
           ))}
         </div>
       )}

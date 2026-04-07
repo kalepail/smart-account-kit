@@ -225,7 +225,13 @@
 
   <div class="section" style="background: #f8f9fa;">
     <h2>Manual Lookup (Debug)</h2>
-    <p>Enter a credential ID or Stellar address to look up contracts.</p>
+    <p>Enter a contract ID, credential ID, or Stellar address to inspect indexed contracts.</p>
+    <div class="input-group">
+      <label for="contract-id">Contract ID (C...):</label>
+      <input type="text" id="contract-id" placeholder="CBQVIRSH6EMJVR4SBEMUOZ3ZFFYI6FTQW7DMNESA2BB2XOVYG24FX47T">
+    </div>
+    <button id="contract-lookup-btn">Lookup by Contract ID</button>
+    <hr style="margin: 1rem 0; border: none; border-top: 1px solid #ddd;">
     <div class="input-group">
       <label for="public-key">Credential ID (Hex):</label>
       <input type="text" id="public-key" placeholder="3f8bd02ac47ad80f224404269c00133ec64c1e4b45b0b7ef1e20f3bd0d6a40a1">
@@ -241,6 +247,7 @@
 
   <div class="section">
     <h2>Configuration</h2>
+    <p>These defaults point at testnet. Replace them with the mainnet Worker and RPC URLs when you want to inspect mainnet data.</p>
     <div class="input-group">
       <label for="indexer-url">Indexer URL:</label>
       <input type="text" id="indexer-url" placeholder="https://smart-account-indexer.sdf-ecosystem.workers.dev">

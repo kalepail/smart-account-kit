@@ -22,6 +22,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "agent-browser:webauthn": "node scripts/agent-browser-webauthn-helper.mjs",
     "prebuild": "node scripts/sync-version.js",
     "build": "tsc",
     "build:all": "./scripts/build.sh",
@@ -30,6 +31,9 @@
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist packages/smart-account-kit-bindings/dist",
     "test": "vitest",
+    "test:e2e:browser:full": "bash scripts/browser-full-e2e-audit.sh",
+    "test:e2e:testnet-passkey:onchain": "SKIP_INDEXER=true bash scripts/testnet-passkey-smoke.sh",
+    "test:e2e:testnet-passkey": "bash scripts/testnet-passkey-smoke.sh",
     "release": "./scripts/publish.sh",
     "release:bindings": "./scripts/bindings/publish.sh"
   },
@@ -51,7 +55,7 @@
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.2.2",
-    "@stellar/stellar-sdk": ">=14.6.0",
+    "@stellar/stellar-sdk": "15.0.1",
     "base64url": "^3.0.1",
     "smart-account-kit-bindings": "workspace:*"
   },
@@ -68,7 +72,7 @@
   "packageManager": "pnpm@10.30.3",
   "peerDependencies": {
     "@creit-tech/stellar-wallets-kit": ">=2.0.0",
-    "@stellar/stellar-sdk": ">=14.0.0"
+    "@stellar/stellar-sdk": "15.0.1"
   },
   "peerDependenciesMeta": {
     "@creit-tech/stellar-wallets-kit": {

@@ -110,6 +110,7 @@ export {
   validateAddress,
   validateAmount,
   validateNotEmpty,
+  generateChallenge,
 } from "./utils";
 
 // Builder utilities

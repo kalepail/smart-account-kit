@@ -10,8 +10,9 @@ These pipelines filter Stellar contract events for smart account operations and 
 
 | File | Network | Description |
 |------|---------|-------------|
-| `pipeline.yaml` | Testnet | Indexes from `stellar_testnet.events` |
-| `pipeline-mainnet.yaml` | Mainnet | Indexes from `stellar_mainnet.events` |
+| `pipeline-testnet.yaml` | Testnet | Turbo pipeline on `stellar_testnet.events` v1.2.0 with `start_at: earliest` |
+| `pipeline-mainnet.yaml` | Mainnet | Turbo pipeline on `stellar_mainnet.events` v1.2.0 starting from ledger `60343871` (approx. 2026-01-01 UTC) |
+| `schema-inspect.yaml` | Mainnet | Blackhole inspection pipeline for validating current Stellar dataset schemas |
 
 ## Events Indexed
 
@@ -36,6 +37,7 @@ The SDK and handler depend on these events being present together. The rule view
 ### Prerequisites
 
 - [Goldsky CLI](https://docs.goldsky.com/get-started/cli)
+- Goldsky Turbo CLI extension (`goldsky turbo`)
 - Goldsky account with Stellar dataset access
 - PostgreSQL database
 
@@ -46,31 +48,41 @@ The SDK and handler depend on these events being present together. The rule view
 goldsky login
 
 # Deploy testnet pipeline
-goldsky pipeline apply ./pipeline.yaml --status ACTIVE
+goldsky turbo apply ./pipeline-testnet.yaml
 
 # Deploy mainnet pipeline
-goldsky pipeline apply ./pipeline-mainnet.yaml --status ACTIVE
+goldsky turbo apply ./pipeline-mainnet.yaml
 ```
 
 ### Manage Pipeline
 
 ```bash
 # Check pipeline status
-goldsky pipeline list
+goldsky turbo list
 
 # View pipeline logs
-goldsky pipeline logs smart-account-signers
+goldsky turbo logs smart-account-signers-testnet
+goldsky turbo logs smart-account-signers-mainnet
 
 # Pause pipeline
-goldsky pipeline update smart-account-signers --status PAUSED
+goldsky turbo pause smart-account-signers-testnet
+goldsky turbo pause smart-account-signers-mainnet
 
 # Delete pipeline
-goldsky pipeline delete smart-account-signers
+goldsky turbo delete smart-account-signers-testnet
+goldsky turbo delete smart-account-signers-mainnet
 ```
 
 ## Database
 
 The pipeline creates and populates the `smart_account_signer_events` table. Run the schema from `../handler/schema.sql` to create the required views for querying.
+
+## Notes
+
+- Goldsky now supports Turbo for both `stellar_mainnet.*` and `stellar_testnet.*` datasets.
+- Mainnet uses a ledger-sequence `start_at` so backfill starts around January 1, 2026 UTC instead of replaying full history.
+- Testnet intentionally uses `start_at: earliest` so it captures all events still available in the current testnet epoch, including events from before the pipeline was deployed.
+- Stellar testnet still resets frequently, so `earliest` only covers the current reset window rather than all historical testnet activity.
 
 ## Related
 

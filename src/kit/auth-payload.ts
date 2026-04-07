@@ -51,6 +51,24 @@ export function buildWebAuthnSignatureBytes(sigData: WebAuthnSigData): Buffer {
   ]).toXDR();
 }
 
+export function buildAddressSignatureScVal(
+  publicKeyBytes: Uint8Array | Buffer,
+  signatureBytes: Uint8Array | Buffer
+): xdr.ScVal {
+  return xdr.ScVal.scvVec([
+    xdr.ScVal.scvMap([
+      new xdr.ScMapEntry({
+        key: xdr.ScVal.scvSymbol("public_key"),
+        val: xdr.ScVal.scvBytes(Buffer.from(publicKeyBytes)),
+      }),
+      new xdr.ScMapEntry({
+        key: xdr.ScVal.scvSymbol("signature"),
+        val: xdr.ScVal.scvBytes(Buffer.from(signatureBytes)),
+      }),
+    ]),
+  ]);
+}
+
 export function emptyAuthPayload(): AuthPayload {
   return {
     context_rule_ids: [],

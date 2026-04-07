@@ -18,6 +18,11 @@
 #
 # Deployment:
 #   goldsky turbo apply ./pipeline-mainnet.yaml
+#
+# start_at is pinned to an approximate start-of-year ledger for 2026-01-01 UTC.
+# Derived from Stellar mainnet tip sequence 61,997,985 at 2026-04-06T17:22:50Z
+# using the nominal 5-second ledger cadence because the public RPC retention
+# window did not include January 1, 2026 history.
 
 name: smart-account-signers-mainnet
 resource_size: xl
@@ -31,8 +36,9 @@ sources:
   stellar_events:
     type: dataset
     dataset_name: stellar_mainnet.events
-    version: 1.1.0
-    start_at: earliest
+    version: 1.2.0
+    start_at: 60343871
+    fetch_parallelism: 2
 
 transforms:
   signer_events:

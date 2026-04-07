@@ -6,11 +6,22 @@
 // Network Configuration
 // ============================================================================
 
-/** Default indexer URL */
+/** Default hosted indexer URL for the checked-in demo (testnet). Override via env or UI for mainnet. */
 export const DEFAULT_INDEXER_URL = "https://smart-account-indexer.sdf-ecosystem.workers.dev";
 
-/** Default RPC URL for Stellar testnet */
+/** Default RPC URL for the checked-in demo (testnet). Override via env or UI for mainnet. */
 export const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";
+
+/** Default Stellar network passphrase for the checked-in demo (testnet). */
+export const DEFAULT_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+
+/** Default smart-account WASM hash used by the checked-in demo. */
+export const DEFAULT_ACCOUNT_WASM_HASH =
+  "8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611";
+
+/** Default WebAuthn verifier used by the checked-in demo. */
+export const DEFAULT_WEBAUTHN_VERIFIER_ADDRESS =
+  "CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU";
 
 // ============================================================================
 // Ledger Constants

@@ -24,7 +24,7 @@
   "scripts": {
     "agent-browser:webauthn": "node scripts/agent-browser-webauthn-helper.mjs",
     "prebuild": "node scripts/sync-version.js",
-    "build": "tsc",
+    "build": "pnpm --filter smart-account-kit-bindings build && tsc",
     "build:all": "./scripts/build.sh",
     "build:bindings": "./scripts/bindings/build.sh",
     "build:demo": "pnpm build && pnpm --filter smart-account-kit-demo build",

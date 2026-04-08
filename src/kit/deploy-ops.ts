@@ -9,6 +9,18 @@ import { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import type { Keypair } from "@stellar/stellar-sdk";
 import { getSubmissionMethod } from "./tx-ops";
 
+async function sendDeploymentTxViaRpc<T>(
+  tx: contract.AssembledTransaction<T>
+): Promise<{ hashValue: string; ledger: number | undefined }> {
+  const sentTx = await tx.send();
+  const txResponse = sentTx.getTransactionResponse;
+
+  return {
+    hashValue: sentTx.sendTransactionResponse?.hash ?? "",
+    ledger: txResponse?.status === "SUCCESS" ? txResponse.ledger : undefined,
+  };
+}
+
 export async function submitDeploymentTx<T>(
   deps: {
     storage: StorageAdapter;
@@ -22,29 +34,29 @@ export async function submitDeploymentTx<T>(
   try {
     let hashValue: string;
     let ledger: number | undefined;
-
     const method = getSubmissionMethod(deps.relayer, options);
 
     if (method === "relayer" && tx.signed && deps.relayer) {
       const relayerResult = await deps.relayer.sendXdr(tx.signed);
 
       if (!relayerResult.success) {
-        throw new Error(relayerResult.error ?? "Relayer submission failed");
-      }
+        if (options?.forceMethod === "relayer") {
+          throw new Error(relayerResult.error ?? "Relayer submission failed");
+        }
 
-      hashValue = relayerResult.hash ?? "";
+        ({ hashValue, ledger } = await sendDeploymentTxViaRpc(tx));
+      } else {
+        hashValue = relayerResult.hash ?? "";
 
-      const txResult = await deps.rpc.pollTransaction(hashValue, { attempts: 10 });
-      if (txResult.status === "SUCCESS") {
-        ledger = txResult.ledger;
-      } else if (txResult.status === "FAILED") {
-        throw new Error("Transaction failed on-chain");
+        const txResult = await deps.rpc.pollTransaction(hashValue, { attempts: 10 });
+        if (txResult.status === "SUCCESS") {
+          ledger = txResult.ledger;
+        } else if (txResult.status === "FAILED") {
+          throw new Error("Transaction failed on-chain");
+        }
       }
     } else {
-      const sentTx = await tx.send();
-      const txResponse = sentTx.getTransactionResponse;
-      hashValue = sentTx.sendTransactionResponse?.hash ?? "";
-      ledger = txResponse?.status === "SUCCESS" ? txResponse.ledger : undefined;
+      ({ hashValue, ledger } = await sendDeploymentTxViaRpc(tx));
     }
 
     await deps.storage.delete(credentialId);

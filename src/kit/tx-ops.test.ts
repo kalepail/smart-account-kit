@@ -315,6 +315,16 @@ describe("tx-ops", () => {
     const preparedTx = {
       sign: vi.fn(),
     };
+    const simulateTransaction = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: { auth: [] },
+        latestLedger: 100,
+      })
+      .mockResolvedValueOnce({
+        result: { auth: [] },
+        latestLedger: 100,
+      });
     const sendAndPollMock = vi.fn().mockResolvedValue({
       success: true,
       hash: "fund-hash",
@@ -332,10 +342,7 @@ describe("tx-ops", () => {
         rpc: {
           getAccount: vi.fn().mockResolvedValue(account),
           getContractData: vi.fn().mockRejectedValue(new Error("missing balance")),
-          simulateTransaction: vi.fn().mockResolvedValue({
-            result: { auth: [] },
-            latestLedger: 100,
-          }),
+          simulateTransaction,
         } as never,
         networkPassphrase: "Test SDF Network ; September 2015",
         timeoutInSeconds: 30,
@@ -346,6 +353,7 @@ describe("tx-ops", () => {
       makeContractAddress("token")
     );
 
+    expect(simulateTransaction).toHaveBeenCalledTimes(2);
     expect(assembleTransactionMock).toHaveBeenCalledTimes(1);
     expect(preparedTx.sign).toHaveBeenCalledTimes(1);
     expect(sendAndPollMock).toHaveBeenCalledWith(preparedTx, { forceMethod: undefined });

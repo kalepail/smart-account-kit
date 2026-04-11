@@ -1,0 +1,250 @@
+---
+title: SmartAccountKit
+description: The main SDK client class for deploying and managing smart accounts.
+---
+
+## Import
+
+```typescript
+import { SmartAccountKit } from 'smart-account-kit';
+```
+
+## Constructor
+
+```typescript
+const kit = new SmartAccountKit(config: SmartAccountConfig);
+```
+
+See [Configuration](/configuration) for all available options.
+
+## Sub-Manager Properties
+
+After construction, the following sub-managers are available as properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `kit.signers` | `SignerManager` | Add/remove signers on context rules |
+| `kit.rules` | `ContextRuleManager` | CRUD for context rules |
+| `kit.policies` | `PolicyManager` | Attach/detach policies |
+| `kit.credentials` | `CredentialManager` | Local credential lifecycle |
+| `kit.multiSigners` | `MultiSignerManager` | Multi-signer transaction flows |
+| `kit.externalSigners` | `ExternalSignerManager` | G-address / wallet signers |
+| `kit.indexer` | `IndexerClient \| null` | Contract discovery |
+| `kit.relayer` | `RelayerClient \| null` | Fee-sponsored submission |
+| `kit.events` | `SmartAccountEventEmitter` | Event subscriptions |
+| `kit.wallet` | `WalletClient \| null` | Raw contract client (after connect) |
+
+## Wallet Lifecycle
+
+### `createWallet()`
+
+Create a new smart account secured by a WebAuthn passkey.
+
+```typescript
+const { contractId, credentialId } = await kit.createWallet(
+  appName: string,
+  userName: string,
+  options?: CreateWalletOptions
+);
+```
+
+**Options:**
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `autoSubmit` | boolean | false | Deploy the wallet immediately |
+| `autoFund` | boolean | false | Fund via Friendbot (testnet only) |
+| `nativeTokenContract` | string | - | Required when `autoFund` is true |
+
+```typescript
+const { contractId, credentialId } = await kit.createWallet('My App', 'user@example.com', {
+  autoSubmit: true,
+  autoFund: true,
+  nativeTokenContract: 'CDLZFC3...',
+});
+```
+
+### `connectWallet()`
+
+Restore a session or prompt for passkey selection.
+
+```typescript
+const result = await kit.connectWallet(options?: ConnectWalletOptions);
+// Returns ConnectWalletResult | null
+```
+
+**Options:**
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `prompt` | boolean | Show passkey selection UI |
+| `fresh` | boolean | Ignore session, always prompt |
+| `credentialId` | string | Connect with a specific credential |
+| `contractId` | string | Connect with a specific contract |
+
+```typescript
+await kit.connectWallet();                            // Silent restore
+await kit.connectWallet({ prompt: true });            // Always prompt
+await kit.connectWallet({ fresh: true });             // Ignore cached session
+await kit.connectWallet({ credentialId: '...' });     // Specific credential
+await kit.connectWallet({ contractId: 'C...' });      // Specific contract
+```
+
+### `disconnect()`
+
+Clear the session. The passkey and contract remain on-chain.
+
+```typescript
+await kit.disconnect();
+```
+
+### `authenticatePasskey()`
+
+Perform passkey authentication without connecting to a wallet.
+
+```typescript
+const authResult = await kit.authenticatePasskey();
+```
+
+## Transaction Methods
+
+### `signAndSubmit()`
+
+Sign auth entries for a transaction and submit it. **This is the recommended path** for smart-account auth flows.
+
+```typescript
+const result = await kit.signAndSubmit(
+  transaction: Transaction | FeeBumpTransaction,
+  options?: SubmissionOptions
+): Promise<TransactionResult>
+```
+
+### `executeAndSubmit()`
+
+Build a smart-account mediated contract call, sign it, and submit. **Preferred for arbitrary contract calls.**
+
+```typescript
+const result = await kit.executeAndSubmit(
+  target: string,
+  targetFn: string,
+  targetArgs: xdr.ScVal[],
+  options?: SubmissionOptions
+): Promise<TransactionResult>
+```
+
+```typescript
+const result = await kit.executeAndSubmit('CTARGET...', 'set_config', [owner, threshold]);
+```
+
+### `execute()`
+
+Build the assembled transaction for a smart-account mediated call without submitting.
+
+```typescript
+const tx = await kit.execute(
+  target: string,
+  targetFn: string,
+  targetArgs: xdr.ScVal[]
+): Promise<AssembledTransaction>
+```
+
+### `sign()`
+
+Sign auth entries on a transaction. Use `signAndSubmit()` unless you need to inspect the signed entries.
+
+```typescript
+const signedTx = await kit.sign(transaction, options?: SubmissionOptions);
+```
+
+### `signAuthEntry()`
+
+Sign a single auth entry.
+
+```typescript
+const signedEntry = await kit.signAuthEntry(authEntry, options?);
+```
+
+### `transfer()`
+
+Transfer tokens from the connected smart account.
+
+```typescript
+const result = await kit.transfer(
+  tokenContract: string,
+  recipient: string,
+  amount: number | bigint | string,
+  options?: { forceMethod?: 'rpc' | 'relayer' }
+): Promise<TransactionResult>
+```
+
+```typescript
+// Transfer via relayer (if configured) or RPC
+await kit.transfer('CTOKEN...', 'GRECIPIENT...', 100);
+
+// Force RPC even if relayer is configured
+await kit.transfer('CTOKEN...', 'GRECIPIENT...', 100, { forceMethod: 'rpc' });
+```
+
+## Contract Discovery
+
+### `discoverContractsByCredential()`
+
+Find smart account contracts associated with a credential ID (via indexer).
+
+```typescript
+const contracts = await kit.discoverContractsByCredential(credentialId: string);
+```
+
+### `discoverContractsByAddress()`
+
+Find smart account contracts associated with a Stellar address (via indexer).
+
+```typescript
+const contracts = await kit.discoverContractsByAddress(address: string);
+```
+
+### `getContractDetailsFromIndexer()`
+
+Fetch full contract details including rules, signers, and policies.
+
+```typescript
+const details = await kit.getContractDetailsFromIndexer(contractId: string);
+```
+
+## Utility Methods
+
+### `fundWallet()`
+
+Fund the connected wallet via Friendbot (testnet only).
+
+```typescript
+await kit.fundWallet(nativeTokenContract: string);
+```
+
+### `convertPolicyParams()`
+
+Convert policy parameter objects to `ScVal` for on-chain use.
+
+```typescript
+const scVal = kit.convertPolicyParams(params: PolicyConfig);
+```
+
+### `buildPoliciesScVal()`
+
+Build a policies `ScVal` array for context rule creation.
+
+```typescript
+const policiesScVal = kit.buildPoliciesScVal(policies: PolicyConfig[]);
+```
+
+## Raw Wallet Escape Hatch
+
+The generated contract client is accessible as `kit.wallet` after connecting. Use it directly for contract methods the SDK intentionally does not wrap: `upgrade`, `batch_add_signer`, `get_signer_id`, `get_policy_id`, and `get_context_rules_count`.
+
+```typescript
+// Only available after kit.connectWallet()
+const count = await kit.wallet?.get_context_rules_count();
+const signerId = await kit.wallet?.get_signer_id({ signer });
+```
+
+**Rule of thumb:** if the SDK adds orchestration, session handling, signer resolution, or submission logic, use the wrapper. If it's a thin contract call, use `kit.wallet` directly.

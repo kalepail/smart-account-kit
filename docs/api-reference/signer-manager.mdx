@@ -1,0 +1,104 @@
+---
+title: SignerManager
+description: Add and remove signers on context rules via kit.signers.
+---
+
+## Overview
+
+`SignerManager` manages signers attached to context rules on your smart account. Access it via `kit.signers`.
+
+```typescript
+// Add a passkey signer to rule 0
+await kit.signers.addPasskey(0, 'My App', 'Recovery Key');
+
+// Add a G-address signer
+await kit.signers.addDelegated(0, 'GABC...');
+
+// Remove a signer
+await kit.signers.remove(0, signer);
+```
+
+<Note>
+  `batch_add_signer` is intentionally left on the raw `kit.wallet` client - the SDK does not add enough ergonomics to justify a wrapper.
+</Note>
+
+## Methods
+
+### `addPasskey()`
+
+Register a new WebAuthn passkey and add it as a signer on the given context rule.
+
+```typescript
+const { credentialId, transaction } = await kit.signers.addPasskey(
+  contextRuleId: number,
+  appName: string,
+  userName: string,
+  options?: AddPasskeyOptions
+);
+```
+
+**Parameters:**
+
+<ParamField path="contextRuleId" type="number" required>
+  The ID of the context rule to add the signer to.
+</ParamField>
+
+<ParamField path="appName" type="string" required>
+  Display name for the relying party shown during passkey creation.
+</ParamField>
+
+<ParamField path="userName" type="string" required>
+  Label for the new passkey (e.g. "Recovery Key", "YubiKey").
+</ParamField>
+
+<ParamField path="options.nickname" type="string">
+  Optional local nickname for the credential.
+</ParamField>
+
+**Example:**
+
+```typescript
+const { credentialId } = await kit.signers.addPasskey(
+  0,
+  'My App',
+  'Backup YubiKey',
+  { nickname: 'Backup YubiKey' }
+);
+```
+
+### `addDelegated()`
+
+Add a Stellar G-address as a delegated signer on a context rule.
+
+```typescript
+await kit.signers.addDelegated(
+  contextRuleId: number,
+  address: string
+);
+```
+
+**Example:**
+
+```typescript
+await kit.signers.addDelegated(0, 'GABC...');
+```
+
+### `remove()`
+
+Remove a signer from a context rule. The SDK resolves signer IDs internally - pass the signer value directly.
+
+```typescript
+await kit.signers.remove(
+  contextRuleId: number,
+  signer: ContractSigner
+);
+```
+
+**Example:**
+
+```typescript
+const rule = (await kit.rules.get(0)).result;
+const signer = rule.signers[0];
+
+await kit.signers.remove(0, signer);
+```

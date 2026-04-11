@@ -1,0 +1,120 @@
+---
+title: IndexerClient
+description: Reverse-lookup smart account contracts by credential or address.
+---
+
+## Overview
+
+`IndexerClient` provides reverse lookups from passkey credentials and Stellar addresses to smart account contracts. It's used internally by `kit.rules.list()`, `kit.multiSigners.getAvailableSigners()`, and contract discovery methods.
+
+```typescript
+import { IndexerClient, DEFAULT_INDEXER_URLS } from 'smart-account-kit';
+```
+
+## Via SmartAccountKit (Recommended)
+
+The SDK auto-configures an indexer for testnet and mainnet:
+
+```typescript
+// Discover contracts by credential
+const { contracts } = await kit.discoverContractsByCredential(credentialId);
+
+// Discover by address
+const { contracts } = await kit.discoverContractsByAddress('GABC...');
+
+// Full contract details
+const details = await kit.getContractDetailsFromIndexer('CABC...');
+
+// Access the client directly
+if (kit.indexer) {
+  const healthy = await kit.indexer.isHealthy();
+  const stats = await kit.indexer.getStats();
+}
+```
+
+## Direct Usage
+
+### `IndexerClient.forNetwork()`
+
+Create a client pre-configured for a known Stellar network:
+
+```typescript
+// Testnet
+const indexer = IndexerClient.forNetwork('Test SDF Network ; September 2015');
+
+// Mainnet
+const indexer = IndexerClient.forNetwork('Public Global Stellar Network ; September 2015');
+```
+
+### Custom URL
+
+```typescript
+const indexer = new IndexerClient({
+  baseUrl: 'https://smart-account-indexer.sdf-ecosystem.workers.dev',
+  timeout: 10000,
+});
+```
+
+## Methods
+
+### `lookupByCredentialId()`
+
+Find contracts associated with a WebAuthn credential ID.
+
+```typescript
+const { contracts } = await indexer.lookupByCredentialId(
+  credentialIdHex: string
+): Promise<CredentialLookupResponse>
+```
+
+### `lookupByAddress()`
+
+Find contracts associated with a Stellar G/C-address.
+
+```typescript
+const { contracts } = await indexer.lookupByAddress(
+  address: string
+): Promise<AddressLookupResponse>
+```
+
+### `getContractDetails()`
+
+Fetch full details for a smart account contract including context rules, signers, and policies.
+
+```typescript
+const details = await indexer.getContractDetails(
+  contractId: string
+): Promise<ContractDetailsResponse>
+```
+
+### `isHealthy()`
+
+Check if the indexer is reachable and healthy.
+
+```typescript
+const healthy = await indexer.isHealthy(); // boolean
+```
+
+### `getStats()`
+
+Fetch indexer stats (indexed contracts, latest ledger, etc.).
+
+```typescript
+const stats = await indexer.getStats(); // IndexerStatsResponse
+```
+
+## Types
+
+```typescript
+import type {
+  IndexerConfig,
+  IndexedContractSummary,
+  IndexedSigner,
+  IndexedPolicy,
+  IndexedContextRule,
+  CredentialLookupResponse,
+  AddressLookupResponse,
+  ContractDetailsResponse,
+  IndexerStatsResponse,
+} from 'smart-account-kit';
+```

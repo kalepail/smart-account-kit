@@ -1,0 +1,82 @@
+---
+title: Events
+description: Subscribe to SDK lifecycle events via kit.events.
+---
+
+## Overview
+
+Smart Account Kit emits events for key lifecycle moments. Use `kit.events` to subscribe, handle one-time events, or clean up listeners.
+
+## Available Events
+
+| Event | Payload | Description |
+|-------|---------|-------------|
+| `walletConnected` | `{ contractId: string }` | Fired when connected to a wallet |
+| `walletDisconnected` | `{}` | Fired on disconnect |
+| `credentialCreated` | `{ credentialId: string }` | Fired when a passkey is registered |
+| `credentialDeleted` | `{ credentialId: string }` | Fired when a credential is removed |
+| `sessionExpired` | `{}` | Fired when the session expires |
+| `transactionSigned` | `{ transaction: ... }` | Fired after auth entries are signed |
+| `transactionSubmitted` | `{ hash: string; success: boolean }` | Fired after submission |
+
+## Usage
+
+### `on()` - Persistent listener
+
+```typescript
+kit.events.on('walletConnected', ({ contractId }) => {
+  console.log('Connected to:', contractId);
+  updateUI(contractId);
+});
+
+kit.events.on('transactionSubmitted', ({ hash, success }) => {
+  if (success) {
+    showToast(`Transaction confirmed: ${hash}`);
+  } else {
+    showToast('Transaction failed', 'error');
+  }
+});
+
+kit.events.on('sessionExpired', () => {
+  // Prompt user to reconnect
+  showReconnectBanner();
+});
+```
+
+### `once()` - Fire once then remove
+
+```typescript
+kit.events.once('walletConnected', ({ contractId }) => {
+  // Only fires on the next connection
+  console.log('First connection:', contractId);
+});
+```
+
+### `off()` - Remove a listener
+
+```typescript
+const handler = ({ contractId }: { contractId: string }) => {
+  console.log('Connected:', contractId);
+};
+
+kit.events.on('walletConnected', handler);
+
+// Later...
+kit.events.off('walletConnected', handler);
+```
+
+## Types
+
+```typescript
+import type { SmartAccountEventMap, EventListener } from 'smart-account-kit';
+
+type SmartAccountEventMap = {
+  walletConnected: { contractId: string };
+  walletDisconnected: {};
+  credentialCreated: { credentialId: string };
+  credentialDeleted: { credentialId: string };
+  sessionExpired: {};
+  transactionSigned: { transaction: AssembledTransaction };
+  transactionSubmitted: { hash: string; success: boolean };
+};
+```

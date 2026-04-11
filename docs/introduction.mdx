@@ -1,0 +1,67 @@
+---
+title: Introduction
+description: TypeScript SDK for deploying and managing OpenZeppelin Smart Account contracts on Stellar/Soroban with WebAuthn passkey authentication.
+---
+
+## What is Smart Account Kit?
+
+Smart Account Kit is a TypeScript SDK that makes it easy to build wallet-aware applications on Stellar/Soroban using [OpenZeppelin's smart account contracts](https://github.com/OpenZeppelin/stellar-contracts). It handles the complexity of WebAuthn passkey authentication, session persistence, and multi-signer flows so you can focus on building your app.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Passkey Authentication" icon="fingerprint">
+    Create and manage smart wallets secured by WebAuthn passkeys - no seed phrases required.
+  </Card>
+  <Card title="Session Management" icon="rotate">
+    Automatic session persistence for seamless reconnection across page loads.
+  </Card>
+  <Card title="Multiple Signer Types" icon="key">
+    Support for passkeys (secp256r1), Ed25519 keys, and policy signers.
+  </Card>
+  <Card title="Context Rules" icon="shield">
+    Fine-grained authorization control for different operations.
+  </Card>
+  <Card title="Policy Support" icon="scale-balanced">
+    Threshold multisig, spending limits, and custom policies.
+  </Card>
+  <Card title="Storage Adapters" icon="database">
+    Flexible credential storage with IndexedDB, localStorage, or custom backends.
+  </Card>
+</CardGroup>
+
+## How It Works
+
+Smart Account Kit wraps the on-chain smart account contract with ergonomic TypeScript APIs:
+
+1. **Create** - Register a passkey and deploy a smart account contract on Stellar
+2. **Connect** - Restore a session or prompt the user to select a passkey
+3. **Sign & Submit** - Sign transactions via WebAuthn and submit to the network
+4. **Manage** - Add/remove signers, create context rules, and attach policies
+
+## Architecture
+
+```
+Your App
+   ↓
+SmartAccountKit          ← Main entry point
+   ├── SignerManager      ← Add/remove signers on context rules
+   ├── ContextRuleManager ← CRUD context rules
+   ├── PolicyManager      ← Attach/detach policies
+   ├── CredentialManager  ← Local credential lifecycle
+   ├── MultiSignerManager ← Multi-sig transaction flows
+   ├── ExternalSignerManager ← G-address / wallet signer support
+   ├── RelayerClient      ← Fee-sponsored submission
+   └── IndexerClient      ← Contract discovery by credential/address
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Explore all SDK initialization options.
+  </Card>
+</CardGroup>

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Smart Account Kit",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0E76FD",
+    "light": "#60A5FA",
+    "dark": "#0E76FD"
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/kalepail/smart-account-kit"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "npm",
+    "url": "https://www.npmjs.com/package/smart-account-kit"
+  },
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "quickstart",
+        "configuration"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api-reference/smart-account-kit",
+        "api-reference/signer-manager",
+        "api-reference/context-rule-manager",
+        "api-reference/policy-manager",
+        "api-reference/credential-manager",
+        "api-reference/multi-signer-manager",
+        "api-reference/external-signer-manager"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/storage-adapters",
+        "guides/fee-sponsoring",
+        "guides/multi-sig",
+        "guides/events",
+        "guides/error-handling"
+      ]
+    },
+    {
+      "group": "Advanced",
+      "pages": [
+        "advanced/builder-functions",
+        "advanced/relayer-client",
+        "advanced/indexer-client",
+        "advanced/wallet-adapters"
+      ]
+    },
+    {
+      "group": "Migration",
+      "pages": [
+        "migration/v0.7.0"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/kalepail/smart-account-kit"
+  }
+}

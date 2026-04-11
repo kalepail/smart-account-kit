@@ -62,6 +62,12 @@
       ]
     },
     {
+      "group": "AI",
+      "pages": [
+        "ai/skills"
+      ]
+    },
+    {
       "group": "Migration",
       "pages": [
         "migration/v0.7.0"

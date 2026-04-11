@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "smart-account-kit",
+      "description": "Initialize, configure, and use the smart-account-kit TypeScript SDK for deploying WebAuthn passkey-secured smart accounts on Stellar/Soroban. Use when a developer asks about smart-account-kit, passkey wallets on Stellar, or smart account integration.",
+      "url": "/.mintlify/skills/smart-account-kit/SKILL.md"
+    },
+    {
+      "name": "create-stellar-wallet",
+      "description": "Create and deploy a WebAuthn passkey-secured smart account wallet on Stellar using smart-account-kit. Use when a user wants to create a new wallet, register a passkey, deploy a smart account, or set up a new account on Stellar/Soroban.",
+      "url": "/.mintlify/skills/create-stellar-wallet/SKILL.md"
+    },
+    {
+      "name": "sign-stellar-transactions",
+      "description": "Sign and submit Stellar transactions using a smart account passkey via smart-account-kit. Use when a developer needs to sign transactions, submit operations, execute contract calls, or transfer tokens on Stellar/Soroban using a connected smart account.",
+      "url": "/.mintlify/skills/sign-stellar-transactions/SKILL.md"
+    },
+    {
+      "name": "manage-signers",
+      "description": "Add, remove, and manage signers and context rules on a Stellar smart account using smart-account-kit. Use when a developer wants to add a passkey signer, add a G-address signer, remove a signer, create context rules, update rules, or manage who can authorize transactions on a smart account.",
+      "url": "/.mintlify/skills/manage-signers/SKILL.md"
+    },
+    {
+      "name": "setup-policies",
+      "description": "Attach and configure authorization policies on Stellar smart account context rules using smart-account-kit. Use when a developer wants to set up threshold multisig, spending limits, weighted voting, M-of-N signatures, or any policy-enforced authorization on a Stellar smart account.",
+      "url": "/.mintlify/skills/setup-policies/SKILL.md"
+    }
+  ]
+}

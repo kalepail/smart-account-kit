@@ -1,0 +1,124 @@
+---
+title: Agent Skills
+description: Use Smart Account Kit skills to let AI agents (Claude Code, Cursor, etc.) understand and work with the SDK in your project.
+---
+
+## What Are Agent Skills?
+
+Agent skills are structured files ([agentskills.io spec](https://agentskills.io/specification)) that describe what an SDK can do and how to use it. When an AI agent discovers your project's skills, it can answer questions, write correct code, and follow best practices without requiring manual context or documentation links.
+
+Smart Account Kit ships five skills covering its core workflows.
+
+## Available Skills
+
+| Skill | Description |
+|-------|-------------|
+| `smart-account-kit` | SDK initialization, config, sub-managers, and error handling |
+| `create-stellar-wallet` | Create and deploy passkey-secured smart accounts |
+| `sign-stellar-transactions` | Sign and submit transactions through a smart account |
+| `manage-signers` | Add/remove signers, create and update context rules |
+| `setup-policies` | Threshold multisig, spending limits, weighted voting |
+
+## Using Skills with Claude Code
+
+### Option 1 - Mintlify MCP (Recommended)
+
+If you have the [Mintlify MCP server](/ai/mcp) configured in Claude Code, skills are discovered automatically when you reference the docs.
+
+Add to your `~/.claude/mcp.json`:
+
+```json
+{
+  "servers": {
+    "Mintlify": {
+      "type": "http",
+      "url": "https://mintlify.com/docs/mcp"
+    }
+  }
+}
+```
+
+Then ask Claude Code questions and it will pull the relevant skill automatically:
+
+```
+How do I add a 2-of-3 multisig policy to my smart account?
+```
+
+### Option 2 - Direct Skill Reference
+
+Reference a skill file directly in your prompt or `CLAUDE.md`:
+
+```
+@docs/.mintlify/skills/create-stellar-wallet/SKILL.md
+
+Set up wallet creation in my React app.
+```
+
+### Option 3 - Add to CLAUDE.md
+
+Add a skills reference block to your project's `CLAUDE.md` so Claude Code loads the relevant skill context automatically:
+
+```markdown
+## Smart Account Kit
+
+This project uses smart-account-kit for Stellar smart account management.
+
+Relevant skills:
+- @docs/.mintlify/skills/smart-account-kit/SKILL.md
+- @docs/.mintlify/skills/create-stellar-wallet/SKILL.md
+- @docs/.mintlify/skills/sign-stellar-transactions/SKILL.md
+```
+
+## Discovery Endpoint
+
+AI agents that support the agentskills.io discovery protocol can find all skills automatically at:
+
+```
+GET /.well-known/agent-skills/index.json
+```
+
+This is served automatically by Mintlify when your docs are deployed.
+
+## Skill Files
+
+All skill files live under `docs/.mintlify/skills/`:
+
+```
+docs/
+└── .mintlify/
+    └── skills/
+        ├── smart-account-kit/
+        │   └── SKILL.md
+        ├── create-stellar-wallet/
+        │   └── SKILL.md
+        ├── sign-stellar-transactions/
+        │   └── SKILL.md
+        ├── manage-signers/
+        │   └── SKILL.md
+        └── setup-policies/
+            └── SKILL.md
+```
+
+Each `SKILL.md` contains:
+- **Frontmatter** - machine-readable metadata (`name`, `description`, `allowed-tools`)
+- **Instructions** - step-by-step usage for AI agents
+- **Code examples** - copy-paste ready snippets
+
+## Writing Custom Skills
+
+You can extend or override these skills for your own project. Create a `SKILL.md` following the [agentskills.io specification](https://agentskills.io/specification):
+
+```markdown
+---
+name: my-custom-skill
+description: "What this skill does and when to use it."
+license: MIT
+allowed-tools: Read Write Edit Bash(pnpm:*)
+---
+
+## Instructions
+
+Step-by-step instructions for the AI agent...
+```
+
+Place it in `.claude/commands/my-custom-skill.md` (project-level) or `~/.claude/commands/my-custom-skill.md` (user-level) for Claude Code to pick it up as a `/my-custom-skill` slash command.

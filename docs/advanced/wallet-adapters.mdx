@@ -1,0 +1,94 @@
+---
+title: Wallet Adapters
+description: Connect external Stellar wallets (Freighter, Lobstr, etc.) as signers.
+---
+
+## Overview
+
+Wallet adapters bridge external Stellar wallet extensions with Smart Account Kit's `ExternalSignerManager`. The SDK ships with a first-class adapter for `@creit-tech/stellar-wallets-kit`.
+
+## StellarWalletsKitAdapter
+
+`@creit-tech/stellar-wallets-kit` is a peer dependency that provides a unified interface for Freighter, Lobstr, and other Stellar wallet extensions.
+
+### Installation
+
+```bash
+pnpm add @creit-tech/stellar-wallets-kit
+```
+
+### Usage
+
+```typescript
+import { StellarWalletsKit, WalletNetwork, FREIGHTER_ID } from '@creit-tech/stellar-wallets-kit';
+import { StellarWalletsKitAdapter } from 'smart-account-kit';
+
+// Create the StellarWalletsKit instance
+const swk = new StellarWalletsKit({
+  network: WalletNetwork.TESTNET,
+  selectedWalletId: FREIGHTER_ID,
+  // ... other config
+});
+
+// Wrap it in the adapter
+const adapter = new StellarWalletsKitAdapter({
+  kit: swk,
+  onConnectionChange: (connected: boolean) => {
+    console.log('External wallet:', connected ? 'connected' : 'disconnected');
+  },
+});
+
+// Register with SmartAccountKit
+await kit.externalSigners.addFromWallet(adapter);
+```
+
+### `StellarWalletsKitAdapterConfig`
+
+```typescript
+import type { StellarWalletsKitAdapterConfig } from 'smart-account-kit';
+
+interface StellarWalletsKitAdapterConfig {
+  kit: StellarWalletsKit;
+  onConnectionChange?: (connected: boolean) => void;
+}
+```
+
+## Custom Adapter
+
+Implement `ExternalWalletAdapter` to connect any wallet or signing service:
+
+```typescript
+import type { ExternalWalletAdapter } from 'smart-account-kit';
+import type { xdr } from '@stellar/stellar-sdk';
+
+class MyWalletAdapter implements ExternalWalletAdapter {
+  async getAddress(): Promise<string> {
+    // Return the wallet's G-address
+    return await myWallet.getPublicKey();
+  }
+
+  async signAuthEntry(
+    authEntry: xdr.SorobanAuthorizationEntry
+  ): Promise<xdr.SorobanAuthorizationEntry> {
+    // Sign the auth entry and return the signed version
+    return await myWallet.signAuthEntry(authEntry);
+  }
+
+  async disconnect(): Promise<void> {
+    await myWallet.disconnect();
+  }
+}
+
+// Register it
+await kit.externalSigners.addFromWallet(new MyWalletAdapter());
+```
+
+## Restoring Connections
+
+On page load, restore previously persisted wallet connections:
+
+```typescript
+await kit.externalSigners.restoreConnections();
+```
+
+This re-connects any external wallets that were active in the previous session.

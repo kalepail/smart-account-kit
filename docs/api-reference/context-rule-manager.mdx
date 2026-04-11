@@ -1,0 +1,121 @@
+---
+title: ContextRuleManager
+description: Create, read, update, and delete context rules via kit.rules.
+---
+
+## Overview
+
+Context rules define what signers and policies are required for different operations on your smart account. Access the manager via `kit.rules`.
+
+```typescript
+// Create a rule
+await kit.rules.add(contextType, 'My Rule', signers, policies);
+
+// Read a rule
+const rule = (await kit.rules.get(0)).result;
+
+// List all active rules (requires indexer)
+const rules = await kit.rules.list();
+```
+
+## Methods
+
+### `add()`
+
+Create a new context rule on the smart account.
+
+```typescript
+await kit.rules.add(
+  contextType: ContextRuleType,
+  name: string,
+  signers: ContractSigner[],
+  policies: PolicyConfig[]
+);
+```
+
+**Example:**
+
+```typescript
+import { createDefaultContext, createWebAuthnSigner } from 'smart-account-kit';
+
+const context = createDefaultContext();
+const signer = createWebAuthnSigner(verifierAddress, publicKey, credentialId);
+
+await kit.rules.add(context, 'Default Rule', [signer], []);
+```
+
+### `get()`
+
+Read a specific context rule directly from the contract by ID.
+
+```typescript
+const result = await kit.rules.get(contextRuleId: number);
+const rule = result.result; // ContextRule
+```
+
+<Note>
+  `get()` reads directly from the chain. For listing active rules after deletions, use `list()` or `getAll()` - these are indexer-backed because the contract does not expose an iterator over active rule IDs.
+</Note>
+
+### `list()`
+
+List all active context rules. **Requires indexer access.**
+
+```typescript
+const rules = await kit.rules.list(); // ContextRule[]
+```
+
+### `getAll()`
+
+Get all active context rules of a specific type. **Requires indexer access.**
+
+```typescript
+const rules = await kit.rules.getAll(contextType: ContextRuleType);
+```
+
+### `remove()`
+
+Delete a context rule by ID.
+
+```typescript
+await kit.rules.remove(contextRuleId: number);
+```
+
+### `updateName()`
+
+Update the display name of a context rule.
+
+```typescript
+await kit.rules.updateName(contextRuleId: number, name: string);
+```
+
+### `updateExpiration()`
+
+Update the expiration ledger for a context rule. After this ledger, the rule is no longer active.
+
+```typescript
+await kit.rules.updateExpiration(contextRuleId: number, expirationLedger: number);
+```
+
+## Context Rule Types
+
+Use the builder functions to create context rule type values:
+
+```typescript
+import {
+  createDefaultContext,         // Matches any operation
+  createCallContractContext,    // Matches calls to a specific contract
+  createCreateContractContext,  // Matches contract deployments
+} from 'smart-account-kit';
+
+// Default - matches everything
+const defaultCtx = createDefaultContext();
+
+// Call contract - only matches invocations of CTARGET
+const callCtx = createCallContractContext('CTARGET...');
+
+// Create contract - matches deployments
+const deployCtx = createCreateContractContext();
+```
+
+See [Builder Functions](/advanced/builder-functions) for the full reference.

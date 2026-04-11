@@ -1,0 +1,88 @@
+---
+title: RelayerClient
+description: Fee-sponsored transaction submission via a relayer proxy.
+---
+
+## Overview
+
+`RelayerClient` handles communication with a relayer proxy for fee-sponsored transactions. It's created automatically when you pass `relayerUrl` to `SmartAccountKit`, and accessed via `kit.relayer`.
+
+```typescript
+import { RelayerClient } from 'smart-account-kit';
+```
+
+## Via SmartAccountKit (Recommended)
+
+Configure a `relayerUrl` and the SDK handles routing automatically:
+
+```typescript
+const kit = new SmartAccountKit({
+  // ...
+  relayerUrl: 'https://my-relayer.example.com',
+});
+
+// Uses relayer automatically
+await kit.transfer(tokenContract, recipient, amount);
+
+// Bypass relayer for a specific call
+await kit.transfer(tokenContract, recipient, amount, { forceMethod: 'rpc' });
+
+// Access client directly
+if (kit.relayer) {
+  const result = await kit.relayer.sendXdr(signedTx);
+}
+```
+
+## Direct Usage
+
+```typescript
+const relayer = new RelayerClient('https://my-relayer.example.com');
+```
+
+### `send()`
+
+Submit a transaction via func + auth (for `invokeHostFunction` flows). The relayer wraps it in a fee bump and sponsors fees.
+
+```typescript
+const result = await relayer.send(
+  funcXdr: string,
+  authXdrs: string[]
+): Promise<RelayerResponse>
+```
+
+### `sendXdr()`
+
+Submit a fully signed transaction XDR. Used for deployments and other non-invoke flows.
+
+```typescript
+const result = await relayer.sendXdr(
+  signedTransactionXdr: string
+): Promise<RelayerResponse>
+```
+
+## Response
+
+```typescript
+import type { RelayerResponse } from 'smart-account-kit';
+
+interface RelayerResponse {
+  success: boolean;
+  hash?: string;        // Transaction hash on success
+  error?: string;       // Error message on failure
+  errorCode?: RelayerErrorCode;
+}
+```
+
+## Error Codes
+
+```typescript
+import { RelayerErrorCodes } from 'smart-account-kit';
+import type { RelayerErrorCode } from 'smart-account-kit';
+```
+
+| Code | Description |
+|------|-------------|
+| `NETWORK_ERROR` | Could not reach the relayer |
+| `SUBMISSION_FAILED` | Relayer received the request but the transaction failed |
+| `INVALID_REQUEST` | Malformed request |
+| `TIMEOUT` | Relayer did not respond in time |

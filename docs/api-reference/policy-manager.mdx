@@ -1,0 +1,90 @@
+---
+title: PolicyManager
+description: Attach and detach policies on context rules via kit.policies.
+---
+
+## Overview
+
+Policies add additional authorization logic on top of signers - threshold multisig, spending limits, weighted voting, etc. Access the manager via `kit.policies`.
+
+```typescript
+// Add a threshold policy to rule 0
+await kit.policies.add(0, 'CPOLICY...', installParams);
+
+// Remove it
+await kit.policies.remove(0, 'CPOLICY...');
+```
+
+## Methods
+
+### `add()`
+
+Attach a policy contract to a context rule.
+
+```typescript
+await kit.policies.add(
+  contextRuleId: number,
+  policyAddress: string,
+  installParams: xdr.ScVal
+);
+```
+
+**Example (threshold multisig):**
+
+```typescript
+import { createThresholdParams } from 'smart-account-kit';
+
+const params = createThresholdParams(2); // 2-of-N
+const installParams = kit.convertPolicyParams(params);
+
+await kit.policies.add(0, process.env.THRESHOLD_POLICY_ADDRESS!, installParams);
+```
+
+**Example (spending limit):**
+
+```typescript
+import { createSpendingLimitParams, LEDGERS_PER_DAY } from 'smart-account-kit';
+
+const params = createSpendingLimitParams(
+  'CTOKEN...',
+  BigInt(1000 * 10_000_000),  // 1000 tokens
+  LEDGERS_PER_DAY
+);
+const installParams = kit.convertPolicyParams(params);
+
+await kit.policies.add(0, process.env.SPENDING_LIMIT_POLICY_ADDRESS!, installParams);
+```
+
+### `remove()`
+
+Detach a policy from a context rule.
+
+```typescript
+await kit.policies.remove(
+  contextRuleId: number,
+  policyAddress: string
+);
+```
+
+## Policy Types
+
+The SDK ships with builders for all supported policy types:
+
+| Builder | Policy | Description |
+|---------|--------|-------------|
+| `createThresholdParams(m)` | Threshold | M-of-N multisig |
+| `createWeightedThresholdParams(threshold, weights)` | Weighted threshold | Weighted voting |
+| `createSpendingLimitParams(token, limit, period)` | Spending limit | Time-limited per-token cap |
+
+```typescript
+import {
+  createThresholdParams,
+  createWeightedThresholdParams,
+  createSpendingLimitParams,
+  LEDGERS_PER_HOUR,
+  LEDGERS_PER_DAY,
+  LEDGERS_PER_WEEK,
+} from 'smart-account-kit';
+```
+
+See [Builder Functions](/advanced/builder-functions) for full details.

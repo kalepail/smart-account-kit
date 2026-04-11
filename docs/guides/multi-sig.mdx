@@ -1,0 +1,115 @@
+---
+title: Multi-Sig
+description: Set up threshold and weighted multi-signer flows.
+---
+
+## Overview
+
+Smart Account Kit supports multiple signer types and policy-enforced multi-sig authorization. You can require M-of-N passkey signatures, weighted voting, or spending limits - all enforced on-chain by policy contracts.
+
+## Adding Multiple Signers
+
+Add additional passkeys to an existing context rule:
+
+```typescript
+// Add a backup passkey to rule 0
+await kit.signers.addPasskey(0, 'My App', 'Recovery Key', {
+  nickname: 'Backup YubiKey',
+});
+
+// Add a G-address signer (hardware wallet, co-signer, etc.)
+await kit.signers.addDelegated(0, 'GABC...');
+```
+
+## Threshold Policy (M-of-N)
+
+Require M signatures from N signers before authorizing a transaction:
+
+```typescript
+import { createThresholdParams } from 'smart-account-kit';
+
+// 2-of-N threshold
+const params = createThresholdParams(2);
+const installParams = kit.convertPolicyParams(params);
+
+await kit.policies.add(
+  0,                                          // context rule ID
+  process.env.THRESHOLD_POLICY_ADDRESS!,
+  installParams
+);
+```
+
+## Weighted Threshold Policy
+
+Assign weights to signers; a transaction requires reaching a total weight threshold:
+
+```typescript
+import { createWeightedThresholdParams } from 'smart-account-kit';
+
+const params = createWeightedThresholdParams(
+  100,                     // threshold (total weight required)
+  [                        // weights per signer index
+    { signerIndex: 0, weight: 70 },
+    { signerIndex: 1, weight: 50 },
+  ]
+);
+const installParams = kit.convertPolicyParams(params);
+
+await kit.policies.add(0, process.env.WEIGHTED_THRESHOLD_POLICY_ADDRESS!, installParams);
+```
+
+## Executing a Multi-Sig Transaction
+
+Use `MultiSignerManager` when a transaction requires signatures from multiple signers:
+
+```typescript
+// 1. Discover available signers
+const signers = await kit.multiSigners.getAvailableSigners();
+
+// 2. Check if multi-sig is needed
+if (!kit.multiSigners.needsMultiSigner(signers)) {
+  await kit.transfer(tokenContract, recipient, amount);
+  return;
+}
+
+// 3. Build signer selection
+const selected = kit.multiSigners.buildSelectedSigners(
+  signers,
+  kit.activeCredentialId
+);
+
+// 4. Execute multi-sig transfer
+const result = await kit.multiSigners.transfer(
+  tokenContract,
+  recipient,
+  amount,
+  selected
+);
+```
+
+## Spending Limit Policy
+
+Cap token spending over a time window (enforced per-token, per-reset-period):
+
+```typescript
+import { createSpendingLimitParams, LEDGERS_PER_DAY } from 'smart-account-kit';
+
+const params = createSpendingLimitParams(
+  'CDLZFC3...',            // token contract (native XLM)
+  BigInt(100 * 10_000_000), // 100 XLM in stroops
+  LEDGERS_PER_DAY          // resets every ~24 hours
+);
+const installParams = kit.convertPolicyParams(params);
+
+await kit.policies.add(0, process.env.SPENDING_LIMIT_POLICY_ADDRESS!, installParams);
+```
+
+## Time Constants
+
+```typescript
+import { LEDGERS_PER_HOUR, LEDGERS_PER_DAY, LEDGERS_PER_WEEK } from 'smart-account-kit';
+
+LEDGERS_PER_HOUR  // ~720
+LEDGERS_PER_DAY   // ~17,280
+LEDGERS_PER_WEEK  // ~120,960
+```

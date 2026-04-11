@@ -1,0 +1,113 @@
+---
+title: MultiSignerManager
+description: Coordinate multi-signer transaction flows via kit.multiSigners.
+---
+
+## Overview
+
+`MultiSignerManager` handles transactions that require signatures from multiple signers. Access it via `kit.multiSigners`.
+
+```typescript
+// Get all available signers (indexer-backed)
+const signers = await kit.multiSigners.getAvailableSigners();
+
+if (kit.multiSigners.needsMultiSigner(signers)) {
+  const selected = kit.multiSigners.buildSelectedSigners(signers, activeCredentialId);
+  await kit.multiSigners.transfer('CTOKEN...', 'GRECIPIENT...', 100, selected);
+}
+```
+
+<Note>
+  `getAvailableSigners()` is indexer-backed - it requires a configured indexer. This mirrors `kit.rules.list()` for the same reason: the contract does not expose an iterator over active rule IDs after deletions.
+</Note>
+
+## Methods
+
+### `getAvailableSigners()`
+
+Discover all signers across all active context rules. **Requires indexer access.**
+
+```typescript
+const signers = await kit.multiSigners.getAvailableSigners(); // ContractSigner[]
+```
+
+### `needsMultiSigner()`
+
+Check whether the current operation requires more than one signer.
+
+```typescript
+const needs = kit.multiSigners.needsMultiSigner(signers: ContractSigner[]); // boolean
+```
+
+### `buildSelectedSigners()`
+
+Assemble a `SelectedSigner[]` array for use in multi-sig operations.
+
+```typescript
+const selected = kit.multiSigners.buildSelectedSigners(
+  signers: ContractSigner[],
+  activeCredentialId?: string
+);
+```
+
+Pass `activeCredentialId` to mark which passkey credential is the currently authenticated one.
+
+### `transfer()`
+
+Execute a token transfer requiring signatures from multiple signers.
+
+```typescript
+const result = await kit.multiSigners.transfer(
+  tokenContract: string,
+  recipient: string,
+  amount: number | bigint | string,
+  selectedSigners: SelectedSigner[]
+);
+```
+
+### `operation()`
+
+Execute any assembled transaction requiring multi-signer authorization.
+
+```typescript
+const result = await kit.multiSigners.operation(
+  assembledTx: AssembledTransaction,
+  selectedSigners: SelectedSigner[],
+  options?: SubmissionOptions
+);
+```
+
+## Full Multi-Sig Example
+
+```typescript
+// 1. Discover all signers
+const signers = await kit.multiSigners.getAvailableSigners();
+
+// 2. Check if multi-sig is needed
+if (!kit.multiSigners.needsMultiSigner(signers)) {
+  // Single signer - use the normal transfer path
+  await kit.transfer(tokenContract, recipient, amount);
+  return;
+}
+
+// 3. Build the signer selection
+const selected = kit.multiSigners.buildSelectedSigners(
+  signers,
+  kit.activeCredentialId  // mark which passkey is currently authenticated
+);
+
+// 4. Execute
+const result = await kit.multiSigners.transfer(tokenContract, recipient, amount, selected);
+```
+
+## Types
+
+```typescript
+import type { SelectedSigner } from 'smart-account-kit';
+
+interface SelectedSigner {
+  signer: ContractSigner;
+  credentialId?: string;  // For passkey signers
+  address?: string;       // For G-address signers
+}
+```

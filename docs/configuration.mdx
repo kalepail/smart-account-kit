@@ -1,0 +1,112 @@
+---
+title: Configuration
+description: All SmartAccountKit initialization options.
+---
+
+## SmartAccountConfig
+
+Pass a config object to the `SmartAccountKit` constructor:
+
+```typescript
+import { SmartAccountKit, IndexedDBStorage } from 'smart-account-kit';
+
+const kit = new SmartAccountKit({
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+  accountWasmHash: 'YOUR_WASM_HASH',
+  webauthnVerifierAddress: 'YOUR_VERIFIER_ADDRESS',
+});
+```
+
+## Options
+
+<ParamField body="rpcUrl" type="string" required>
+  Stellar RPC endpoint URL. Use `https://soroban-testnet.stellar.org` for testnet or `https://mainnet.stellar.validationcloud.io/v1/<key>` for mainnet.
+</ParamField>
+
+<ParamField body="networkPassphrase" type="string" required>
+  Network passphrase. Use the `Networks` enum from `@stellar/stellar-sdk`:
+  - Testnet: `'Test SDF Network ; September 2015'`
+  - Mainnet: `'Public Global Stellar Network ; September 2015'`
+</ParamField>
+
+<ParamField body="accountWasmHash" type="string" required>
+  WASM hash of the uploaded smart account contract. Used to deploy new wallet instances. The testnet default is in [`demo/.env.example`](https://github.com/kalepail/smart-account-kit/blob/main/demo/.env.example).
+</ParamField>
+
+<ParamField body="webauthnVerifierAddress" type="string" required>
+  Contract address of the deployed WebAuthn verifier. This is the on-chain verifier used to validate passkey signatures.
+</ParamField>
+
+<ParamField body="storage" type="StorageAdapter">
+  Credential storage backend. Defaults to `IndexedDBStorage` if not provided.
+
+  ```typescript
+  import { IndexedDBStorage, LocalStorageAdapter, MemoryStorage } from 'smart-account-kit';
+
+  storage: new IndexedDBStorage()     // Recommended for web
+  storage: new LocalStorageAdapter()  // Simple fallback
+  storage: new MemoryStorage()        // Testing only
+  ```
+</ParamField>
+
+<ParamField body="timeoutInSeconds" type="number" default="30">
+  Transaction timeout in seconds. Transactions that are not included in a ledger within this window will expire.
+</ParamField>
+
+<ParamField body="rpId" type="string">
+  WebAuthn Relying Party ID. Defaults to the current hostname (`window.location.hostname`). Override this if your domain differs from the RP ID registered during passkey creation.
+</ParamField>
+
+<ParamField body="rpName" type="string">
+  WebAuthn Relying Party display name. Shown to the user during passkey creation.
+</ParamField>
+
+<ParamField body="relayerUrl" type="string">
+  URL of a relayer proxy for fee-sponsored transactions. When set, the SDK routes all submissions through the relayer instead of the RPC endpoint.
+
+  ```typescript
+  relayerUrl: 'https://my-relayer.example.com'
+  ```
+
+  See the [Fee Sponsoring guide](/guides/fee-sponsoring) for details.
+</ParamField>
+
+<ParamField body="indexerUrl" type="string">
+  Override the default indexer URL. The SDK auto-selects a default indexer based on `networkPassphrase`. Only set this if you're running a custom indexer.
+</ParamField>
+
+## Environment Variables (Demo / Vite)
+
+If you're using Vite, the recommended pattern is to read from environment variables:
+
+```typescript
+const kit = new SmartAccountKit({
+  rpcUrl: import.meta.env.VITE_RPC_URL,
+  networkPassphrase: import.meta.env.VITE_NETWORK_PASSPHRASE,
+  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH,
+  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS,
+  relayerUrl: import.meta.env.VITE_RELAYER_URL,
+});
+```
+
+```bash .env
+VITE_RPC_URL=https://soroban-testnet.stellar.org
+VITE_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
+VITE_ACCOUNT_WASM_HASH=<wasm_hash>
+VITE_WEBAUTHN_VERIFIER_ADDRESS=<verifier_contract_id>
+VITE_RELAYER_URL=https://my-relayer.example.com
+```
+
+## Testnet Defaults
+
+The [demo `.env.example`](https://github.com/kalepail/smart-account-kit/blob/main/demo/.env.example) ships with pre-deployed testnet contract addresses so you can get started without deploying your own contracts.
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_ACCOUNT_WASM_HASH` | Smart account WASM hash (testnet) |
+| `VITE_WEBAUTHN_VERIFIER_ADDRESS` | WebAuthn verifier contract (testnet) |
+| `VITE_ED25519_VERIFIER_ADDRESS` | Ed25519 verifier contract (testnet) |
+| `VITE_THRESHOLD_POLICY_ADDRESS` | Threshold multisig policy (testnet) |
+| `VITE_SPENDING_LIMIT_POLICY_ADDRESS` | Spending limit policy (testnet) |
+| `VITE_NATIVE_TOKEN_CONTRACT` | Native XLM SAC contract (testnet) |

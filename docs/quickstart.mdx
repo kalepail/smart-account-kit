@@ -1,0 +1,159 @@
+---
+title: Quick Start
+description: Install Smart Account Kit and create your first passkey-secured wallet.
+---
+
+## Installation
+
+<CodeGroup>
+```bash pnpm
+pnpm add smart-account-kit
+```
+
+```bash npm
+npm install smart-account-kit
+```
+
+```bash yarn
+yarn add smart-account-kit
+```
+</CodeGroup>
+
+## Initialize the SDK
+
+```typescript
+import { SmartAccountKit, IndexedDBStorage } from 'smart-account-kit';
+
+const kit = new SmartAccountKit({
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+  accountWasmHash: 'YOUR_ACCOUNT_WASM_HASH',
+  webauthnVerifierAddress: 'YOUR_WEBAUTHN_VERIFIER_ADDRESS',
+  storage: new IndexedDBStorage(),
+});
+```
+
+<Info>
+  Testnet contract addresses (WASM hashes, verifier addresses, policy addresses) are available in the [demo `.env.example`](https://github.com/kalepail/smart-account-kit/blob/main/demo/.env.example).
+</Info>
+
+## Create a Wallet
+
+Prompt the user to register a passkey and deploy a new smart account:
+
+```typescript
+const { contractId, credentialId } = await kit.createWallet('My App', 'user@example.com', {
+  autoSubmit: true,  // Deploy immediately
+  autoFund: true,    // Fund via Friendbot (testnet only)
+  nativeTokenContract: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+});
+
+console.log('Wallet deployed at:', contractId);
+```
+
+## Connect to an Existing Wallet
+
+On subsequent page loads, silently restore a session or prompt for passkey selection:
+
+```typescript
+// Silent restore (no UI prompt)
+const result = await kit.connectWallet();
+
+if (!result) {
+  // No stored session - show your connect button
+  showConnectButton();
+}
+
+// User clicks "Connect" - prompt passkey selection
+await kit.connectWallet({ prompt: true });
+```
+
+## Sign and Submit a Transaction
+
+```typescript
+import { TransactionBuilder, Networks, Operation, Asset } from '@stellar/stellar-sdk';
+
+// Build your transaction
+const tx = new TransactionBuilder(account, { fee: BASE_FEE, networkPassphrase: Networks.TESTNET })
+  .addOperation(Operation.payment({ destination, asset: Asset.native(), amount: '10' }))
+  .setTimeout(30)
+  .build();
+
+// Sign and submit via the smart account
+const result = await kit.signAndSubmit(tx);
+
+if (result.success) {
+  console.log('Submitted:', result.hash);
+}
+```
+
+## Transfer Tokens
+
+For simple token transfers, use the `transfer` shortcut:
+
+```typescript
+await kit.transfer(
+  'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC', // token contract
+  'GRECIPIENT...',  // recipient address
+  100               // amount
+);
+```
+
+## Disconnect
+
+```typescript
+await kit.disconnect(); // Clears session; passkey and contract remain intact
+```
+
+## Full Example
+
+```typescript
+import { SmartAccountKit, IndexedDBStorage } from 'smart-account-kit';
+
+const kit = new SmartAccountKit({
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+  accountWasmHash: process.env.ACCOUNT_WASM_HASH!,
+  webauthnVerifierAddress: process.env.WEBAUTHN_VERIFIER!,
+  storage: new IndexedDBStorage(),
+});
+
+// On page load
+const session = await kit.connectWallet();
+if (session) {
+  console.log('Restored session for:', session.contractId);
+} else {
+  // Show UI to create or connect wallet
+}
+
+// Create wallet button
+async function handleCreate() {
+  const { contractId } = await kit.createWallet('My App', 'user@example.com', {
+    autoSubmit: true,
+    autoFund: true,
+  });
+  console.log('Created:', contractId);
+}
+
+// Connect wallet button
+async function handleConnect() {
+  await kit.connectWallet({ prompt: true });
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Full list of SDK initialization options.
+  </Card>
+  <Card title="SmartAccountKit API" icon="code" href="/api-reference/smart-account-kit">
+    Explore all available methods.
+  </Card>
+  <Card title="Storage Adapters" icon="database" href="/guides/storage-adapters">
+    Choose the right storage backend for your app.
+  </Card>
+  <Card title="Multi-Sig" icon="users" href="/guides/multi-sig">
+    Set up threshold and weighted multi-signer flows.
+  </Card>
+</CardGroup>

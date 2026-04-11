@@ -1,0 +1,189 @@
+---
+title: Builder Functions
+description: Utility functions for constructing signers, context rule types, and policy parameters.
+---
+
+## Signer Builders
+
+```typescript
+import {
+  createDelegatedSigner,
+  createExternalSigner,
+  createWebAuthnSigner,
+  createEd25519Signer,
+} from 'smart-account-kit';
+```
+
+### `createWebAuthnSigner()`
+
+Create a passkey (secp256r1) signer.
+
+```typescript
+const signer = createWebAuthnSigner(
+  verifierAddress: string,
+  publicKey: Uint8Array,
+  credentialId: string
+);
+```
+
+### `createDelegatedSigner()`
+
+Create a delegated Stellar G-address signer.
+
+```typescript
+const signer = createDelegatedSigner(
+  address: string,           // G-address
+  ed25519VerifierAddress: string
+);
+```
+
+### `createEd25519Signer()`
+
+Create an Ed25519 key signer.
+
+```typescript
+const signer = createEd25519Signer(
+  verifierAddress: string,
+  publicKey: Uint8Array
+);
+```
+
+### `createExternalSigner()`
+
+Create a signer for a custom on-chain verifier contract.
+
+```typescript
+const signer = createExternalSigner(
+  verifierAddress: string,
+  publicKey: Uint8Array
+);
+```
+
+---
+
+## Context Rule Type Builders
+
+```typescript
+import {
+  createDefaultContext,
+  createCallContractContext,
+  createCreateContractContext,
+} from 'smart-account-kit';
+```
+
+### `createDefaultContext()`
+
+A rule that matches any operation. Use as a catch-all fallback rule.
+
+```typescript
+const context = createDefaultContext();
+```
+
+### `createCallContractContext()`
+
+A rule that only matches invocations of a specific contract.
+
+```typescript
+const context = createCallContractContext(contractAddress: string);
+```
+
+### `createCreateContractContext()`
+
+A rule that only matches contract deployments.
+
+```typescript
+const context = createCreateContractContext();
+```
+
+---
+
+## Policy Parameter Builders
+
+```typescript
+import {
+  createThresholdParams,
+  createWeightedThresholdParams,
+  createSpendingLimitParams,
+  LEDGERS_PER_HOUR,
+  LEDGERS_PER_DAY,
+  LEDGERS_PER_WEEK,
+} from 'smart-account-kit';
+```
+
+### `createThresholdParams()`
+
+M-of-N multisig: require `m` signatures from any of the rule's signers.
+
+```typescript
+const params = createThresholdParams(m: number);
+```
+
+```typescript
+const twoOfThree = createThresholdParams(2);
+```
+
+### `createWeightedThresholdParams()`
+
+Weighted voting: each signer has a weight, and the transaction must accumulate enough weight to reach the threshold.
+
+```typescript
+const params = createWeightedThresholdParams(
+  threshold: number,
+  weights: Array<{ signerIndex: number; weight: number }>
+);
+```
+
+```typescript
+const params = createWeightedThresholdParams(100, [
+  { signerIndex: 0, weight: 70 },
+  { signerIndex: 1, weight: 50 },
+]);
+```
+
+### `createSpendingLimitParams()`
+
+Cap token spending over a rolling ledger window.
+
+```typescript
+const params = createSpendingLimitParams(
+  tokenContract: string,
+  limit: bigint,         // in stroops (1 XLM = 10_000_000 stroops)
+  resetPeriod: number    // in ledgers
+);
+```
+
+```typescript
+const params = createSpendingLimitParams(
+  'CDLZFC3...',
+  BigInt(100 * 10_000_000), // 100 XLM
+  LEDGERS_PER_DAY           // resets daily
+);
+```
+
+### Ledger Constants
+
+```typescript
+LEDGERS_PER_HOUR  // 720
+LEDGERS_PER_DAY   // 17_280
+LEDGERS_PER_WEEK  // 120_960
+```
+
+---
+
+## Signer Helper Functions
+
+```typescript
+import {
+  getCredentialIdFromSigner,
+  signersEqual,
+  truncateAddress,
+  formatSignerForDisplay,
+} from 'smart-account-kit';
+```
+
+| Function | Description |
+|----------|-------------|
+| `getCredentialIdFromSigner(signer)` | Extract the credential ID from a WebAuthn signer |
+| `signersEqual(a, b)` | Deep-compare two signers |
+| `truncateAddress(address)` | Shorten a G/C-address for display (e.g. `GABC...WXYZ`) |
+| `formatSignerForDisplay(signer)` | Format a signer as a human-readable string |

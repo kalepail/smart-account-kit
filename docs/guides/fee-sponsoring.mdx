@@ -1,0 +1,69 @@
+---
+title: Fee Sponsoring
+description: Enable gasless transactions by routing submissions through a relayer proxy.
+---
+
+## Overview
+
+By default, Smart Account Kit submits transactions directly via the Stellar RPC. Configure a `relayerUrl` to route submissions through a relayer proxy that sponsors fees - making your app effectively gasless for end users.
+
+## Setup
+
+```typescript
+const kit = new SmartAccountKit({
+  rpcUrl: 'https://soroban-testnet.stellar.org',
+  networkPassphrase: 'Test SDF Network ; September 2015',
+  accountWasmHash: 'YOUR_WASM_HASH',
+  webauthnVerifierAddress: 'YOUR_VERIFIER',
+  relayerUrl: 'https://my-relayer.example.com',  // ← add this
+});
+```
+
+Once configured, all `transfer()`, `signAndSubmit()`, and `executeAndSubmit()` calls automatically route through the relayer.
+
+## Bypassing the Relayer
+
+To use RPC directly for a specific operation:
+
+```typescript
+// Force RPC for this transfer only
+await kit.transfer(tokenContract, recipient, amount, { forceMethod: 'rpc' });
+```
+
+## Relayer Protocol
+
+The relayer proxy must accept POST requests with one of two formats:
+
+**For `invokeHostFunction` flows (func + auth):**
+```json
+{ "func": "<xdr>", "auth": ["<xdr>", ...] }
+```
+
+**For signed transactions (e.g. deployments):**
+```json
+{ "xdr": "<signed_tx_xdr>" }
+```
+
+The relayer wraps the transaction in a fee bump, sponsors fees, and returns the submitted transaction hash.
+
+## Using RelayerClient Directly
+
+Access the relayer client directly via `kit.relayer`:
+
+```typescript
+if (kit.relayer) {
+  // Submit func + auth for fee sponsoring
+  const result = await kit.relayer.send(funcXdr, authXdrs);
+
+  // Or submit a signed transaction
+  const result = await kit.relayer.sendXdr(signedTx);
+
+  if (result.success) {
+    console.log('Hash:', result.hash);
+  } else {
+    console.error('Error:', result.error, result.errorCode);
+  }
+}
+```
+
+See [RelayerClient](/advanced/relayer-client) for the full API reference.

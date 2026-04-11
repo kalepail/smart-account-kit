@@ -1,0 +1,100 @@
+---
+title: Storage Adapters
+description: Choose and configure the right credential storage backend for your app.
+---
+
+## Overview
+
+Smart Account Kit needs to persist passkey credentials and session data across page loads. It does this through a `StorageAdapter` interface with three built-in implementations.
+
+## Built-in Adapters
+
+### IndexedDBStorage (Recommended)
+
+Uses the browser's IndexedDB API. Best for production web apps - supports large payloads and works across tabs.
+
+```typescript
+import { IndexedDBStorage } from 'smart-account-kit';
+
+const kit = new SmartAccountKit({
+  // ...
+  storage: new IndexedDBStorage(),
+});
+```
+
+### LocalStorageAdapter
+
+Uses `window.localStorage`. Simpler fallback for environments where IndexedDB is unavailable.
+
+```typescript
+import { LocalStorageAdapter } from 'smart-account-kit';
+
+storage: new LocalStorageAdapter()
+```
+
+<Warning>
+  `localStorage` has a ~5MB limit and is synchronous. Use `IndexedDBStorage` in production.
+</Warning>
+
+### MemoryStorage
+
+Stores credentials in memory only - data is lost on page reload. Use for testing.
+
+```typescript
+import { MemoryStorage } from 'smart-account-kit';
+
+storage: new MemoryStorage()
+```
+
+## Custom Adapter
+
+Implement the `StorageAdapter` interface to use any backend (e.g. a server-side store, encrypted storage, or React Native AsyncStorage):
+
+```typescript
+import type { StorageAdapter, StoredCredential, StoredSession } from 'smart-account-kit';
+
+class MyStorage implements StorageAdapter {
+  async save(credential: StoredCredential): Promise<void> {
+    // Persist credential
+  }
+
+  async get(credentialId: string): Promise<StoredCredential | null> {
+    // Retrieve by ID
+    return null;
+  }
+
+  async getAll(): Promise<StoredCredential[]> {
+    return [];
+  }
+
+  async delete(credentialId: string): Promise<void> {
+    // Remove credential
+  }
+
+  async saveSession(session: StoredSession): Promise<void> {
+    // Persist session
+  }
+
+  async getSession(): Promise<StoredSession | null> {
+    return null;
+  }
+
+  async clearSession(): Promise<void> {
+    // Clear session
+  }
+}
+
+const kit = new SmartAccountKit({
+  // ...
+  storage: new MyStorage(),
+});
+```
+
+## What Gets Stored
+
+| Data | Description |
+|------|-------------|
+| `StoredCredential` | Passkey public key, credential ID, associated contract ID, and metadata |
+| `StoredSession` | Short-lived session token for silent reconnection on page reload |
+
+Session data is cleared by `kit.disconnect()`. Credentials persist until explicitly deleted via `kit.credentials.delete()`.

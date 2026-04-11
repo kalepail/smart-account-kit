@@ -1,0 +1,121 @@
+---
+title: Error Handling
+description: Handle SDK errors with typed error classes and error codes.
+---
+
+## Overview
+
+Smart Account Kit uses typed error classes that extend `SmartAccountError`. Catch them specifically to give users clear, actionable feedback.
+
+## Error Classes
+
+```typescript
+import {
+  SmartAccountError,
+  WalletNotConnectedError,
+  CredentialNotFoundError,
+  SignerNotFoundError,
+  SimulationError,
+  SubmissionError,
+  ValidationError,
+  WebAuthnError,
+  SessionError,
+} from 'smart-account-kit';
+```
+
+| Class | When thrown |
+|-------|-------------|
+| `WalletNotConnectedError` | A method requiring a connected wallet is called before connecting |
+| `CredentialNotFoundError` | The requested credential ID is not in storage |
+| `SignerNotFoundError` | The signer cannot be found on-chain |
+| `SimulationError` | Soroban simulation rejected the transaction |
+| `SubmissionError` | Transaction submission to the network failed |
+| `ValidationError` | Input validation failed |
+| `WebAuthnError` | WebAuthn browser API failed or user cancelled |
+| `SessionError` | Session restore or save failed |
+
+## Usage
+
+### Catching specific errors
+
+```typescript
+import {
+  WalletNotConnectedError,
+  SimulationError,
+  WebAuthnError,
+  SubmissionError,
+} from 'smart-account-kit';
+
+try {
+  await kit.transfer(tokenContract, recipient, amount);
+} catch (error) {
+  if (error instanceof WalletNotConnectedError) {
+    showConnectPrompt();
+  } else if (error instanceof WebAuthnError) {
+    // User cancelled the passkey prompt or the device rejected it
+    showToast('Authentication cancelled or failed', 'warning');
+  } else if (error instanceof SimulationError) {
+    showToast('Transaction simulation failed: ' + error.message, 'error');
+  } else if (error instanceof SubmissionError) {
+    showToast('Transaction failed to submit', 'error');
+  } else {
+    throw error; // Re-throw unknown errors
+  }
+}
+```
+
+### Using error codes
+
+Each error class carries an `errorCode` property:
+
+```typescript
+import { SmartAccountError, SmartAccountErrorCode } from 'smart-account-kit';
+
+try {
+  await kit.signAndSubmit(tx);
+} catch (error) {
+  if (error instanceof SmartAccountError) {
+    switch (error.errorCode) {
+      case SmartAccountErrorCode.WALLET_NOT_CONNECTED:
+        // ...
+        break;
+      case SmartAccountErrorCode.SIMULATION_FAILED:
+        // ...
+        break;
+      default:
+        console.error('Unhandled SDK error:', error.errorCode, error.message);
+    }
+  }
+}
+```
+
+### `wrapError` utility
+
+Wrap unknown caught values into `SmartAccountError`:
+
+```typescript
+import { wrapError } from 'smart-account-kit';
+
+try {
+  await someOperation();
+} catch (err) {
+  const wrapped = wrapError(err);
+  console.error(wrapped.errorCode, wrapped.message);
+}
+```
+
+## WebAuthn Cancellation
+
+`WebAuthnError` is thrown when the user dismisses the passkey prompt or the browser rejects the WebAuthn ceremony. Always handle it gracefully - it's expected user behaviour, not a bug:
+
+```typescript
+try {
+  await kit.connectWallet({ prompt: true });
+} catch (error) {
+  if (error instanceof WebAuthnError) {
+    // User cancelled - stay on the connect screen
+    return;
+  }
+  throw error;
+}
+```

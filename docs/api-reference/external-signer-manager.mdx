@@ -1,0 +1,119 @@
+---
+title: ExternalSignerManager
+description: Manage G-address (delegated) signers via kit.externalSigners.
+---
+
+## Overview
+
+`ExternalSignerManager` manages Stellar G-address signers - either raw keypairs or connected wallet extensions. Access it via `kit.externalSigners`.
+
+```typescript
+// Add a keypair (in-memory only)
+kit.externalSigners.addFromSecret('SXXX...');
+
+// Connect an external wallet (e.g. Freighter)
+await kit.externalSigners.addFromWallet(walletAdapter);
+```
+
+## Methods
+
+### `addFromSecret()`
+
+Add a Stellar keypair as an external signer. Stored in memory only - not persisted to storage.
+
+```typescript
+kit.externalSigners.addFromSecret(secretKey: string);
+```
+
+<Warning>
+  This method is primarily for testing and development. Never use it with real secret keys in production.
+</Warning>
+
+### `addFromWallet()`
+
+Connect an external wallet (e.g. Freighter, Lobstr) as a signer.
+
+```typescript
+await kit.externalSigners.addFromWallet(adapter: ExternalWalletAdapter);
+```
+
+See [Wallet Adapters](/advanced/wallet-adapters) for available adapters.
+
+### `restoreConnections()`
+
+Restore previously persisted wallet connections on page load.
+
+```typescript
+await kit.externalSigners.restoreConnections();
+```
+
+### `canSignFor()`
+
+Check if a signer is available for a given G-address.
+
+```typescript
+const can = kit.externalSigners.canSignFor(address: string); // boolean
+```
+
+### `signAuthEntry()`
+
+Sign a single auth entry using the signer for the given address.
+
+```typescript
+const signed = await kit.externalSigners.signAuthEntry(
+  address: string,
+  authEntry: xdr.SorobanAuthorizationEntry
+);
+```
+
+### `getAll()`
+
+Return all registered external signers.
+
+```typescript
+const signers = kit.externalSigners.getAll(); // ConnectedWallet[]
+```
+
+### `remove()`
+
+Remove an external signer by address.
+
+```typescript
+kit.externalSigners.remove(address: string);
+```
+
+## Types
+
+```typescript
+import type { ExternalWalletAdapter, ConnectedWallet } from 'smart-account-kit';
+
+interface ExternalWalletAdapter {
+  getAddress(): Promise<string>;
+  signAuthEntry(authEntry: xdr.SorobanAuthorizationEntry): Promise<xdr.SorobanAuthorizationEntry>;
+  disconnect?(): Promise<void>;
+}
+
+interface ConnectedWallet {
+  address: string;
+  adapter: ExternalWalletAdapter;
+}
+```
+
+## StellarWalletsKit Integration
+
+The SDK ships with a `StellarWalletsKitAdapter` for first-class `@creit-tech/stellar-wallets-kit` support:
+
+```typescript
+import { StellarWalletsKitAdapter } from 'smart-account-kit';
+
+const adapter = new StellarWalletsKitAdapter({
+  kit: stellarWalletsKit,
+  onConnectionChange: (connected) => {
+    console.log('External wallet:', connected ? 'connected' : 'disconnected');
+  },
+});
+
+await kit.externalSigners.addFromWallet(adapter);
+```
+
+See [Wallet Adapters](/advanced/wallet-adapters) for the full guide.

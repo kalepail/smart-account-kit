@@ -185,5 +185,18 @@ export type {
 export { StellarWalletsKitAdapter } from "./wallet-adapter";
 export type { StellarWalletsKitAdapterConfig } from "./wallet-adapter";
 
+// Invocation tree utilities — for inspecting auth_context structure and
+// determining contextRuleIds before signing transactions with sub-invocations.
+export {
+  countAuthContexts,
+  walkInvocationTree,
+  validateContextRuleIds,
+  hintContextRuleIds,
+  resolveContextRuleIds,
+  type InvocationNode,
+  type ContextRuleMatch,
+  type InvocationContextHint,
+} from "./kit/invocation-utils";
+
 // Re-export stellar-sdk types for convenience
 export type { AssembledTransaction } from "@stellar/stellar-sdk/contract";

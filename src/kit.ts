@@ -122,8 +122,13 @@ import {
 import { convertPolicyParams, buildPoliciesScVal } from "./kit/policies-ops";
 import {
   findWebAuthnSignerForCredential,
+  listContextRules,
   resolveContextRuleIdsForEntry,
 } from "./kit/context-rules";
+import {
+  hintContextRuleIds as hintContextRuleIdsFromTree,
+  type InvocationContextHint,
+} from "./kit/invocation-utils";
 import { validateAddress, validateAmount, xlmToStroops } from "./utils";
 
 
@@ -1211,6 +1216,91 @@ export class SmartAccountKit {
   ): Promise<TransactionResult> {
     const transaction = await this.execute(target, targetFn, targetArgs);
     return this.signAndSubmit(transaction, options);
+  }
+
+  // ==========================================================================
+  // Invocation Tree Utilities
+  // ==========================================================================
+
+  /**
+   * Get per-node rule suggestions for a multi-contract invocation tree.
+   *
+   * Walks the invocation tree depth-first, fetches all on-chain context rules,
+   * and matches each node against the rules by specificity:
+   * 1. `CallContract(address)` — most specific
+   * 2. `CreateContract(wasmHash)` — intermediate
+   * 3. `Default` — catch-all
+   *
+   * Use this to inspect which rules apply before signing, or to let users
+   * choose when multiple rules match a single node.
+   *
+   * @param authEntry - The authorization entry to inspect
+   * @param options - Optional settings
+   * @returns Array of hints, one per auth_context node in the tree
+   *
+   * @example
+   * ```typescript
+   * const hints = await kit.hintContextRuleIds(authEntry);
+   * // hints[0].suggestedRuleId = 1  (CallContract rule for deposit contract)
+   * // hints[1].suggestedRuleId = 0  (Default rule for transfer)
+   *
+   * const ruleIds = hints.map(h => h.suggestedRuleId);
+   * await kit.signAndSubmit(tx, { resolveContextRuleIds: () => ruleIds });
+   * ```
+   */
+  async hintContextRuleIds(
+    authEntry: xdr.SorobanAuthorizationEntry,
+    options?: {
+      /** Rule ID used when no rule matches a node (default 0) */
+      defaultRuleId?: number;
+    }
+  ): Promise<InvocationContextHint[]> {
+    const { wallet, contractId } = this.requireWallet();
+    const discoveryDeps = {
+      getContractDetailsFromIndexer: () => this.getContractDetailsFromIndexer(contractId),
+      probeRuleIds: this.probeRuleIds,
+      rpc: this.rpc,
+      contractId,
+      networkPassphrase: this.networkPassphrase,
+      timeoutInSeconds: this.timeoutInSeconds,
+    };
+    const rules = await listContextRules(wallet, discoveryDeps);
+
+    return hintContextRuleIdsFromTree(
+      authEntry.rootInvocation(),
+      rules,
+      options?.defaultRuleId
+    );
+  }
+
+  /**
+   * Auto-resolve context rule IDs for every auth_context in an invocation tree.
+   *
+   * This is the non-interactive version of {@link hintContextRuleIds} — it
+   * returns only the suggested IDs. Use `hintContextRuleIds` when you need to
+   * inspect or override individual suggestions.
+   *
+   * @param authEntry - The authorization entry to resolve
+   * @param options - Optional settings
+   * @returns Array of rule IDs, one per auth_context, ready to use as `contextRuleIds`
+   *
+   * @example
+   * ```typescript
+   * const ruleIds = await kit.resolveContextRuleIds(authEntry);
+   * // -> [1, 0]  (deposit contract: rule 1, transfer: default rule 0)
+   *
+   * await kit.signAndSubmit(tx, { resolveContextRuleIds: () => ruleIds });
+   * ```
+   */
+  async resolveContextRuleIds(
+    authEntry: xdr.SorobanAuthorizationEntry,
+    options?: {
+      /** Rule ID used when no rule matches a node (default 0) */
+      defaultRuleId?: number;
+    }
+  ): Promise<number[]> {
+    const hints = await this.hintContextRuleIds(authEntry, options);
+    return hints.map((h) => h.suggestedRuleId);
   }
 
   // ==========================================================================

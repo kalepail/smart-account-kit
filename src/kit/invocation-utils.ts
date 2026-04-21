@@ -42,6 +42,12 @@
 import { Address, xdr } from "@stellar/stellar-sdk";
 import type { ContextRule } from "smart-account-kit-bindings";
 
+const CONTEXT_TYPE_SPECIFICITY: Record<string, number> = {
+  CallContract: 0,
+  CreateContract: 1,
+  Default: 2,
+};
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -116,11 +122,7 @@ export interface InvocationContextHint {
 export function countAuthContexts(
   invocation: xdr.SorobanAuthorizedInvocation
 ): number {
-  let count = 1;
-  for (const sub of invocation.subInvocations()) {
-    count += countAuthContexts(sub);
-  }
-  return count;
+  return walkInvocationTree(invocation).length;
 }
 
 /**
@@ -190,10 +192,9 @@ export function validateContextRuleIds(
   contextRuleIds: number[],
   invocation: xdr.SorobanAuthorizedInvocation
 ): void {
-  const contextCount = countAuthContexts(invocation);
-  if (contextRuleIds.length === contextCount) return;
-
   const nodes = walkInvocationTree(invocation);
+  if (contextRuleIds.length === nodes.length) return;
+
   const treeLines = nodes.map(
     (n) =>
       `  [${n.index}] ${
@@ -205,11 +206,11 @@ export function validateContextRuleIds(
 
   throw new Error(
     `contextRuleIds length (${contextRuleIds.length}) does not match ` +
-      `auth_contexts count (${contextCount}).\n` +
-      `Invocation tree — ${contextCount} auth_context${contextCount === 1 ? "" : "s"} (depth-first):\n` +
+      `auth_contexts count (${nodes.length}).\n` +
+      `Invocation tree — ${nodes.length} auth_context${nodes.length === 1 ? "" : "s"} (depth-first):\n` +
       treeLines.join("\n") +
       "\n" +
-      `Pass exactly ${contextCount} rule ID${contextCount === 1 ? "" : "s"}, e.g. ` +
+      `Pass exactly ${nodes.length} rule ID${nodes.length === 1 ? "" : "s"}, e.g. ` +
       `contextRuleIds: [${nodes.map(() => "0").join(", ")}]\n` +
       `Tip: use kit.hintContextRuleIds(authEntry) to get per-node suggestions.`
   );
@@ -284,13 +285,10 @@ export function hintContextRuleIds(
       }
     }
 
-    const specificity: Record<string, number> = {
-      CallContract: 0,
-      CreateContract: 1,
-      Default: 2,
-    };
     matchingRules.sort(
-      (a, b) => specificity[a.contextType] - specificity[b.contextType]
+      (a, b) =>
+        CONTEXT_TYPE_SPECIFICITY[a.contextType] -
+        CONTEXT_TYPE_SPECIFICITY[b.contextType]
     );
 
     const suggestedRuleId =

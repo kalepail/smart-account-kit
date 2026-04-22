@@ -1,4 +1,4 @@
-import { Address, Keypair, xdr } from "@stellar/stellar-sdk";
+import { Address, Keypair, hash, xdr } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 import type { ContextRule, ContextRuleType, Signer } from "smart-account-kit-bindings";
 import {
@@ -61,6 +61,31 @@ function makeAuthEntry(
       })
     ),
     rootInvocation,
+  });
+}
+
+function makeCreateContractInvocation(
+  wasmHash: Buffer,
+  subInvocations: xdr.SorobanAuthorizedInvocation[] = []
+): xdr.SorobanAuthorizedInvocation {
+  return new xdr.SorobanAuthorizedInvocation({
+    function:
+      xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeCreateContractHostFn(
+        new xdr.CreateContractArgs({
+          contractIdPreimage:
+            xdr.ContractIdPreimage.contractIdPreimageFromAddress(
+              new xdr.ContractIdPreimageFromAddress({
+                address: xdr.ScAddress.scAddressTypeAccount(
+                  xdr.PublicKey.publicKeyTypeEd25519(Buffer.alloc(32))
+                ),
+                salt: Buffer.alloc(32),
+              })
+            ),
+          executable:
+            xdr.ContractExecutable.contractExecutableWasm(wasmHash),
+        })
+      ),
+    subInvocations,
   });
 }
 
@@ -141,6 +166,31 @@ describe("invocation-utils", () => {
       { index: 1, contractAddress: CONTRACT_B, functionName: "deposit" },
       { index: 2, contractAddress: CONTRACT_C, functionName: "transfer" },
     ]);
+  });
+
+  it("walks a create-contract invocation and populates wasmHash", () => {
+    const wasmHash = hash(Buffer.from("test-wasm"));
+    const invocation = makeCreateContractInvocation(wasmHash);
+    const nodes = walkInvocationTree(invocation);
+
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].contractAddress).toBeUndefined();
+    expect(nodes[0].functionName).toBeUndefined();
+    expect(nodes[0].wasmHash).toEqual(wasmHash);
+  });
+
+  it("walks a mixed tree with contract calls and create-contract", () => {
+    const wasmHash = hash(Buffer.from("deploy"));
+    const invocation = makeContractInvocation(CONTRACT_A, "deploy", [
+      makeCreateContractInvocation(wasmHash),
+    ]);
+    const nodes = walkInvocationTree(invocation);
+
+    expect(nodes).toHaveLength(2);
+    expect(nodes[0].contractAddress).toBe(CONTRACT_A);
+    expect(nodes[0].wasmHash).toBeUndefined();
+    expect(nodes[1].contractAddress).toBeUndefined();
+    expect(nodes[1].wasmHash).toEqual(wasmHash);
   });
 
   // ==========================================================================
@@ -262,6 +312,37 @@ describe("invocation-utils", () => {
     expect(hints[1].suggestedRuleId).toBe(0);
     expect(hints[1].contractAddress).toBe(CONTRACT_B);
     expect(hints[1].functionName).toBe("transfer");
+  });
+
+  it("matches a CreateContract rule to a create-contract invocation", () => {
+    const wasmHash = hash(Buffer.from("test-wasm"));
+    const invocation = makeCreateContractInvocation(wasmHash);
+    const rules = [
+      makeRule(0, { tag: "Default", values: undefined }, "default"),
+      makeRule(1, { tag: "CreateContract", values: [wasmHash] }, "deployer"),
+    ];
+
+    const hints = hintContextRuleIds(invocation, rules);
+
+    expect(hints).toHaveLength(1);
+    expect(hints[0].suggestedRuleId).toBe(1);
+    expect(hints[0].matchingRules[0].contextType).toBe("CreateContract");
+    expect(hints[0].matchingRules[1].contextType).toBe("Default");
+  });
+
+  it("does not match a CreateContract rule to a contract-call invocation", () => {
+    const wasmHash = hash(Buffer.from("test-wasm"));
+    const invocation = makeContractInvocation(CONTRACT_A, "transfer");
+    const rules = [
+      makeRule(0, { tag: "Default", values: undefined }),
+      makeRule(1, { tag: "CreateContract", values: [wasmHash] }),
+    ];
+
+    const hints = hintContextRuleIds(invocation, rules);
+
+    expect(hints[0].suggestedRuleId).toBe(0);
+    expect(hints[0].matchingRules).toHaveLength(1);
+    expect(hints[0].matchingRules[0].contextType).toBe("Default");
   });
 
   it("includes node metadata in each hint", () => {

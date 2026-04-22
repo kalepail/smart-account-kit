@@ -63,6 +63,8 @@ export interface InvocationNode {
   contractAddress?: string;
   /** Function name for contract-function invocations, undefined otherwise. */
   functionName?: string;
+  /** WASM hash for create-contract invocations, undefined otherwise. */
+  wasmHash?: Buffer;
 }
 
 /**
@@ -153,13 +155,19 @@ function walkRecursive(
 ): void {
   const fn = invocation.function();
   const node: InvocationNode = { index: nodes.length };
+  const switchName = fn.switch().name;
 
-  if (fn.switch().name === "sorobanAuthorizedFunctionTypeContractFn") {
+  if (switchName === "sorobanAuthorizedFunctionTypeContractFn") {
     const contractFn = fn.contractFn();
     node.contractAddress = Address.fromScAddress(
       contractFn.contractAddress()
     ).toString();
     node.functionName = contractFn.functionName().toString();
+  } else if (switchName.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
+    const wasmHash = extractCreateContractWasmHash(fn);
+    if (wasmHash) {
+      node.wasmHash = wasmHash;
+    }
   }
 
   nodes.push(node);
@@ -167,6 +175,62 @@ function walkRecursive(
   for (const sub of invocation.subInvocations()) {
     walkRecursive(sub, nodes);
   }
+}
+
+function extractCreateContractWasmHash(
+  fn: xdr.SorobanAuthorizedFunction
+): Buffer | null {
+  const candidates: Array<unknown> = [];
+  const fnAny = fn as unknown as {
+    createContractHostFn?: () => unknown;
+    createContractWithCtorHostFn?: () => unknown;
+    createContractWithConstructorHostFn?: () => unknown;
+  };
+
+  if (typeof fnAny.createContractHostFn === "function") {
+    candidates.push(fnAny.createContractHostFn());
+  }
+  if (typeof fnAny.createContractWithCtorHostFn === "function") {
+    candidates.push(fnAny.createContractWithCtorHostFn());
+  }
+  if (typeof fnAny.createContractWithConstructorHostFn === "function") {
+    candidates.push(fnAny.createContractWithConstructorHostFn());
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+
+    const ctx = candidate as { executable?: unknown };
+    const executable = typeof ctx.executable === "function"
+      ? (ctx.executable as () => unknown)()
+      : ctx.executable;
+
+    if (!executable || typeof executable !== "object") {
+      continue;
+    }
+
+    const execAny = executable as {
+      switch?: () => { name: string };
+      wasm?: (() => Buffer) | Buffer;
+      wasmHash?: (() => Buffer) | Buffer;
+    };
+    const execSwitch = execAny.switch?.();
+
+    if (execSwitch?.name !== "contractExecutableWasm") {
+      continue;
+    }
+
+    const hash =
+      (typeof execAny.wasmHash === "function" ? execAny.wasmHash() : execAny.wasmHash) ??
+      (typeof execAny.wasm === "function" ? execAny.wasm() : execAny.wasm);
+    if (hash) {
+      return Buffer.from(hash);
+    }
+  }
+
+  return null;
 }
 
 // ============================================================================

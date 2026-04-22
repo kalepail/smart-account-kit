@@ -22,6 +22,7 @@ import {
 } from "../signer-utils";
 import type { ContractDetailsResponse } from "../indexer";
 import { BASE_FEE } from "../constants";
+import { walkInvocationTree } from "./invocation-utils";
 
 type ContextRuleQueryClient = {
   get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule>>;
@@ -78,37 +79,17 @@ export function contextRuleTypeMatches(
 export function buildInvocationContextTypes(
   entry: xdr.SorobanAuthorizationEntry
 ): ContextRuleType[] {
-  const contexts: ContextRuleType[] = [];
-
-  const walk = (invocation: xdr.SorobanAuthorizedInvocation) => {
-    const fn = invocation.function();
-    const switchName = fn.switch().name;
-
-    if (switchName === "sorobanAuthorizedFunctionTypeContractFn") {
-      const args = fn.contractFn();
-      contexts.push({
-        tag: "CallContract",
-        values: [Address.fromScAddress(args.contractAddress()).toString()],
-      });
-    } else if (switchName.startsWith("sorobanAuthorizedFunctionTypeCreateContract")) {
-      const wasmHash = extractCreateContractWasmHash(fn);
-      if (!wasmHash) {
-        throw new Error("Unable to extract WASM hash from create-contract authorization entry");
-      }
-
-      contexts.push({
-        tag: "CreateContract",
-        values: [wasmHash],
-      });
+  return walkInvocationTree(entry.rootInvocation()).map((node) => {
+    if (node.contractAddress) {
+      return { tag: "CallContract", values: [node.contractAddress] } as ContextRuleType;
     }
-
-    for (const sub of invocation.subInvocations()) {
-      walk(sub);
+    if (node.wasmHash) {
+      return { tag: "CreateContract", values: [node.wasmHash] } as ContextRuleType;
     }
-  };
-
-  walk(entry.rootInvocation());
-  return contexts;
+    throw new Error(
+      "Unable to determine context type for invocation node"
+    );
+  });
 }
 
 function hasRpcReadConfig(
@@ -556,59 +537,6 @@ export async function resolveContextRuleIdsForEntry(
       `Provide contextRuleIds explicitly. Matched ${candidates.length} rule(s)${ids ? `: ${ids}` : ""}.`
     );
   });
-}
-
-function extractCreateContractWasmHash(
-  fn: xdr.SorobanAuthorizedFunction
-): Buffer | null {
-  const candidates: Array<unknown> = [];
-  const fnAny = fn as unknown as {
-    createContractHostFn?: () => unknown;
-    createContractWithCtorHostFn?: () => unknown;
-    createContractWithConstructorHostFn?: () => unknown;
-  };
-
-  if (typeof fnAny.createContractHostFn === "function") {
-    candidates.push(fnAny.createContractHostFn());
-  }
-  if (typeof fnAny.createContractWithCtorHostFn === "function") {
-    candidates.push(fnAny.createContractWithCtorHostFn());
-  }
-  if (typeof fnAny.createContractWithConstructorHostFn === "function") {
-    candidates.push(fnAny.createContractWithConstructorHostFn());
-  }
-
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") {
-      continue;
-    }
-
-    const ctx = candidate as { executable?: unknown };
-    const executable = typeof ctx.executable === "function"
-      ? (ctx.executable as () => unknown)()
-      : ctx.executable;
-
-    if (!executable || typeof executable !== "object") {
-      continue;
-    }
-
-    const execAny = executable as {
-      switch?: () => { name: string };
-      wasm?: (() => Buffer) | Buffer;
-    };
-    const execSwitch = execAny.switch?.();
-
-    if (execSwitch?.name !== "contractExecutableWasm") {
-      continue;
-    }
-
-    const wasm = typeof execAny.wasm === "function" ? execAny.wasm() : execAny.wasm;
-    if (wasm) {
-      return Buffer.from(wasm);
-    }
-  }
-
-  return null;
 }
 
 function isMissingContextRuleError(error: unknown): boolean {

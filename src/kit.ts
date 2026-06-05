@@ -124,6 +124,7 @@ import {
   findWebAuthnSignerForCredential,
   resolveContextRuleIdsForEntry,
 } from "./kit/context-rules";
+import { normalizeSignatureExpirationLedger } from "./kit/auth-payload";
 import { validateAddress, validateAmount, xlmToStroops } from "./utils";
 
 
@@ -669,7 +670,7 @@ export class SmartAccountKit {
    */
   private async calculateExpiration(): Promise<number> {
     const { sequence } = await this.rpc.getLatestLedger();
-    return sequence + this.signatureExpirationLedgers;
+    return normalizeSignatureExpirationLedger(sequence + this.signatureExpirationLedgers);
   }
 
   /**

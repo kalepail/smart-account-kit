@@ -21,7 +21,12 @@ import {
   FRIENDBOT_URL,
   LEDGERS_PER_HOUR,
 } from "../constants";
-import { buildAddressSignatureScVal } from "./auth-payload";
+import {
+  buildAddressSignatureScVal,
+  buildSignaturePreimage,
+  createAddressCredentials,
+  getAddressCredentials,
+} from "./auth-payload";
 import { validateAddress, validateAmount, xlmToStroops, stroopsToXlm } from "../utils";
 
 type ResolveContextRuleIds = (
@@ -566,7 +571,7 @@ export async function fundWallet(
     const expirationLedger = currentLedger + LEDGERS_PER_HOUR; // ~1 hour
 
     for (const entry of authEntries) {
-      const credType = entry.credentials().switch().name;
+      const credType = entry.credentials().switch().name as string;
 
       // For source_account credentials, convert to Address credentials
       // so the Relayer can use its own channel accounts
@@ -574,50 +579,53 @@ export async function fundWallet(
         // Generate a nonce for the new Address credential
         const nonce = xdr.Int64.fromString(Date.now().toString());
 
-        const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-          new xdr.HashIdPreimageSorobanAuthorization({
-            networkId: hash(Buffer.from(deps.networkPassphrase)),
-            nonce,
-            signatureExpirationLedger: expirationLedger,
-            invocation: entry.rootInvocation(),
-          })
-        );
-        const payload = hash(preimage.toXDR());
-        const signature = tempKeypair.sign(payload);
-
         // Create new Address credentials entry to replace source_account
         const addressEntry = new xdr.SorobanAuthorizationEntry({
-          credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(
+          credentials: createAddressCredentials(
             new xdr.SorobanAddressCredentials({
               address: Address.fromString(tempKeypair.publicKey()).toScAddress(),
               nonce,
               signatureExpirationLedger: expirationLedger,
-              signature: buildAddressSignatureScVal(
-                tempKeypair.rawPublicKey(),
-                signature
-              ),
+              signature: xdr.ScVal.scvVoid(),
             })
           ),
           rootInvocation: entry.rootInvocation(),
         });
+        const preimage = buildSignaturePreimage(
+          deps.networkPassphrase,
+          addressEntry,
+          expirationLedger
+        );
+        const payload = hash(preimage.toXDR());
+        const signature = tempKeypair.sign(payload);
+        getAddressCredentials(addressEntry.credentials()).signature(
+          buildAddressSignatureScVal(
+            tempKeypair.rawPublicKey(),
+            signature
+          )
+        );
 
         signedAuthEntries.push(addressEntry);
         continue;
       }
 
+      if (credType === "sorobanCredentialsAddressWithDelegates") {
+        return {
+          success: false,
+          hash: "",
+          error: "ADDRESS_WITH_DELEGATES auth entries are not supported by fundWallet() yet",
+        };
+      }
+
       // For Address credentials, sign them
-      if (credType === "sorobanCredentialsAddress") {
-        const credentials = entry.credentials().address();
+      if (
+        credType === "sorobanCredentialsAddress" ||
+        credType === "sorobanCredentialsAddressV2"
+      ) {
+        const credentials = getAddressCredentials(entry.credentials());
         credentials.signatureExpirationLedger(expirationLedger);
 
-        const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-          new xdr.HashIdPreimageSorobanAuthorization({
-            networkId: hash(Buffer.from(deps.networkPassphrase)),
-            nonce: credentials.nonce(),
-            signatureExpirationLedger: credentials.signatureExpirationLedger(),
-            invocation: entry.rootInvocation(),
-          })
-        );
+        const preimage = buildSignaturePreimage(deps.networkPassphrase, entry, expirationLedger);
         const payload = hash(preimage.toXDR());
         const signature = tempKeypair.sign(payload);
 

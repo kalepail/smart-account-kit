@@ -22,6 +22,8 @@ import {
   buildAuthDigest,
   buildSignaturePayload,
   buildWebAuthnSignatureBytes,
+  getAddressCredentials,
+  normalizeSignatureExpirationLedger,
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
@@ -127,8 +129,17 @@ export async function signAuthEntry(
   }
 ): Promise<xdr.SorobanAuthorizationEntry> {
   const normalizedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-  const credentials = normalizedEntry.credentials().address();
-  const expiration = options?.expiration ?? await deps.calculateExpiration();
+  const credentialType = normalizedEntry.credentials().switch().name as string;
+  if (credentialType === "sorobanCredentialsAddressWithDelegates") {
+    throw new Error(
+      "ADDRESS_WITH_DELEGATES auth entries are not supported by WebAuthn signing yet"
+    );
+  }
+
+  const credentials = getAddressCredentials(normalizedEntry.credentials());
+  const expiration = normalizeSignatureExpirationLedger(
+    options?.expiration ?? await deps.calculateExpiration()
+  );
   credentials.signatureExpirationLedger(expiration);
   const authPayload = readAuthPayload(credentials.signature());
 

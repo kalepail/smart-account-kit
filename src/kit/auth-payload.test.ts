@@ -1,9 +1,17 @@
-import { Address, Keypair, hash, xdr } from "@stellar/stellar-sdk";
+import {
+  Address,
+  Keypair,
+  buildAuthorizationEntryPreimage,
+  buildWithDelegatesEntry,
+  hash,
+  xdr,
+} from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 import type { AuthPayload, Signer } from "smart-account-kit-bindings";
 import {
   buildAuthDigest,
   buildAddressSignatureScVal,
+  buildSignaturePreimage,
   buildSignaturePayload,
   createAddressCredentials,
   getAddressCredentials,
@@ -127,12 +135,16 @@ describe("auth-payload", () => {
     expect(Address.fromScAddress(credentials.address()).toString()).toBe(account);
   });
 
-  it("requires explicit opt-in for ADDRESS_V2 credentials", () => {
+  it("creates ADDRESS_V2 credentials only with explicit opt-in", () => {
     const credentials = getAddressCredentials(makeAuthEntry(makeAccount(5)).credentials());
+    const legacyCredentials = createAddressCredentials(credentials);
+    const addressV2Credentials = createAddressCredentials(credentials, {
+      version: "address_v2",
+    });
 
-    expect(() => createAddressCredentials(credentials, { version: "address_v2" })).toThrow(
-      "ADDRESS_V2 credentials require an SDK with Protocol 27 credential support"
-    );
+    expect(legacyCredentials.switch().name).toBe("sorobanCredentialsAddress");
+    expect(addressV2Credentials.switch().name).toBe("sorobanCredentialsAddressV2");
+    expect(getAddressCredentials(addressV2Credentials).nonce().toString()).toBe("7");
   });
 
   it("rejects unsupported address credential versions", () => {
@@ -143,26 +155,57 @@ describe("auth-payload", () => {
     ).toThrow("Unsupported Soroban address credential version: bogus");
   });
 
-  it("does not sign address-bound credentials without P27 preimage support", () => {
-    const credentials = getAddressCredentials(makeAuthEntry(makeAccount(7)).credentials());
-    const fakeAddressV2Entry = {
-      credentials: () => ({
-        switch: () => ({ name: "sorobanCredentialsAddressV2" }),
-        addressV2: () => credentials,
-      }),
-      rootInvocation: () => makeAuthEntry(makeAccount(8)).rootInvocation(),
-    } as unknown as xdr.SorobanAuthorizationEntry;
+  it("matches the SDK auth preimage helper for legacy ADDRESS credentials", () => {
+    const networkPassphrase = "Test SDF Network ; September 2015";
+    const entry = makeAuthEntry(makeAccount(7));
+    const expectedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
+    const preimage = buildSignaturePreimage(networkPassphrase, entry, 123);
+    const expected = buildAuthorizationEntryPreimage(expectedEntry, 123, networkPassphrase);
 
-    expect(() =>
-      buildSignaturePayload("Test SDF Network ; September 2015", fakeAddressV2Entry, 123)
-    ).toThrow(
-      "Address-bound Soroban auth credentials require an SDK with Protocol 27 auth preimage support"
+    expect(preimage.toXDR()).toEqual(expected.toXDR());
+    expect(preimage.switch().name).toBe("envelopeTypeSorobanAuthorization");
+    expect(getAddressCredentials(entry.credentials()).signatureExpirationLedger()).toBe(123);
+  });
+
+  it("matches the SDK auth preimage helper for ADDRESS_V2 credentials", () => {
+    const networkPassphrase = "Test SDF Network ; September 2015";
+    const baseEntry = makeAuthEntry(makeAccount(8));
+    const entry = new xdr.SorobanAuthorizationEntry({
+      credentials: createAddressCredentials(getAddressCredentials(baseEntry.credentials()), {
+        version: "address_v2",
+      }),
+      rootInvocation: baseEntry.rootInvocation(),
+    });
+    const expectedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
+    const preimage = buildSignaturePreimage(networkPassphrase, entry, 123);
+    const expected = buildAuthorizationEntryPreimage(expectedEntry, 123, networkPassphrase);
+
+    expect(preimage.toXDR()).toEqual(expected.toXDR());
+    expect(preimage.switch().name).toBe("envelopeTypeSorobanAuthorizationWithAddress");
+    expect(buildSignaturePayload(networkPassphrase, entry, 123)).toHaveLength(32);
+    expect(getAddressCredentials(entry.credentials()).signatureExpirationLedger()).toBe(123);
+  });
+
+  it("matches the SDK auth preimage helper for ADDRESS_WITH_DELEGATES credentials", () => {
+    const networkPassphrase = "Test SDF Network ; September 2015";
+    const delegatedEntry = buildWithDelegatesEntry({
+      entry: makeAuthEntry(makeAccount(14)),
+      validUntilLedgerSeq: 123,
+      delegates: [{ address: makeAccount(15) }],
+    });
+    const expectedEntry = xdr.SorobanAuthorizationEntry.fromXDR(delegatedEntry.toXDR());
+    const preimage = buildSignaturePreimage(networkPassphrase, delegatedEntry, 123);
+    const expected = buildAuthorizationEntryPreimage(expectedEntry, 123, networkPassphrase);
+
+    expect(delegatedEntry.credentials().switch().name).toBe(
+      "sorobanCredentialsAddressWithDelegates"
     );
-    expect(credentials.signatureExpirationLedger()).toBe(1);
+    expect(preimage.toXDR()).toEqual(expected.toXDR());
+    expect(preimage.switch().name).toBe("envelopeTypeSorobanAuthorizationWithAddress");
   });
 
   it("keeps the submitted expiration in sync with the signed payload", () => {
-    const entry = makeAuthEntry(makeAccount(9));
+    const entry = makeAuthEntry(makeAccount(16));
     const payload = buildSignaturePayload("Test SDF Network ; September 2015", entry, 123);
 
     expect(payload).toHaveLength(32);
@@ -170,7 +213,7 @@ describe("auth-payload", () => {
   });
 
   it("rounds fractional signature expirations up before XDR serialization", () => {
-    const entry = makeAuthEntry(makeAccount(10));
+    const entry = makeAuthEntry(makeAccount(17));
     const payload = buildSignaturePayload("Test SDF Network ; September 2015", entry, 123.2);
 
     expect(payload).toHaveLength(32);
@@ -178,7 +221,7 @@ describe("auth-payload", () => {
   });
 
   it("rejects non-finite signature expirations without mutating the entry", () => {
-    const entry = makeAuthEntry(makeAccount(11));
+    const entry = makeAuthEntry(makeAccount(18));
 
     expect(() =>
       buildSignaturePayload("Test SDF Network ; September 2015", entry, Number.NaN)
@@ -187,8 +230,8 @@ describe("auth-payload", () => {
   });
 
   it("rejects out-of-range signature expirations without mutating the entry", () => {
-    const negativeEntry = makeAuthEntry(makeAccount(12));
-    const oversizedEntry = makeAuthEntry(makeAccount(13));
+    const negativeEntry = makeAuthEntry(makeAccount(19));
+    const oversizedEntry = makeAuthEntry(makeAccount(20));
 
     expect(() =>
       buildSignaturePayload("Test SDF Network ; September 2015", negativeEntry, -1)

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import type { Buffer } from "buffer";
 import type { SmartAccountKit, StoredCredential, AssembledTransaction } from "smart-account-kit";
 import {
   createDelegatedSigner,

@@ -1,3 +1,4 @@
+import * as StellarSdk from "@stellar/stellar-sdk";
 import { Address, hash, xdr } from "@stellar/stellar-sdk";
 import type {
   AuthPayload,
@@ -21,6 +22,22 @@ export function buildSignaturePreimage(
 ): xdr.HashIdPreimage {
   const credentials = getAddressCredentials(entry.credentials());
   const normalizedExpiration = normalizeSignatureExpirationLedger(expiration);
+  const sdkAuth = StellarSdk as unknown as {
+    buildAuthorizationEntryPreimage?: (
+      entry: xdr.SorobanAuthorizationEntry,
+      validUntilLedgerSeq: number,
+      networkPassphrase: string
+    ) => xdr.HashIdPreimage;
+  };
+
+  if (sdkAuth.buildAuthorizationEntryPreimage) {
+    credentials.signatureExpirationLedger(normalizedExpiration);
+    return sdkAuth.buildAuthorizationEntryPreimage(
+      entry,
+      normalizedExpiration,
+      networkPassphrase
+    );
+  }
 
   const hashIdPreimage = xdr.HashIdPreimage as unknown as {
     envelopeTypeSorobanAuthorizationWithAddress?: (value: unknown) => xdr.HashIdPreimage;

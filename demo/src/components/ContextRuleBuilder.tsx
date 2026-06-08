@@ -1333,7 +1333,9 @@ export function ContextRuleBuilder({
                 {selectedPolicies.map((sp, index) => (
                   <div key={index} className="selected-policy-item">
                     <div className="selected-policy-header">
-                      <span className="policy-type-badge">{sp.policy.type}</span>
+                      <span className={`policy-type-badge policy-type-${sp.policy.type}`}>
+                        {sp.policy.type}
+                      </span>
                       <span className="policy-name">{sp.policy.name}</span>
                       <button
                         className="remove-btn"

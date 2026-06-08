@@ -255,8 +255,7 @@ export class MultiSignerManager {
         }
 
         let signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-        const signedCredentials = getAddressCredentials(signedEntry.credentials());
-        signedCredentials.signatureExpirationLedger(expiration);
+        getAddressCredentials(signedEntry.credentials()).signatureExpirationLedger(expiration);
         const selectedContractSigners = selectedSigners
           .map(({ signer }) => signer)
           .filter((signer): signer is ContractSigner => signer !== undefined);
@@ -284,6 +283,9 @@ export class MultiSignerManager {
             signer: passkeySigner.signer as ContractSigner | undefined,
           });
         }
+
+        const signedCredentials = getAddressCredentials(signedEntry.credentials());
+        signedCredentials.signatureExpirationLedger(expiration);
 
         for (const walletSigner of walletSigners) {
           if (!walletSigner.walletAddress) continue;

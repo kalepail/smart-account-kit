@@ -161,6 +161,28 @@ describe("context-rules", () => {
     expect(rules.map((rule) => rule.id)).toEqual([0]);
   });
 
+  it("falls back to direct probing when the best-effort indexer fails", async () => {
+    const delegated: Signer = {
+      tag: "Delegated",
+      values: [makeAccount(8)],
+    };
+    const wallet = makeWallet({
+      0: makeRule(0, { tag: "Default", values: undefined }, [delegated]),
+    });
+
+    const rules = await listContextRules(wallet, {
+      getContractDetailsFromIndexer: async () => {
+        throw new Error("Indexer request failed: 500");
+      },
+      probeRuleIds: {
+        maxRuleId: 4,
+        maxConsecutiveMisses: 2,
+      },
+    });
+
+    expect(rules.map((rule) => rule.id)).toEqual([0]);
+  });
+
   it("merges probed rule ids with stale indexer ids when probing is enabled", async () => {
     const delegated: Signer = {
       tag: "Delegated",

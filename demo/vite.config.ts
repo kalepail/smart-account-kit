@@ -16,14 +16,13 @@ export default defineConfig({
     // Ensure symlinks are resolved to prevent duplicate module instances
     preserveSymlinks: false,
     // Force Vite to use a single instance of these packages
-    dedupe: ["@stellar/stellar-sdk", "@stellar/stellar-base"],
+    dedupe: ["@stellar/stellar-sdk"],
   },
   optimizeDeps: {
     include: [
       "buffer",
       "@stellar/stellar-sdk",
       "@stellar/stellar-sdk/rpc",
-      "@stellar/stellar-base",
     ],
     esbuildOptions: {
       define: {

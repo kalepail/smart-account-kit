@@ -29,12 +29,18 @@ import { Account, Address, Keypair, Operation, TransactionBuilder, xdr } from "@
 import { MultiSignerManager } from "./multi-signer-manager";
 import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
 import {
+  getAddressCredentials,
+  readAuthPayload,
+  writeAuthPayload,
+} from "../kit/auth-payload";
+import {
   makeAccount,
   makeAddressAuthEntry,
   makeContract,
   makeDelegatedSigner,
   makeExternalSigner,
 } from "./test-utils";
+import { signersEqual } from "../signer-utils";
 
 function makeDeps() {
   const externalSigners = {
@@ -393,5 +399,88 @@ describe("MultiSignerManager", () => {
     expect(resolveContextRuleIdsForEntry).toHaveBeenCalledTimes(1);
     expect(deps.signAuthEntry).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ success: true, hash: "tx-3" });
+  });
+
+  it("preserves delegated wallet signers when passkey signing returns a cloned auth entry", async () => {
+    const deps = makeDeps();
+    const contractId = deps.getContractId();
+    const walletAddress = makeAccount(23);
+    const passkeySigner = makeExternalSigner(6, 7, 8);
+    const walletSigner = makeDelegatedSigner(23);
+    const preparedTx = { sign: vi.fn() };
+    deps.rpc.getLatestLedger.mockResolvedValue({ sequence: 500 });
+    deps.rpc.getAccount.mockResolvedValue(new Account(deps.deployerPublicKey, "1"));
+    deps.rpc.simulateTransaction.mockResolvedValue({ result: { auth: [] } });
+    deps.externalSigners.canSignFor.mockImplementation((address: string) => address === walletAddress);
+    deps.externalSigners.signAuthEntry.mockResolvedValue({
+      signedAuthEntry: Buffer.alloc(64, 8).toString("base64"),
+      signerAddress: walletAddress,
+    });
+    deps.sendAndPoll.mockResolvedValue({ success: true, hash: "tx-4" });
+    deps.signAuthEntry.mockImplementation(async (entry, options) => {
+      const clonedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
+      const credentials = getAddressCredentials(clonedEntry.credentials());
+      const signer = options?.signer;
+      expect(signer).toBeDefined();
+      credentials.signature(
+        writeAuthPayload({
+          context_rule_ids: options?.contextRuleIds ?? [],
+          signers: new Map([[signer!, Buffer.from("aa", "hex")]]),
+        })
+      );
+      return clonedEntry;
+    });
+    assembleTransactionMock.mockReturnValue({
+      build: () => preparedTx,
+    });
+    vi.mocked(resolveContextRuleIdsForEntry).mockResolvedValue([12]);
+    const manager = new MultiSignerManager(deps);
+
+    const result = await manager.operation(
+      {
+        built: {
+          operations: [{
+            type: "invokeHostFunction",
+            func: xdr.HostFunction.hostFunctionTypeInvokeContract(
+              new xdr.InvokeContractArgs({
+                contractAddress: Address.fromString(makeContract(45)).toScAddress(),
+                functionName: "ping",
+                args: [],
+              })
+            ),
+            auth: [makeAddressAuthEntry(contractId)],
+          }],
+        },
+      } as any,
+      [
+        {
+          signer: passkeySigner,
+          type: "passkey",
+          credentialId: Buffer.alloc(20, 8).toString("base64url"),
+        },
+        {
+          signer: walletSigner,
+          type: "wallet",
+          walletAddress,
+        },
+      ],
+      {}
+    );
+
+    expect(result).toEqual({ success: true, hash: "tx-4" });
+    const resimTx = deps.rpc.simulateTransaction.mock.calls[0][0] as any;
+    const submittedAuthEntry = resimTx.operations[0].auth[0] as xdr.SorobanAuthorizationEntry;
+    const authPayload = readAuthPayload(
+      getAddressCredentials(submittedAuthEntry.credentials()).signature()
+    );
+
+    const passkeySignature = Array.from(authPayload.signers.entries())
+      .find(([signer]) => signersEqual(signer, passkeySigner))?.[1];
+    const walletSignature = Array.from(authPayload.signers.entries())
+      .find(([signer]) => signersEqual(signer, walletSigner))?.[1];
+
+    expect(authPayload.context_rule_ids).toEqual([12]);
+    expect(passkeySignature).toEqual(Buffer.from("aa", "hex"));
+    expect(walletSignature).toEqual(Buffer.alloc(0));
   });
 });

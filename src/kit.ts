@@ -124,6 +124,7 @@ import {
   findWebAuthnSignerForCredential,
   resolveContextRuleIdsForEntry,
 } from "./kit/context-rules";
+import { normalizeSignatureExpirationLedger } from "./kit/auth-payload";
 import { validateAddress, validateAmount, xlmToStroops } from "./utils";
 
 
@@ -389,12 +390,18 @@ export class SmartAccountKit {
     if (config.indexerUrl === false) {
       this.indexer = null;
     } else if (typeof config.indexerUrl === "string") {
-      this.indexer = new IndexerClient({ baseUrl: config.indexerUrl });
+      this.indexer = new IndexerClient({
+        baseUrl: config.indexerUrl,
+        authToken: config.indexerAuthToken,
+      });
     } else {
       // Try to use default URL for this network
       const defaultUrl = DEFAULT_INDEXER_URLS[this.networkPassphrase];
       this.indexer = defaultUrl
-        ? new IndexerClient({ baseUrl: defaultUrl })
+        ? new IndexerClient({
+            baseUrl: defaultUrl,
+            authToken: config.indexerAuthToken,
+          })
         : null;
     }
 
@@ -669,7 +676,7 @@ export class SmartAccountKit {
    */
   private async calculateExpiration(): Promise<number> {
     const { sequence } = await this.rpc.getLatestLedger();
-    return sequence + this.signatureExpirationLedgers;
+    return normalizeSignatureExpirationLedger(sequence + this.signatureExpirationLedgers);
   }
 
   /**

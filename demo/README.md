@@ -19,13 +19,13 @@ The checked-in `.env.example` shows the current default deployment set used by t
 
 | Contract | Default value |
 |----------|---------------|
-| **Smart Account WASM Hash** | `8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611` |
-| **WebAuthn Verifier** | `CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU` |
-| **Ed25519 Verifier** | `CCJOUKLCZVCXS4VIBBEA7S3SPWZQS5DPE5A4YG67RA3Z7E3SJZAUJFQA` |
+| **Smart Account WASM Hash** | `1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a` |
+| **WebAuthn Verifier** | `CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F` |
+| **Ed25519 Verifier** | `CAAVTMCBXEIBPR64EAASKFXERVPYFZA2JYP5A3BG6PESWEFUJX5IHKN4` |
 | **Native XLM Token** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| **Threshold Policy** | `CB2WQXF2XXDGUV2CTVQ23RLN3ESI3IY5KKX3KVXWBNRTTWDHZM76NVKJ` |
-| **Spending Limit Policy** | `CBBZ2XP4LBDEO2EELTZKJSPQZDREFKCULL6CKIUQO53S42RZABOYQUK3` |
-| **Weighted Threshold Policy** | `CCF65VXVORNOZBRR3EG3GZYSFS3ALDG44CDYN5T5KRWKYX6RXLKLXER4` |
+| **Threshold Policy** | `CB3FATQKCIRIQOCYRUPCQ2KREQ7T4RPKS7EAEOZWPEPUKWEDRVROBCEG` |
+| **Spending Limit Policy** | `CABXBYJNZ7IUW4G3D6BND5YCAQF3ASSDMDAOKQQ63UYFSO7WUU2TIP5G` |
+| **Weighted Threshold Policy** | `CCMZ6X4KM3RC7HXWCZDTH7CMWIJXFPN6HLGKJBM63MCOW2AJ2V5W7YXY` |
 
 The demo does not pin a default smart-account contract ID. Smart accounts are deployed per wallet from the uploaded WASM hash because deployment requires constructor args for `signers` and `policies`. If you need to regenerate bindings from a specific deployed instance for debugging, you can set `VITE_ACCOUNT_CONTRACT_ID` locally in `.env`.
 
@@ -35,12 +35,12 @@ These are the latest uploaded testnet artifacts corresponding to the deployed co
 
 | Contract | Uploaded WASM hash |
 |----------|--------------------|
-| **Smart Account** | `8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611` |
-| **WebAuthn Verifier** | `f83d679f0ead1836b255a0f4160b9766065436a3b1afb9b15d73b646d68c0725` |
-| **Ed25519 Verifier** | `2c1dae0a0fd609d818df05fff5deff91c7565151d82b6259a61d03c8edfdeeca` |
-| **Threshold Policy** | `967dc8b1b2840a77e216243c60a7766c0fe737e6d6db47d7b210f3bf589f681a` |
-| **Spending Limit Policy** | `dfe58cb65409c25084706e71fde3a12dfadbafb93db3d3225fe8919f488d8cc8` |
-| **Weighted Threshold Policy** | `c16f644b40b3bcb0bc5371fe5949ccd51226179adeac8429e75a6e5a6ac68c6e` |
+| **Smart Account** | `1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a` |
+| **WebAuthn Verifier** | `e63a030d0f1a1481e36059a4837c433083b33e704c1f9625b7314795b6d72b76` |
+| **Ed25519 Verifier** | `60e8798db610bdaf3370d39ebda56ee1dc2c15ce1c3a9e28b528bfa24a06b477` |
+| **Threshold Policy** | `cb6c0bd9cd06abba05f924ff4157b41aa1dd3891803c7c93b3b158e20986e592` |
+| **Spending Limit Policy** | `e41b563c4454f5a6742acfa6d44e1ece96d443bb5f40efddd6ed05180210219a` |
+| **Weighted Threshold Policy** | `7565d0a585254be47001281baef5bbc5d539ccbe1c813196b3c45995a6c15b74` |
 
 ## Setup
 
@@ -54,7 +54,7 @@ pnpm dev
 
 Open `http://localhost:5173` in your browser.
 
-The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI, and leave `VITE_RELAYER_URL` blank if you do not want fee-sponsored submissions.
+The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. For mainnet, start from `.env.mainnet.example`. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI, and leave `VITE_RELAYER_URL` blank if you do not want fee-sponsored submissions.
 
 The SDK now auto-configures the hosted indexer for both Stellar testnet and mainnet when you use a known network passphrase. This demo still ships with testnet defaults, so a mainnet run also needs mainnet RPC and contract env values.
 

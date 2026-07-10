@@ -161,6 +161,13 @@ wait_for_log "Transfer successful" "Transfer failed" 120 || TRANSFER_STATUS=$?
 TRANSFER_LOG="$(log_box)"
 printf '%s\n' "$TRANSFER_LOG"
 
+if [[ "$SKIP_INDEXER" == "true" ]]; then
+  if [[ "$TRANSFER_STATUS" -ne 0 ]]; then
+    exit 10
+  fi
+  exit 0
+fi
+
 echo "Waiting for indexer to catch up"
 wait_for_indexed_contract "$CONTRACT_ID" 90 >/dev/null
 
@@ -204,10 +211,6 @@ INDEXER_BODY="$(wait_for_body_pattern "$CONTRACT_ID" "Lookup failed|Indexer look
 
 echo "=== ROOT DEMO LOG ==="
 printf '%s\n' "$TRANSFER_LOG"
-
-if [[ "$SKIP_INDEXER" == "true" ]]; then
-  exit 0
-fi
 
 echo "=== INDEXER PASSKEY BODY ==="
 printf '%s\n' "$PASSKEY_BODY"

@@ -36,7 +36,12 @@ import {
 import {
   buildAuthDigest,
   buildAddressSignatureScVal,
+  buildSignaturePreimage,
   buildSignaturePayload,
+  createAddressCredentials,
+  getAddressCredentials,
+  getAuthEntryAddress,
+  normalizeSignatureExpirationLedger,
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
@@ -142,15 +147,20 @@ export class MultiSignerManager {
     expiration: number
   ): Promise<xdr.SorobanAuthorizationEntry> {
     const signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-    signedEntry.credentials().address().signatureExpirationLedger(expiration);
+    const normalizedExpiration = normalizeSignatureExpirationLedger(expiration);
+    const credentialType = signedEntry.credentials().switch().name as string;
+    if (credentialType === "sorobanCredentialsAddressWithDelegates") {
+      throw new Error(
+        "ADDRESS_WITH_DELEGATES auth entries are not supported by wallet signing yet"
+      );
+    }
 
-    const preimage = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-      new xdr.HashIdPreimageSorobanAuthorization({
-        networkId: hash(Buffer.from(this.deps.networkPassphrase)),
-        nonce: signedEntry.credentials().address().nonce(),
-        signatureExpirationLedger: expiration,
-        invocation: signedEntry.rootInvocation(),
-      })
+    const credentials = getAddressCredentials(signedEntry.credentials());
+    credentials.signatureExpirationLedger(normalizedExpiration);
+    const preimage = buildSignaturePreimage(
+      this.deps.networkPassphrase,
+      signedEntry,
+      normalizedExpiration
     );
 
     const { signedAuthEntry } = await this.deps.externalSigners.signAuthEntry(
@@ -158,7 +168,7 @@ export class MultiSignerManager {
       authAddress
     );
 
-    signedEntry.credentials().address().signature(
+    credentials.signature(
       buildAddressSignatureScVal(
         Address.fromString(authAddress).toScAddress().accountId().ed25519(),
         Buffer.from(signedAuthEntry, "base64")
@@ -207,13 +217,25 @@ export class MultiSignerManager {
 
       for (const [authEntryIndex, entry] of authEntries.entries()) {
         const credentials = entry.credentials();
+        const credentialType = credentials.switch().name as string;
 
-        if (credentials.switch().name !== "sorobanCredentialsAddress") {
+        if (credentialType === "sorobanCredentialsAddressWithDelegates") {
+          return {
+            success: false,
+            hash: "",
+            error: "ADDRESS_WITH_DELEGATES auth entries are not supported by multi-signer signing yet",
+          };
+        }
+
+        if (
+          credentialType !== "sorobanCredentialsAddress" &&
+          credentialType !== "sorobanCredentialsAddressV2"
+        ) {
           signedAuthEntries.push(entry);
           continue;
         }
 
-        const authAddress = Address.fromScAddress(credentials.address().address()).toString();
+        const authAddress = getAuthEntryAddress(entry);
 
         if (authAddress !== contractId) {
           const walletSigner = walletSigners.find((signer) => signer.walletAddress === authAddress);
@@ -233,7 +255,7 @@ export class MultiSignerManager {
         }
 
         let signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(entry.toXDR());
-        signedEntry.credentials().address().signatureExpirationLedger(expiration);
+        getAddressCredentials(signedEntry.credentials()).signatureExpirationLedger(expiration);
         const selectedContractSigners = selectedSigners
           .map(({ signer }) => signer)
           .filter((signer): signer is ContractSigner => signer !== undefined);
@@ -262,6 +284,9 @@ export class MultiSignerManager {
           });
         }
 
+        const signedCredentials = getAddressCredentials(signedEntry.credentials());
+        signedCredentials.signatureExpirationLedger(expiration);
+
         for (const walletSigner of walletSigners) {
           if (!walletSigner.walletAddress) continue;
           if (!walletSigner.signer) {
@@ -273,7 +298,7 @@ export class MultiSignerManager {
           }
         }
 
-        const authPayload = readAuthPayload(signedEntry.credentials().address().signature());
+        const authPayload = readAuthPayload(signedCredentials.signature());
         if (authPayload.context_rule_ids.length === 0) {
           authPayload.context_rule_ids = resolvedContextRuleIds;
         }
@@ -282,7 +307,7 @@ export class MultiSignerManager {
           if (!walletSigner.walletAddress) continue;
           upsertAuthPayloadSigner(authPayload, walletSigner.signer as ContractSigner, Buffer.alloc(0));
         }
-        signedEntry.credentials().address().signature(writeAuthPayload(authPayload));
+        signedCredentials.signature(writeAuthPayload(authPayload));
         signedAuthEntries.push(signedEntry);
 
         if (walletSigners.length === 0) {
@@ -331,7 +356,7 @@ export class MultiSignerManager {
 
           signedAuthEntries.push(
             new xdr.SorobanAuthorizationEntry({
-              credentials: xdr.SorobanCredentials.sorobanCredentialsAddress(
+              credentials: createAddressCredentials(
                 new xdr.SorobanAddressCredentials({
                   address: Address.fromString(walletSigner.walletAddress).toScAddress(),
                   nonce: delegatedNonce,

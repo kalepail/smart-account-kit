@@ -1114,7 +1114,7 @@ button.small .spinner {
   text-transform: uppercase;
 }
 
-.policy-type-badge:has(+ .policy-name:contains("custom")) {
+.policy-type-badge.policy-type-custom {
   background: #8b5cf6;
 }
 

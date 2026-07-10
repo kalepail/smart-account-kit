@@ -375,8 +375,20 @@ export async function listContextRules(
   wallet: ContextRuleQueryClient,
   deps?: ContextRuleDiscoveryDeps
 ): Promise<ContextRule[]> {
-  const details = await deps?.getContractDetailsFromIndexer?.();
   const probeConfig = deps?.probeRuleIds;
+  let details: ContractDetailsResponse | null | undefined;
+
+  try {
+    details = await deps?.getContractDetailsFromIndexer?.();
+  } catch (error) {
+    // The indexer is a best-effort discovery source. When direct probing is
+    // enabled, a transient indexer failure must not prevent fresh wallets from
+    // resolving their low-numbered context rules on-chain.
+    if (!probeConfig) {
+      throw error;
+    }
+  }
+
   const discoveredRuleIds = new Set<number>(details?.contextRules.map((rule) => rule.context_rule_id) ?? []);
 
   if (probeConfig) {

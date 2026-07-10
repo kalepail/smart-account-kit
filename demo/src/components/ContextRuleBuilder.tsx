@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import type { Buffer } from "buffer";
 import type { SmartAccountKit, StoredCredential, AssembledTransaction } from "smart-account-kit";
 import {
   createDelegatedSigner,
@@ -1332,7 +1333,9 @@ export function ContextRuleBuilder({
                 {selectedPolicies.map((sp, index) => (
                   <div key={index} className="selected-policy-item">
                     <div className="selected-policy-header">
-                      <span className="policy-type-badge">{sp.policy.type}</span>
+                      <span className={`policy-type-badge policy-type-${sp.policy.type}`}>
+                        {sp.policy.type}
+                      </span>
                       <span className="policy-name">{sp.policy.name}</span>
                       <button
                         className="remove-btn"

@@ -33,6 +33,57 @@ if (typeof window !== "undefined") {
 
 
 
+/**
+ * Context of a single authorized call performed by an address.
+ *
+ * Custom account contracts that implement `__check_auth` special function
+ * receive a list of `Context` values corresponding to all the calls that
+ * need to be authorized.
+ */
+export type Context = {tag: "Contract", values: readonly [ContractContext]} | {tag: "CreateContractHostFn", values: readonly [CreateContractHostFnContext]} | {tag: "CreateContractWithCtorHostFn", values: readonly [CreateContractWithConstructorHostFnContext]};
+
+
+/**
+ * Authorization context of a single contract call.
+ *
+ * This struct corresponds to a `require_auth_for_args` call for an address
+ * from `contract` function with `fn_name` name and `args` arguments.
+ */
+export interface ContractContext {
+  args: Array<any>;
+  contract: string;
+  fn_name: string;
+}
+
+/**
+ * Contract executable used for creating a new contract and used in
+ * `CreateContractHostFnContext`.
+ */
+export type ContractExecutable = {tag: "Wasm", values: readonly [Buffer]};
+
+
+/**
+ * Authorization context for `create_contract` host function that creates a
+ * new contract on behalf of authorizer address.
+ */
+export interface CreateContractHostFnContext {
+  executable: ContractExecutable;
+  salt: Buffer;
+}
+
+
+/**
+ * Authorization context for `create_contract` host function that creates a
+ * new contract on behalf of authorizer address.
+ * This is the same as `CreateContractHostFnContext`, but also has
+ * contract constructor arguments.
+ */
+export interface CreateContractWithConstructorHostFnContext {
+  constructor_args: Array<any>;
+  executable: ContractExecutable;
+  salt: Buffer;
+}
+
 
 
 
@@ -124,22 +175,22 @@ export type Signer = {tag: "Delegated", values: readonly [string]} | {tag: "Exte
 /**
  * The authorization payload passed to `__check_auth`, bundling cryptographic
  * proofs with context rule selection.
- * 
+ *
  * This struct carries two distinct pieces of information that are both
  * required for authorization but cannot be derived from each other:
- * 
+ *
  * - `signers` maps each [`Signer`] to its raw signature bytes, providing
  * cryptographic proof that the signer actually signed the transaction
  * payload. A context rule stores which signer *identities* are authorized
  * (via `signer_ids`), but the rule does not contain the signatures
  * themselves — those must be supplied here.
- * 
+ *
  * - `context_rule_ids` tells the system which rule to validate for each auth
  * context. Because multiple rules can exist for the same context type, the
  * caller must explicitly select one per context rather than relying on
  * auto-discovery. Each entry is aligned by index with the `auth_contexts`
  * passed to `__check_auth`.
- * 
+ *
  * The length of `context_rule_ids` must equal the number of auth contexts;
  * a mismatch is rejected with
  * [`SmartAccountError::ContextRuleIdsLen
@@ -206,16 +257,16 @@ export interface Client {
    * Construct and simulate a execute transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Executes a function call on a target contract from within the smart
    * account context.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `target` - The address of the contract to call.
    * * `target_fn` - The function name to invoke on the target contract.
    * * `target_args` - Arguments to pass to the target function.
-   * 
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then calling
    * `e.invoke_contract()`.
@@ -232,30 +283,30 @@ export interface Client {
    * Adds a new policy to an existing context rule, installs it, and returns
    * the assigned policy ID. The policy's `install` method will be called
    * during this operation.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to modify.
    * * `policy` - The address of the policy contract to add.
    * * `install_param` - The installation parameter for the policy.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
    * * [`SmartAccountError::DuplicatePolicy`] - When the policy already
    * exists in the rule.
    * * [`SmartAccountError::TooManyPolicies`] - When adding would exceed
    * MAX_POLICIES (5).
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["policy_added", context_rule_id: u32]`
    * * data - `[policy_id: u32]`
-   * 
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::add_policy`].
@@ -266,29 +317,29 @@ export interface Client {
    * Construct and simulate a add_signer transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Adds a new signer to an existing context rule, returning the assigned
    * signer ID.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to modify.
    * * `signer` - The signer to add to the context rule.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
    * * [`SmartAccountError::DuplicateSigner`] - When the signer already
    * exists in the rule.
    * * [`SmartAccountError::TooManySigners`] - When adding would exceed
    * MAX_SIGNERS (15).
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["signer_added", context_rule_id: u32]`
    * * data - `[signer_id: u32]`
-   * 
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::add_signer`].
@@ -298,14 +349,14 @@ export interface Client {
   /**
    * Construct and simulate a get_policy_id transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Retrieves the global registry ID for a policy.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `policy` - The policy address to look up.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::PolicyNotFound`] - When the policy is not
    * registered in the global registry.
    */
@@ -314,14 +365,14 @@ export interface Client {
   /**
    * Construct and simulate a get_signer_id transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Retrieves the global registry ID for a signer.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `signer` - The signer to look up.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::SignerNotFound`] - When the signer is not
    * registered in the global registry.
    */
@@ -333,27 +384,27 @@ export interface Client {
    * policy's `uninstall` method will be called during this operation.
    * Removing the last policy is allowed only if the rule has at least
    * one signer.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to modify.
    * * `policy_id` - The ID of the policy to remove from the context rule.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
    * * [`SmartAccountError::PolicyNotFound`] - When the policy doesn't exist
    * in the rule.
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["policy_removed", context_rule_id: u32]`
    * * data - `[policy_id: u32]`
-   * 
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::remove_policy`].
@@ -364,27 +415,27 @@ export interface Client {
    * Construct and simulate a remove_signer transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Removes a signer from an existing context rule. Removing the last signer
    * is allowed only if the rule has at least one policy.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to modify.
    * * `signer_id` - The ID of the signer to remove from the context rule.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
    * * [`SmartAccountError::SignerNotFound`] - When the signer doesn't exist
    * in the rule.
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["signer_removed", context_rule_id: u32]`
    * * data - `[signer_id: u32]`
-   * 
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::remove_signer`].
@@ -396,18 +447,18 @@ export interface Client {
    * Creates a new context rule with the specified configuration, returning
    * the newly created `ContextRule` with a unique ID assigned. Installs
    * all specified policies during creation.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_type` - The type of context this rule applies to.
    * * `name` - Human-readable name for the context rule.
    * * `valid_until` - Optional expiration ledger sequence.
    * * `signers` - List of signers authorized by this rule.
    * * `policies` - Map of policy addresses to their installation parameters.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::NoSignersAndPolicies`] - When both signers and
    * policies are empty.
    * * [`SmartAccountError::TooManySigners`] - When signers exceed
@@ -431,15 +482,15 @@ export interface Client {
    * Construct and simulate a get_context_rule transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Retrieves a context rule by its unique ID, returning the
    * `ContextRule` containing all metadata, signers, and policies.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The unique identifier of the context rule to
    * retrieve.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
    */
@@ -450,24 +501,24 @@ export interface Client {
    * Removes a context rule and cleans up all associated data. This function
    * uninstalls all policies associated with the rule and removes all stored
    * data including signers, policies, and metadata.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to remove.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["context_rule_removed", context_rule_id: u32]`
    * * data - `[]`
-   * 
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::remove_context_rule`].
@@ -478,9 +529,9 @@ export interface Client {
    * Construct and simulate a get_context_rules_count transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Retrieves the number of all context rules, including expired rules.
    * Defaults to 0.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    */
   get_context_rules_count: (options?: MethodOptions) => Promise<AssembledTransaction<u32>>
@@ -489,26 +540,25 @@ export interface Client {
    * Construct and simulate a update_context_rule_name transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Updates the name of an existing context rule, returning the updated
    * `ContextRule` with the new name.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to update.
    * * `name` - The new human-readable name for the context rule.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["context_rule_meta_updated", context_rule_id: u32]`
-   * * data - `[name: String, context_type: ContextRuleType, valid_until:
-   * Option<u32>]`
-   * 
+   * * data - `[name: String, valid_until: Option<u32>]`
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::update_context_rule_name`].
@@ -519,29 +569,28 @@ export interface Client {
    * Construct and simulate a update_context_rule_valid_until transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
    * Updates the expiration time of an existing context rule, returning the
    * updated `ContextRule` with the new expiration time.
-   * 
+   *
    * # Arguments
-   * 
+   *
    * * `e` - Access to the Soroban environment.
    * * `context_rule_id` - The ID of the context rule to update.
    * * `valid_until` - New optional expiration ledger sequence. Use `None`
    * for no expiration.
-   * 
+   *
    * # Errors
-   * 
+   *
    * * [`SmartAccountError::ContextRuleNotFound`] - When no context rule
    * exists with the given ID.
    * * [`SmartAccountError::PastValidUntil`] - When valid_until is in the
    * past.
-   * 
+   *
    * # Events
-   * 
+   *
    * * topics - `["context_rule_meta_updated", context_rule_id: u32]`
-   * * data - `[name: String, context_type: ContextRuleType, valid_until:
-   * Option<u32>]`
-   * 
+   * * data - `[name: String, valid_until: Option<u32>]`
+   *
    * # Notes
-   * 
+   *
    * Defaults to requiring authorization from the smart account itself
    * (`e.current_contract_address().require_auth()`) and then delegating to
    * [`storage::update_context_rule_valid_until`].
@@ -572,7 +621,7 @@ export class Client extends ContractClient {
         "AAAAAAAAAAAAAAAHdXBncmFkZQAAAAACAAAAAAAAAA1uZXdfd2FzbV9oYXNoAAAAAAAD7gAAACAAAAAAAAAACG9wZXJhdG9yAAAAEwAAAAA=",
         "AAAAAAAAA6xBZGRzIGEgbmV3IHBvbGljeSB0byBhbiBleGlzdGluZyBjb250ZXh0IHJ1bGUsIGluc3RhbGxzIGl0LCBhbmQgcmV0dXJucwp0aGUgYXNzaWduZWQgcG9saWN5IElELiBUaGUgcG9saWN5J3MgYGluc3RhbGxgIG1ldGhvZCB3aWxsIGJlIGNhbGxlZApkdXJpbmcgdGhpcyBvcGVyYXRpb24uCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCiogYGNvbnRleHRfcnVsZV9pZGAgLSBUaGUgSUQgb2YgdGhlIGNvbnRleHQgcnVsZSB0byBtb2RpZnkuCiogYHBvbGljeWAgLSBUaGUgYWRkcmVzcyBvZiB0aGUgcG9saWN5IGNvbnRyYWN0IHRvIGFkZC4KKiBgaW5zdGFsbF9wYXJhbWAgLSBUaGUgaW5zdGFsbGF0aW9uIHBhcmFtZXRlciBmb3IgdGhlIHBvbGljeS4KCiMgRXJyb3JzCgoqIFtgU21hcnRBY2NvdW50RXJyb3I6OkNvbnRleHRSdWxlTm90Rm91bmRgXSAtIFdoZW4gbm8gY29udGV4dCBydWxlCmV4aXN0cyB3aXRoIHRoZSBnaXZlbiBJRC4KKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpEdXBsaWNhdGVQb2xpY3lgXSAtIFdoZW4gdGhlIHBvbGljeSBhbHJlYWR5CmV4aXN0cyBpbiB0aGUgcnVsZS4KKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpUb29NYW55UG9saWNpZXNgXSAtIFdoZW4gYWRkaW5nIHdvdWxkIGV4Y2VlZApNQVhfUE9MSUNJRVMgKDUpLgoKIyBFdmVudHMKCiogdG9waWNzIC0gYFsicG9saWN5X2FkZGVkIiwgY29udGV4dF9ydWxlX2lkOiB1MzJdYAoqIGRhdGEgLSBgW3BvbGljeV9pZDogdTMyXWAKCiMgTm90ZXMKCkRlZmF1bHRzIHRvIHJlcXVpcmluZyBhdXRob3JpemF0aW9uIGZyb20gdGhlIHNtYXJ0IGFjY291bnQgaXRzZWxmCihgZS5jdXJyZW50X2NvbnRyYWN0X2FkZHJlc3MoKS5yZXF1aXJlX2F1dGgoKWApIGFuZCB0aGVuIGRlbGVnYXRpbmcgdG8KW2BzdG9yYWdlOjphZGRfcG9saWN5YF0uAAAACmFkZF9wb2xpY3kAAAAAAAMAAAAAAAAAD2NvbnRleHRfcnVsZV9pZAAAAAAEAAAAAAAAAAZwb2xpY3kAAAAAABMAAAAAAAAADWluc3RhbGxfcGFyYW0AAAAAAAAAAAAAAQAAAAQ=",
         "AAAAAAAAAxVBZGRzIGEgbmV3IHNpZ25lciB0byBhbiBleGlzdGluZyBjb250ZXh0IHJ1bGUsIHJldHVybmluZyB0aGUgYXNzaWduZWQKc2lnbmVyIElELgoKIyBBcmd1bWVudHMKCiogYGVgIC0gQWNjZXNzIHRvIHRoZSBTb3JvYmFuIGVudmlyb25tZW50LgoqIGBjb250ZXh0X3J1bGVfaWRgIC0gVGhlIElEIG9mIHRoZSBjb250ZXh0IHJ1bGUgdG8gbW9kaWZ5LgoqIGBzaWduZXJgIC0gVGhlIHNpZ25lciB0byBhZGQgdG8gdGhlIGNvbnRleHQgcnVsZS4KCiMgRXJyb3JzCgoqIFtgU21hcnRBY2NvdW50RXJyb3I6OkNvbnRleHRSdWxlTm90Rm91bmRgXSAtIFdoZW4gbm8gY29udGV4dCBydWxlCmV4aXN0cyB3aXRoIHRoZSBnaXZlbiBJRC4KKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpEdXBsaWNhdGVTaWduZXJgXSAtIFdoZW4gdGhlIHNpZ25lciBhbHJlYWR5CmV4aXN0cyBpbiB0aGUgcnVsZS4KKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpUb29NYW55U2lnbmVyc2BdIC0gV2hlbiBhZGRpbmcgd291bGQgZXhjZWVkCk1BWF9TSUdORVJTICgxNSkuCgojIEV2ZW50cwoKKiB0b3BpY3MgLSBgWyJzaWduZXJfYWRkZWQiLCBjb250ZXh0X3J1bGVfaWQ6IHUzMl1gCiogZGF0YSAtIGBbc2lnbmVyX2lkOiB1MzJdYAoKIyBOb3RlcwoKRGVmYXVsdHMgdG8gcmVxdWlyaW5nIGF1dGhvcml6YXRpb24gZnJvbSB0aGUgc21hcnQgYWNjb3VudCBpdHNlbGYKKGBlLmN1cnJlbnRfY29udHJhY3RfYWRkcmVzcygpLnJlcXVpcmVfYXV0aCgpYCkgYW5kIHRoZW4gZGVsZWdhdGluZyB0bwpbYHN0b3JhZ2U6OmFkZF9zaWduZXJgXS4AAAAAAAAKYWRkX3NpZ25lcgAAAAAAAgAAAAAAAAAPY29udGV4dF9ydWxlX2lkAAAAAAQAAAAAAAAABnNpZ25lcgAAAAAH0AAAAAZTaWduZXIAAAAAAAEAAAAE",
-        "AAAAAAAAAfdWZXJpZnkgYXV0aG9yaXphdGlvbiBmb3IgdGhlIHNtYXJ0IGFjY291bnQuCgpUaGlzIGZ1bmN0aW9uIGlzIGNhbGxlZCBieSB0aGUgU29yb2JhbiBob3N0IHdoZW4gYXV0aG9yaXphdGlvbiBpcwpyZXF1aXJlZC4gSXQgdmFsaWRhdGVzIHNpZ25hdHVyZXMgYWdhaW5zdCB0aGUgY29uZmlndXJlZCBjb250ZXh0CnJ1bGVzIGFuZCBwb2xpY2llcy4KCiMgQXJndW1lbnRzCgoqIGBzaWduYXR1cmVfcGF5bG9hZGAgLSBIYXNoIG9mIHRoZSBkYXRhIHRoYXQgd2FzIHNpZ25lZAoqIGBzaWduYXR1cmVzYCAtIE1hcCBvZiBzaWduZXJzIHRvIHRoZWlyIHNpZ25hdHVyZSBkYXRhCiogYGF1dGhfY29udGV4dHNgIC0gQ29udGV4dHMgYmVpbmcgYXV0aG9yaXplZCAoY29udHJhY3QgY2FsbHMsCmRlcGxveW1lbnRzLCBldGMuKQoKIyBSZXR1cm5zCgoqIGBPaygoKSlgIGlmIGF1dGhvcml6YXRpb24gc3VjY2VlZHMKKiBgRXJyKFNtYXJ0QWNjb3VudEVycm9yKWAgaWYgYXV0aG9yaXphdGlvbiBmYWlscwAAAAAMX19jaGVja19hdXRoAAAAAwAAAAAAAAARc2lnbmF0dXJlX3BheWxvYWQAAAAAAAPuAAAAIAAAAAAAAAAKc2lnbmF0dXJlcwAAAAAH0AAAAAtBdXRoUGF5bG9hZAAAAAAAAAAADWF1dGhfY29udGV4dHMAAAAAAAPqAAAH0AAAAAdDb250ZXh0AAAAAAEAAAPpAAAAAgAAAAM=",
+        "AAAAAAAAAfdWZXJpZnkgYXV0aG9yaXphdGlvbiBmb3IgdGhlIHNtYXJ0IGFjY291bnQuCgpUaGlzIGZ1bmN0aW9uIGlzIGNhbGxlZCBieSB0aGUgU29yb2JhbiBob3N0IHdoZW4gYXV0aG9yaXphdGlvbiBpcwpyZXF1aXJlZC4gSXQgdmFsaWRhdGVzIHNpZ25hdHVyZXMgYWdhaW5zdCB0aGUgY29uZmlndXJlZCBjb250ZXh0CnJ1bGVzIGFuZCBwb2xpY2llcy4KCiMgQXJndW1lbnRzCgoqIGBzaWduYXR1cmVfcGF5bG9hZGAgLSBIYXNoIG9mIHRoZSBkYXRhIHRoYXQgd2FzIHNpZ25lZAoqIGBzaWduYXR1cmVzYCAtIE1hcCBvZiBzaWduZXJzIHRvIHRoZWlyIHNpZ25hdHVyZSBkYXRhCiogYGF1dGhfY29udGV4dHNgIC0gQ29udGV4dHMgYmVpbmcgYXV0aG9yaXplZCAoY29udHJhY3QgY2FsbHMsCmRlcGxveW1lbnRzLCBldGMuKQoKIyBSZXR1cm5zCgoqIGBPaygoKSlgIGlmIGF1dGhvcml6YXRpb24gc3VjY2VlZHMKKiBgRXJyKFNtYXJ0QWNjb3VudEVycm9yKWAgaWYgYXV0aG9yaXphdGlvbiBmYWlscwAAAAAMX19jaGVja19hdXRoAAAAAwAAAAAAAAARc2lnbmF0dXJlX3BheWxvYWQAAAAAAAPuAAAAIAAAAAAAAAAKc2lnbmF0dXJlcwAAAAAH0AAAAAtBdXRoUGF5bG9hZAAAAAAAAAAADWF1dGhfY29udGV4dHMAAAAAAAPqAAAH0AAAAAdDb250ZXh0AAAAAAEAAAPpAAAAAgAAB9AAAAARU21hcnRBY2NvdW50RXJyb3IAAAA=",
         "AAAAAAAAAP1DcmVhdGVzIGEgZGVmYXVsdCBjb250ZXh0IHJ1bGUgd2l0aCB0aGUgcHJvdmlkZWQgc2lnbmVycyBhbmQgcG9saWNpZXMuCgojIEFyZ3VtZW50cwoKKiBgc2lnbmVyc2AgLSBWZWN0b3Igb2Ygc2lnbmVycyAoRGVsZWdhdGVkIG9yIEV4dGVybmFsKSB0aGF0IGNhbgphdXRob3JpemUgdHJhbnNhY3Rpb25zCiogYHBvbGljaWVzYCAtIE1hcCBvZiBwb2xpY3kgY29udHJhY3QgYWRkcmVzc2VzIHRvIHRoZWlyIGluc3RhbGxhdGlvbgpwYXJhbWV0ZXJzAAAAAAAADV9fY29uc3RydWN0b3IAAAAAAAACAAAAAAAAAAdzaWduZXJzAAAAA+oAAAfQAAAABlNpZ25lcgAAAAAAAAAAAAhwb2xpY2llcwAAA+wAAAATAAAAAAAAAAA=",
         "AAAAAAAAAQJSZXRyaWV2ZXMgdGhlIGdsb2JhbCByZWdpc3RyeSBJRCBmb3IgYSBwb2xpY3kuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCiogYHBvbGljeWAgLSBUaGUgcG9saWN5IGFkZHJlc3MgdG8gbG9vayB1cC4KCiMgRXJyb3JzCgoqIFtgU21hcnRBY2NvdW50RXJyb3I6OlBvbGljeU5vdEZvdW5kYF0gLSBXaGVuIHRoZSBwb2xpY3kgaXMgbm90CnJlZ2lzdGVyZWQgaW4gdGhlIGdsb2JhbCByZWdpc3RyeS4AAAAAAA1nZXRfcG9saWN5X2lkAAAAAAAAAQAAAAAAAAAGcG9saWN5AAAAAAATAAAAAQAAAAQ=",
         "AAAAAAAAAPpSZXRyaWV2ZXMgdGhlIGdsb2JhbCByZWdpc3RyeSBJRCBmb3IgYSBzaWduZXIuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCiogYHNpZ25lcmAgLSBUaGUgc2lnbmVyIHRvIGxvb2sgdXAuCgojIEVycm9ycwoKKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpTaWduZXJOb3RGb3VuZGBdIC0gV2hlbiB0aGUgc2lnbmVyIGlzIG5vdApyZWdpc3RlcmVkIGluIHRoZSBnbG9iYWwgcmVnaXN0cnkuAAAAAAANZ2V0X3NpZ25lcl9pZAAAAAAAAAEAAAAAAAAABnNpZ25lcgAAAAAH0AAAAAZTaWduZXIAAAAAAAEAAAAE",
@@ -583,8 +632,13 @@ export class Client extends ContractClient {
         "AAAAAAAAAWVSZXRyaWV2ZXMgYSBjb250ZXh0IHJ1bGUgYnkgaXRzIHVuaXF1ZSBJRCwgcmV0dXJuaW5nIHRoZQpgQ29udGV4dFJ1bGVgIGNvbnRhaW5pbmcgYWxsIG1ldGFkYXRhLCBzaWduZXJzLCBhbmQgcG9saWNpZXMuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCiogYGNvbnRleHRfcnVsZV9pZGAgLSBUaGUgdW5pcXVlIGlkZW50aWZpZXIgb2YgdGhlIGNvbnRleHQgcnVsZSB0bwpyZXRyaWV2ZS4KCiMgRXJyb3JzCgoqIFtgU21hcnRBY2NvdW50RXJyb3I6OkNvbnRleHRSdWxlTm90Rm91bmRgXSAtIFdoZW4gbm8gY29udGV4dCBydWxlCmV4aXN0cyB3aXRoIHRoZSBnaXZlbiBJRC4AAAAAAAAQZ2V0X2NvbnRleHRfcnVsZQAAAAEAAAAAAAAAD2NvbnRleHRfcnVsZV9pZAAAAAAEAAAAAQAAB9AAAAALQ29udGV4dFJ1bGUA",
         "AAAAAAAAAqdSZW1vdmVzIGEgY29udGV4dCBydWxlIGFuZCBjbGVhbnMgdXAgYWxsIGFzc29jaWF0ZWQgZGF0YS4gVGhpcyBmdW5jdGlvbgp1bmluc3RhbGxzIGFsbCBwb2xpY2llcyBhc3NvY2lhdGVkIHdpdGggdGhlIHJ1bGUgYW5kIHJlbW92ZXMgYWxsIHN0b3JlZApkYXRhIGluY2x1ZGluZyBzaWduZXJzLCBwb2xpY2llcywgYW5kIG1ldGFkYXRhLgoKIyBBcmd1bWVudHMKCiogYGVgIC0gQWNjZXNzIHRvIHRoZSBTb3JvYmFuIGVudmlyb25tZW50LgoqIGBjb250ZXh0X3J1bGVfaWRgIC0gVGhlIElEIG9mIHRoZSBjb250ZXh0IHJ1bGUgdG8gcmVtb3ZlLgoKIyBFcnJvcnMKCiogW2BTbWFydEFjY291bnRFcnJvcjo6Q29udGV4dFJ1bGVOb3RGb3VuZGBdIC0gV2hlbiBubyBjb250ZXh0IHJ1bGUKZXhpc3RzIHdpdGggdGhlIGdpdmVuIElELgoKIyBFdmVudHMKCiogdG9waWNzIC0gYFsiY29udGV4dF9ydWxlX3JlbW92ZWQiLCBjb250ZXh0X3J1bGVfaWQ6IHUzMl1gCiogZGF0YSAtIGBbXWAKCiMgTm90ZXMKCkRlZmF1bHRzIHRvIHJlcXVpcmluZyBhdXRob3JpemF0aW9uIGZyb20gdGhlIHNtYXJ0IGFjY291bnQgaXRzZWxmCihgZS5jdXJyZW50X2NvbnRyYWN0X2FkZHJlc3MoKS5yZXF1aXJlX2F1dGgoKWApIGFuZCB0aGVuIGRlbGVnYXRpbmcgdG8KW2BzdG9yYWdlOjpyZW1vdmVfY29udGV4dF9ydWxlYF0uAAAAABNyZW1vdmVfY29udGV4dF9ydWxlAAAAAAEAAAAAAAAAD2NvbnRleHRfcnVsZV9pZAAAAAAEAAAAAA==",
         "AAAAAAAAAItSZXRyaWV2ZXMgdGhlIG51bWJlciBvZiBhbGwgY29udGV4dCBydWxlcywgaW5jbHVkaW5nIGV4cGlyZWQgcnVsZXMuCkRlZmF1bHRzIHRvIDAuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuAAAAABdnZXRfY29udGV4dF9ydWxlc19jb3VudAAAAAAAAAAAAQAAAAQ=",
-        "AAAAAAAAAthVcGRhdGVzIHRoZSBuYW1lIG9mIGFuIGV4aXN0aW5nIGNvbnRleHQgcnVsZSwgcmV0dXJuaW5nIHRoZSB1cGRhdGVkCmBDb250ZXh0UnVsZWAgd2l0aCB0aGUgbmV3IG5hbWUuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCiogYGNvbnRleHRfcnVsZV9pZGAgLSBUaGUgSUQgb2YgdGhlIGNvbnRleHQgcnVsZSB0byB1cGRhdGUuCiogYG5hbWVgIC0gVGhlIG5ldyBodW1hbi1yZWFkYWJsZSBuYW1lIGZvciB0aGUgY29udGV4dCBydWxlLgoKIyBFcnJvcnMKCiogW2BTbWFydEFjY291bnRFcnJvcjo6Q29udGV4dFJ1bGVOb3RGb3VuZGBdIC0gV2hlbiBubyBjb250ZXh0IHJ1bGUKZXhpc3RzIHdpdGggdGhlIGdpdmVuIElELgoKIyBFdmVudHMKCiogdG9waWNzIC0gYFsiY29udGV4dF9ydWxlX21ldGFfdXBkYXRlZCIsIGNvbnRleHRfcnVsZV9pZDogdTMyXWAKKiBkYXRhIC0gYFtuYW1lOiBTdHJpbmcsIGNvbnRleHRfdHlwZTogQ29udGV4dFJ1bGVUeXBlLCB2YWxpZF91bnRpbDoKT3B0aW9uPHUzMj5dYAoKIyBOb3RlcwoKRGVmYXVsdHMgdG8gcmVxdWlyaW5nIGF1dGhvcml6YXRpb24gZnJvbSB0aGUgc21hcnQgYWNjb3VudCBpdHNlbGYKKGBlLmN1cnJlbnRfY29udHJhY3RfYWRkcmVzcygpLnJlcXVpcmVfYXV0aCgpYCkgYW5kIHRoZW4gZGVsZWdhdGluZyB0bwpbYHN0b3JhZ2U6OnVwZGF0ZV9jb250ZXh0X3J1bGVfbmFtZWBdLgAAABh1cGRhdGVfY29udGV4dF9ydWxlX25hbWUAAAACAAAAAAAAAA9jb250ZXh0X3J1bGVfaWQAAAAABAAAAAAAAAAEbmFtZQAAABAAAAABAAAH0AAAAAtDb250ZXh0UnVsZQA=",
-        "AAAAAAAAA1xVcGRhdGVzIHRoZSBleHBpcmF0aW9uIHRpbWUgb2YgYW4gZXhpc3RpbmcgY29udGV4dCBydWxlLCByZXR1cm5pbmcgdGhlCnVwZGF0ZWQgYENvbnRleHRSdWxlYCB3aXRoIHRoZSBuZXcgZXhwaXJhdGlvbiB0aW1lLgoKIyBBcmd1bWVudHMKCiogYGVgIC0gQWNjZXNzIHRvIHRoZSBTb3JvYmFuIGVudmlyb25tZW50LgoqIGBjb250ZXh0X3J1bGVfaWRgIC0gVGhlIElEIG9mIHRoZSBjb250ZXh0IHJ1bGUgdG8gdXBkYXRlLgoqIGB2YWxpZF91bnRpbGAgLSBOZXcgb3B0aW9uYWwgZXhwaXJhdGlvbiBsZWRnZXIgc2VxdWVuY2UuIFVzZSBgTm9uZWAKZm9yIG5vIGV4cGlyYXRpb24uCgojIEVycm9ycwoKKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpDb250ZXh0UnVsZU5vdEZvdW5kYF0gLSBXaGVuIG5vIGNvbnRleHQgcnVsZQpleGlzdHMgd2l0aCB0aGUgZ2l2ZW4gSUQuCiogW2BTbWFydEFjY291bnRFcnJvcjo6UGFzdFZhbGlkVW50aWxgXSAtIFdoZW4gdmFsaWRfdW50aWwgaXMgaW4gdGhlCnBhc3QuCgojIEV2ZW50cwoKKiB0b3BpY3MgLSBgWyJjb250ZXh0X3J1bGVfbWV0YV91cGRhdGVkIiwgY29udGV4dF9ydWxlX2lkOiB1MzJdYAoqIGRhdGEgLSBgW25hbWU6IFN0cmluZywgY29udGV4dF90eXBlOiBDb250ZXh0UnVsZVR5cGUsIHZhbGlkX3VudGlsOgpPcHRpb248dTMyPl1gCgojIE5vdGVzCgpEZWZhdWx0cyB0byByZXF1aXJpbmcgYXV0aG9yaXphdGlvbiBmcm9tIHRoZSBzbWFydCBhY2NvdW50IGl0c2VsZgooYGUuY3VycmVudF9jb250cmFjdF9hZGRyZXNzKCkucmVxdWlyZV9hdXRoKClgKSBhbmQgdGhlbiBkZWxlZ2F0aW5nIHRvCltgc3RvcmFnZTo6dXBkYXRlX2NvbnRleHRfcnVsZV92YWxpZF91bnRpbGBdLgAAAB91cGRhdGVfY29udGV4dF9ydWxlX3ZhbGlkX3VudGlsAAAAAAIAAAAAAAAAD2NvbnRleHRfcnVsZV9pZAAAAAAEAAAAAAAAAAt2YWxpZF91bnRpbAAAAAPoAAAABAAAAAEAAAfQAAAAC0NvbnRleHRSdWxlAA==",
+        "AAAAAAAAArlVcGRhdGVzIHRoZSBuYW1lIG9mIGFuIGV4aXN0aW5nIGNvbnRleHQgcnVsZSwgcmV0dXJuaW5nIHRoZSB1cGRhdGVkCmBDb250ZXh0UnVsZWAgd2l0aCB0aGUgbmV3IG5hbWUuCgojIEFyZ3VtZW50cwoKKiBgZWAgLSBBY2Nlc3MgdG8gdGhlIFNvcm9iYW4gZW52aXJvbm1lbnQuCiogYGNvbnRleHRfcnVsZV9pZGAgLSBUaGUgSUQgb2YgdGhlIGNvbnRleHQgcnVsZSB0byB1cGRhdGUuCiogYG5hbWVgIC0gVGhlIG5ldyBodW1hbi1yZWFkYWJsZSBuYW1lIGZvciB0aGUgY29udGV4dCBydWxlLgoKIyBFcnJvcnMKCiogW2BTbWFydEFjY291bnRFcnJvcjo6Q29udGV4dFJ1bGVOb3RGb3VuZGBdIC0gV2hlbiBubyBjb250ZXh0IHJ1bGUKZXhpc3RzIHdpdGggdGhlIGdpdmVuIElELgoKIyBFdmVudHMKCiogdG9waWNzIC0gYFsiY29udGV4dF9ydWxlX21ldGFfdXBkYXRlZCIsIGNvbnRleHRfcnVsZV9pZDogdTMyXWAKKiBkYXRhIC0gYFtuYW1lOiBTdHJpbmcsIHZhbGlkX3VudGlsOiBPcHRpb248dTMyPl1gCgojIE5vdGVzCgpEZWZhdWx0cyB0byByZXF1aXJpbmcgYXV0aG9yaXphdGlvbiBmcm9tIHRoZSBzbWFydCBhY2NvdW50IGl0c2VsZgooYGUuY3VycmVudF9jb250cmFjdF9hZGRyZXNzKCkucmVxdWlyZV9hdXRoKClgKSBhbmQgdGhlbiBkZWxlZ2F0aW5nIHRvCltgc3RvcmFnZTo6dXBkYXRlX2NvbnRleHRfcnVsZV9uYW1lYF0uAAAAAAAAGHVwZGF0ZV9jb250ZXh0X3J1bGVfbmFtZQAAAAIAAAAAAAAAD2NvbnRleHRfcnVsZV9pZAAAAAAEAAAAAAAAAARuYW1lAAAAEAAAAAEAAAfQAAAAC0NvbnRleHRSdWxlAA==",
+        "AAAAAAAAAz1VcGRhdGVzIHRoZSBleHBpcmF0aW9uIHRpbWUgb2YgYW4gZXhpc3RpbmcgY29udGV4dCBydWxlLCByZXR1cm5pbmcgdGhlCnVwZGF0ZWQgYENvbnRleHRSdWxlYCB3aXRoIHRoZSBuZXcgZXhwaXJhdGlvbiB0aW1lLgoKIyBBcmd1bWVudHMKCiogYGVgIC0gQWNjZXNzIHRvIHRoZSBTb3JvYmFuIGVudmlyb25tZW50LgoqIGBjb250ZXh0X3J1bGVfaWRgIC0gVGhlIElEIG9mIHRoZSBjb250ZXh0IHJ1bGUgdG8gdXBkYXRlLgoqIGB2YWxpZF91bnRpbGAgLSBOZXcgb3B0aW9uYWwgZXhwaXJhdGlvbiBsZWRnZXIgc2VxdWVuY2UuIFVzZSBgTm9uZWAKZm9yIG5vIGV4cGlyYXRpb24uCgojIEVycm9ycwoKKiBbYFNtYXJ0QWNjb3VudEVycm9yOjpDb250ZXh0UnVsZU5vdEZvdW5kYF0gLSBXaGVuIG5vIGNvbnRleHQgcnVsZQpleGlzdHMgd2l0aCB0aGUgZ2l2ZW4gSUQuCiogW2BTbWFydEFjY291bnRFcnJvcjo6UGFzdFZhbGlkVW50aWxgXSAtIFdoZW4gdmFsaWRfdW50aWwgaXMgaW4gdGhlCnBhc3QuCgojIEV2ZW50cwoKKiB0b3BpY3MgLSBgWyJjb250ZXh0X3J1bGVfbWV0YV91cGRhdGVkIiwgY29udGV4dF9ydWxlX2lkOiB1MzJdYAoqIGRhdGEgLSBgW25hbWU6IFN0cmluZywgdmFsaWRfdW50aWw6IE9wdGlvbjx1MzI+XWAKCiMgTm90ZXMKCkRlZmF1bHRzIHRvIHJlcXVpcmluZyBhdXRob3JpemF0aW9uIGZyb20gdGhlIHNtYXJ0IGFjY291bnQgaXRzZWxmCihgZS5jdXJyZW50X2NvbnRyYWN0X2FkZHJlc3MoKS5yZXF1aXJlX2F1dGgoKWApIGFuZCB0aGVuIGRlbGVnYXRpbmcgdG8KW2BzdG9yYWdlOjp1cGRhdGVfY29udGV4dF9ydWxlX3ZhbGlkX3VudGlsYF0uAAAAAAAAH3VwZGF0ZV9jb250ZXh0X3J1bGVfdmFsaWRfdW50aWwAAAAAAgAAAAAAAAAPY29udGV4dF9ydWxlX2lkAAAAAAQAAAAAAAAAC3ZhbGlkX3VudGlsAAAAA+gAAAAEAAAAAQAAB9AAAAALQ29udGV4dFJ1bGUA",
+        "AAAAAgAAAONDb250ZXh0IG9mIGEgc2luZ2xlIGF1dGhvcml6ZWQgY2FsbCBwZXJmb3JtZWQgYnkgYW4gYWRkcmVzcy4KCkN1c3RvbSBhY2NvdW50IGNvbnRyYWN0cyB0aGF0IGltcGxlbWVudCBgX19jaGVja19hdXRoYCBzcGVjaWFsIGZ1bmN0aW9uCnJlY2VpdmUgYSBsaXN0IG9mIGBDb250ZXh0YCB2YWx1ZXMgY29ycmVzcG9uZGluZyB0byBhbGwgdGhlIGNhbGxzIHRoYXQKbmVlZCB0byBiZSBhdXRob3JpemVkLgAAAAAAAAAAB0NvbnRleHQAAAAAAwAAAAEAAAAUQ29udHJhY3QgaW52b2NhdGlvbi4AAAAIQ29udHJhY3QAAAABAAAH0AAAAA9Db250cmFjdENvbnRleHQAAAAAAQAAAD1Db250cmFjdCB0aGF0IGhhcyBhIGNvbnN0cnVjdG9yIHdpdGggbm8gYXJndW1lbnRzIGlzIGNyZWF0ZWQuAAAAAAAAFENyZWF0ZUNvbnRyYWN0SG9zdEZuAAAAAQAAB9AAAAAbQ3JlYXRlQ29udHJhY3RIb3N0Rm5Db250ZXh0AAAAAAEAAABEQ29udHJhY3QgdGhhdCBoYXMgYSBjb25zdHJ1Y3RvciB3aXRoIDEgb3IgbW9yZSBhcmd1bWVudHMgaXMgY3JlYXRlZC4AAAAcQ3JlYXRlQ29udHJhY3RXaXRoQ3Rvckhvc3RGbgAAAAEAAAfQAAAAKkNyZWF0ZUNvbnRyYWN0V2l0aENvbnN0cnVjdG9ySG9zdEZuQ29udGV4dAAA",
+        "AAAAAQAAAL1BdXRob3JpemF0aW9uIGNvbnRleHQgb2YgYSBzaW5nbGUgY29udHJhY3QgY2FsbC4KClRoaXMgc3RydWN0IGNvcnJlc3BvbmRzIHRvIGEgYHJlcXVpcmVfYXV0aF9mb3JfYXJnc2AgY2FsbCBmb3IgYW4gYWRkcmVzcwpmcm9tIGBjb250cmFjdGAgZnVuY3Rpb24gd2l0aCBgZm5fbmFtZWAgbmFtZSBhbmQgYGFyZ3NgIGFyZ3VtZW50cy4AAAAAAAAAAAAAD0NvbnRyYWN0Q29udGV4dAAAAAADAAAAAAAAAARhcmdzAAAD6gAAAAAAAAAAAAAACGNvbnRyYWN0AAAAEwAAAAAAAAAHZm5fbmFtZQAAAAAR",
+        "AAAAAgAAAF9Db250cmFjdCBleGVjdXRhYmxlIHVzZWQgZm9yIGNyZWF0aW5nIGEgbmV3IGNvbnRyYWN0IGFuZCB1c2VkIGluCmBDcmVhdGVDb250cmFjdEhvc3RGbkNvbnRleHRgLgAAAAAAAAAAEkNvbnRyYWN0RXhlY3V0YWJsZQAAAAAAAQAAAAEAAAAAAAAABFdhc20AAAABAAAD7gAAACA=",
+        "AAAAAQAAAHZBdXRob3JpemF0aW9uIGNvbnRleHQgZm9yIGBjcmVhdGVfY29udHJhY3RgIGhvc3QgZnVuY3Rpb24gdGhhdCBjcmVhdGVzIGEKbmV3IGNvbnRyYWN0IG9uIGJlaGFsZiBvZiBhdXRob3JpemVyIGFkZHJlc3MuAAAAAAAAAAAAG0NyZWF0ZUNvbnRyYWN0SG9zdEZuQ29udGV4dAAAAAACAAAAAAAAAApleGVjdXRhYmxlAAAAAAfQAAAAEkNvbnRyYWN0RXhlY3V0YWJsZQAAAAAAAAAAAARzYWx0AAAD7gAAACA=",
+        "AAAAAQAAANZBdXRob3JpemF0aW9uIGNvbnRleHQgZm9yIGBjcmVhdGVfY29udHJhY3RgIGhvc3QgZnVuY3Rpb24gdGhhdCBjcmVhdGVzIGEKbmV3IGNvbnRyYWN0IG9uIGJlaGFsZiBvZiBhdXRob3JpemVyIGFkZHJlc3MuClRoaXMgaXMgdGhlIHNhbWUgYXMgYENyZWF0ZUNvbnRyYWN0SG9zdEZuQ29udGV4dGAsIGJ1dCBhbHNvIGhhcwpjb250cmFjdCBjb25zdHJ1Y3RvciBhcmd1bWVudHMuAAAAAAAAAAAAKkNyZWF0ZUNvbnRyYWN0V2l0aENvbnN0cnVjdG9ySG9zdEZuQ29udGV4dAAAAAAAAwAAAAAAAAAQY29uc3RydWN0b3JfYXJncwAAA+oAAAAAAAAAAAAAAApleGVjdXRhYmxlAAAAAAfQAAAAEkNvbnRyYWN0RXhlY3V0YWJsZQAAAAAAAAAAAARzYWx0AAAD7gAAACA=",
         "AAAABQAAADdFdmVudCBlbWl0dGVkIHdoZW4gYSBwb2xpY3kgaXMgYWRkZWQgdG8gYSBjb250ZXh0IHJ1bGUuAAAAAAAAAAALUG9saWN5QWRkZWQAAAAAAQAAAAxwb2xpY3lfYWRkZWQAAAACAAAAAAAAAA9jb250ZXh0X3J1bGVfaWQAAAAABAAAAAEAAAAAAAAACXBvbGljeV9pZAAAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAADdFdmVudCBlbWl0dGVkIHdoZW4gYSBzaWduZXIgaXMgYWRkZWQgdG8gYSBjb250ZXh0IHJ1bGUuAAAAAAAAAAALU2lnbmVyQWRkZWQAAAAAAQAAAAxzaWduZXJfYWRkZWQAAAACAAAAAAAAAA9jb250ZXh0X3J1bGVfaWQAAAAABAAAAAEAAAAAAAAACXNpZ25lcl9pZAAAAAAAAAQAAAAAAAAAAg==",
         "AAAABQAAADtFdmVudCBlbWl0dGVkIHdoZW4gYSBwb2xpY3kgaXMgcmVtb3ZlZCBmcm9tIGEgY29udGV4dCBydWxlLgAAAAAAAAAADVBvbGljeVJlbW92ZWQAAAAAAAABAAAADnBvbGljeV9yZW1vdmVkAAAAAAACAAAAAAAAAA9jb250ZXh0X3J1bGVfaWQAAAAABAAAAAEAAAAAAAAACXBvbGljeV9pZAAAAAAAAAQAAAAAAAAAAg==",

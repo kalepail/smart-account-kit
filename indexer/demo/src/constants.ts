@@ -17,11 +17,11 @@ export const DEFAULT_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
 
 /** Default smart-account WASM hash used by the checked-in demo. */
 export const DEFAULT_ACCOUNT_WASM_HASH =
-  "8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611";
+  "1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a";
 
 /** Default WebAuthn verifier used by the checked-in demo. */
 export const DEFAULT_WEBAUTHN_VERIFIER_ADDRESS =
-  "CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU";
+  "CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F";
 
 // ============================================================================
 // Ledger Constants

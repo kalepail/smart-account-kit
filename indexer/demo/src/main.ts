@@ -9,14 +9,24 @@
  * 5. Allow user to select which contract to connect to
  */
 
-import { rpc, xdr, Address, scValToNative } from "@stellar/stellar-sdk";
-import { MemoryStorage, SmartAccountKit } from "smart-account-kit";
+import { rpc, xdr, Address } from "@stellar/stellar-sdk";
+import {
+  MemoryStorage,
+  SmartAccountKit,
+  SimpleThresholdPolicyClient,
+  SpendingLimitPolicyClient,
+  WeightedThresholdPolicyClient,
+  type PolicyClientDeps,
+} from "smart-account-kit";
 import {
   DEFAULT_ACCOUNT_WASM_HASH,
   DEFAULT_INDEXER_URL,
   DEFAULT_NETWORK_PASSPHRASE,
   DEFAULT_RPC_URL,
   DEFAULT_WEBAUTHN_VERIFIER_ADDRESS,
+  DEFAULT_THRESHOLD_POLICY_ADDRESS,
+  DEFAULT_SPENDING_LIMIT_POLICY_ADDRESS,
+  DEFAULT_WEIGHTED_THRESHOLD_POLICY_ADDRESS,
   LEDGERS_PER_DAY,
   STROOPS_PER_XLM,
   truncateAddress,
@@ -137,140 +147,111 @@ function getAuthKit(): SmartAccountKit {
 }
 
 // ============================================================================
-// Policy RPC Loading
+// Policy Params (via typed policy clients)
 // ============================================================================
 
-/**
- * Build a ledger key for a policy's storage entry.
- * Policy contracts store data with key: AccountContext(smartAccountAddress, contextRuleId)
- */
-function buildPolicyStorageKey(
-  policyAddress: string,
-  smartAccountAddress: string,
-  contextRuleId: number
-): xdr.LedgerKey {
-  const storageKey = xdr.ScVal.scvVec([
-    xdr.ScVal.scvSymbol("AccountContext"),
-    new Address(smartAccountAddress).toScVal(),
-    xdr.ScVal.scvU32(contextRuleId),
-  ]);
+type KnownPolicyType = "threshold" | "spending_limit" | "weighted_threshold";
 
-  return xdr.LedgerKey.contractData(
-    new xdr.LedgerKeyContractData({
-      contract: new Address(policyAddress).toScAddress(),
-      key: storageKey,
-      durability: xdr.ContractDataDurability.persistent(),
-    })
-  );
+/**
+ * Map of known policy contract addresses -> type. Built from env (with testnet
+ * defaults matching the root demo). Policies not in this map fall back to the
+ * indexer's install_params (see formatPolicyParams).
+ */
+const POLICY_TYPES: Record<string, KnownPolicyType> = {};
+function registerPolicyType(address: string | undefined, type: KnownPolicyType): void {
+  if (address) POLICY_TYPES[address] = type;
+}
+registerPolicyType(
+  import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || DEFAULT_THRESHOLD_POLICY_ADDRESS,
+  "threshold"
+);
+registerPolicyType(
+  import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || DEFAULT_SPENDING_LIMIT_POLICY_ADDRESS,
+  "spending_limit"
+);
+registerPolicyType(
+  import.meta.env.VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS || DEFAULT_WEIGHTED_THRESHOLD_POLICY_ADDRESS,
+  "weighted_threshold"
+);
+
+/**
+ * Build policy-client deps for read-only getters. Getters only need
+ * rpc/network/timeout + the smart-account address; encodeContextRule and
+ * execute (used by setters and weighted getSignerWeights) are not wired here
+ * because this demo is a read-only viewer without a connected wallet client.
+ */
+function policyClientDeps(contractId: string): PolicyClientDeps {
+  return {
+    rpc: new rpc.Server(rpcUrlInput.value),
+    networkPassphrase:
+      import.meta.env.VITE_NETWORK_PASSPHRASE || DEFAULT_NETWORK_PASSPHRASE,
+    timeoutInSeconds: 30,
+    getSmartAccount: () => contractId,
+    encodeContextRule: () => {
+      throw new Error("encodeContextRule is not available in the read-only indexer demo");
+    },
+    execute: () => {
+      throw new Error("execute is not available in the read-only indexer demo");
+    },
+  };
 }
 
 /**
- * Batch load policy params from RPC for all policies across all context rules.
- * Returns a Map keyed by "contextRuleId:policyAddress" with the parsed params.
+ * Read live policy params via the SDK's typed policy clients
+ * (get_threshold / get_spending_limit_data) for every recognized policy across
+ * all context rules. Returns a Map keyed by "contextRuleId:policyAddress" with a
+ * formatted display string.
  */
-async function loadPolicyParamsFromRpc(
+async function readTypedPolicyParams(
   contractId: string,
   contextRules: ContextRuleInfo[]
-): Promise<Map<string, any>> {
-  const rpcUrl = rpcUrlInput.value;
-  const server = new rpc.Server(rpcUrl);
-  const paramsMap = new Map<string, any>();
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const deps = policyClientDeps(contractId);
 
-  // Collect all policy keys we need to fetch
-  const keysToFetch: { key: xdr.LedgerKey; mapKey: string }[] = [];
-
+  const reads: Promise<void>[] = [];
   for (const rule of contextRules) {
-    if (!rule.policies) continue;
-    for (const policy of rule.policies) {
-      const ledgerKey = buildPolicyStorageKey(
-        policy.policy_address,
-        contractId,
-        rule.context_rule_id
-      );
-      keysToFetch.push({
-        key: ledgerKey,
-        mapKey: `${rule.context_rule_id}:${policy.policy_address}`,
-      });
-    }
-  }
-
-  if (keysToFetch.length === 0) {
-    return paramsMap;
-  }
-
-  try {
-    // Batch fetch all ledger entries in one RPC call
-    const response = await server.getLedgerEntries(...keysToFetch.map((k) => k.key));
-
-    if (response.entries) {
-      for (let i = 0; i < response.entries.length; i++) {
-        const entry = response.entries[i];
-        if (entry) {
+    for (const policy of rule.policies ?? []) {
+      const type = POLICY_TYPES[policy.policy_address];
+      if (!type) continue;
+      const mapKey = `${rule.context_rule_id}:${policy.policy_address}`;
+      reads.push(
+        (async () => {
           try {
-            const dataEntry = entry.val.contractData();
-            const value = scValToNative(dataEntry.val());
-            // Find the corresponding mapKey by matching the ledger key
-            // Since entries come back in same order as keys, use index
-            const mapKey = keysToFetch[i]?.mapKey;
-            if (mapKey) {
-              paramsMap.set(mapKey, value);
+            if (type === "threshold") {
+              const threshold = await new SimpleThresholdPolicyClient(
+                policy.policy_address,
+                deps
+              ).getThreshold(rule.context_rule_id);
+              out.set(mapKey, `threshold: ${threshold}`);
+            } else if (type === "spending_limit") {
+              const data = await new SpendingLimitPolicyClient(
+                policy.policy_address,
+                deps
+              ).getSpendingLimitData(rule.context_rule_id);
+              const limitXlm = Number(data.spending_limit) / STROOPS_PER_XLM;
+              const days = Math.round(Number(data.period_ledgers) / LEDGERS_PER_DAY);
+              out.set(mapKey, `limit: ${limitXlm} XLM, period: ${days} day${days !== 1 ? "s" : ""}`);
+            } else if (type === "weighted_threshold") {
+              const threshold = await new WeightedThresholdPolicyClient(
+                policy.policy_address,
+                deps
+              ).getThreshold(rule.context_rule_id);
+              out.set(mapKey, `threshold: ${threshold}`);
             }
-          } catch (parseError) {
-            console.warn("Failed to parse policy entry:", parseError);
+          } catch (error) {
+            console.warn(
+              `Typed policy read failed for ${type} ${policy.policy_address}:`,
+              error
+            );
           }
-        }
-      }
+        })()
+      );
     }
-  } catch (error) {
-    console.warn("Failed to fetch policy params from RPC:", error);
   }
 
-  return paramsMap;
-}
-
-/**
- * Format policy params for display based on the value structure
- */
-function formatPolicyParamsFromRpc(params: any): string {
-  if (!params) return "";
-
-  // Handle different policy value structures
-  if (typeof params === "number" || typeof params === "bigint") {
-    // Simple threshold policy (just a number)
-    return `threshold: ${params}`;
-  }
-
-  if (typeof params === "object") {
-    const parts: string[] = [];
-
-    // Spending limit policy
-    if (params.spending_limit !== undefined) {
-      const limitXlm = Number(params.spending_limit) / STROOPS_PER_XLM;
-      parts.push(`limit: ${limitXlm} XLM`);
-    }
-    if (params.period_ledgers !== undefined) {
-      const days = Math.round(Number(params.period_ledgers) / LEDGERS_PER_DAY);
-      parts.push(`period: ${days} day${days !== 1 ? "s" : ""}`);
-    }
-
-    // Weighted threshold policy
-    if (params.threshold !== undefined && !params.spending_limit) {
-      parts.push(`threshold: ${params.threshold}`);
-    }
-
-    // Generic key-value pairs
-    if (parts.length === 0) {
-      for (const [key, val] of Object.entries(params)) {
-        if (val !== undefined && val !== null) {
-          parts.push(`${key}: ${val}`);
-        }
-      }
-    }
-
-    return parts.join(", ");
-  }
-
-  return String(params);
+  await Promise.all(reads);
+  return out;
 }
 
 // ============================================================================
@@ -488,8 +469,8 @@ async function renderContractDetails(details: ContractDetails) {
   // Hide contracts list section, show details section
   contractDetailsSection.style.display = "block";
 
-  // Load policy params from RPC (batched - one call for all policies)
-  const policyParams = await loadPolicyParamsFromRpc(contractId, contextRules);
+  // Read live policy params via the SDK's typed policy clients
+  const typedPolicyParams = await readTypedPolicyParams(contractId, contextRules);
 
   let html = `
     <div class="contract-full-id">${contractId}</div>
@@ -601,12 +582,11 @@ async function renderContractDetails(details: ContractDetails) {
           <div class="signer-group-items">
       `;
       for (const policy of rule.policies) {
-        // Try RPC params first, fall back to indexer params
+        // Prefer live params from the typed policy clients; fall back to the
+        // indexer's install_params for unrecognized policy types.
         const mapKey = `${rule.context_rule_id}:${policy.policy_address}`;
-        const rpcParams = policyParams.get(mapKey);
-        const params = rpcParams
-          ? formatPolicyParamsFromRpc(rpcParams)
-          : formatPolicyParams(policy.install_params);
+        const params =
+          typedPolicyParams.get(mapKey) ?? formatPolicyParams(policy.install_params);
         html += `
           <div class="credential-item">
             <span class="address-full">${policy.policy_address}</span>

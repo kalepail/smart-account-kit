@@ -24,6 +24,24 @@ export const DEFAULT_WEBAUTHN_VERIFIER_ADDRESS =
   "CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F";
 
 // ============================================================================
+// Known Policy Contracts (testnet)
+// ============================================================================
+// Used to read live policy params via the SDK's typed policy clients. Contracts
+// using different policy addresses fall back to the indexer's install_params.
+
+/** Default simple-threshold policy contract (testnet). */
+export const DEFAULT_THRESHOLD_POLICY_ADDRESS =
+  "CB3FATQKCIRIQOCYRUPCQ2KREQ7T4RPKS7EAEOZWPEPUKWEDRVROBCEG";
+
+/** Default spending-limit policy contract (testnet). */
+export const DEFAULT_SPENDING_LIMIT_POLICY_ADDRESS =
+  "CABXBYJNZ7IUW4G3D6BND5YCAQF3ASSDMDAOKQQ63UYFSO7WUU2TIP5G";
+
+/** Default weighted-threshold policy contract (testnet). */
+export const DEFAULT_WEIGHTED_THRESHOLD_POLICY_ADDRESS =
+  "CCMZ6X4KM3RC7HXWCZDTH7CMWIJXFPN6HLGKJBM63MCOW2AJ2V5W7YXY";
+
+// ============================================================================
 // Ledger Constants
 // ============================================================================
 

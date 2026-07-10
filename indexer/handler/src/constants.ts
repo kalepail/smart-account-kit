@@ -23,6 +23,8 @@ export const DEFAULT_PAGINATION_LIMIT = 100;
 export const HTTP_STATUS = {
   OK: 200,
   BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
   NOT_FOUND: 404,
   INTERNAL_ERROR: 500,
 } as const;
@@ -34,6 +36,8 @@ export const HTTP_STATUS = {
 export const ERROR_MESSAGES = {
   DATABASE_QUERY_FAILED: "Database query failed",
   CONTRACT_NOT_FOUND: "Contract not found",
+  UNAUTHORIZED: "Unauthorized",
+  FORBIDDEN: "Forbidden",
 } as const;
 
 // ============================================================================

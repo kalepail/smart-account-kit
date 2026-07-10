@@ -8,6 +8,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import postgres from "postgres";
+import { apiAuth } from "./auth";
 import {
   SERVICE_NAME,
   DEFAULT_PAGINATION_LIMIT,
@@ -19,6 +20,12 @@ import {
 declare global {
   interface Env {
     DATABASE_URL: string;
+    /**
+     * Optional bearer token. When set, every `/api/*` route requires
+     * `Authorization: Bearer <token>`. When unset, the handler is a public
+     * reference implementation (except `/api/credentials`, which stays locked).
+     */
+    INDEXER_AUTH_TOKEN?: string;
   }
 }
 
@@ -36,10 +43,16 @@ interface ContractSummary {
 // Hono app
 const app = new Hono<{ Bindings: Env }>();
 
-// Enable CORS
+// Enable CORS. Kept wide-open so browser SDK clients (and Mercury-compatible
+// providers) can call the read-only API cross-origin. Access control, when
+// required, is handled by the bearer-token gate below rather than by origin.
 app.use("*", cors());
 
-// Health check
+// Bearer-token auth gate for the data API. No-op (public) unless
+// INDEXER_AUTH_TOKEN is configured; see ./auth for the exact posture.
+app.use("/api/*", apiAuth());
+
+// Health check (intentionally public, outside the /api/* auth gate)
 app.get("/", (c) => {
   return c.json({ status: "ok", service: SERVICE_NAME });
 });

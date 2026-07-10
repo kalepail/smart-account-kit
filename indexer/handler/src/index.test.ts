@@ -387,3 +387,133 @@ describe("handler routes", () => {
     expect(currentSqlClient?.end).toHaveBeenCalledTimes(3);
   });
 });
+
+describe("handler auth gate", () => {
+  const publicEnv = { DATABASE_URL: "postgres://example" } as any;
+  const gatedEnv = {
+    DATABASE_URL: "postgres://example",
+    INDEXER_AUTH_TOKEN: "s3cret-token",
+  } as any;
+
+  it("keeps the admin /api/credentials route locked (403) when no token is configured", async () => {
+    const response = await app.fetch(
+      new Request("http://localhost/api/credentials"),
+      publicEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(403);
+    // Gate rejects before any database work.
+    expect(currentSqlClient).toBeNull();
+    await expect(response.json()).resolves.toEqual({ error: "Forbidden" });
+  });
+
+  it("leaves the other /api routes public when no token is configured", async () => {
+    currentSqlClient = createSqlClient([
+      [
+        {
+          total_events: 0,
+          unique_contracts: 0,
+          unique_credentials: 0,
+          first_ledger: null,
+          last_ledger: null,
+        },
+      ],
+      [],
+    ]);
+
+    const response = await app.fetch(
+      new Request("http://localhost/api/stats"),
+      publicEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(200);
+    expect(currentSqlClient?.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the health check public regardless of configuration", async () => {
+    const response = await app.fetch(
+      new Request("http://localhost/"),
+      gatedEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: "ok",
+      service: "smart-account-indexer",
+    });
+  });
+
+  it("requires a bearer token on every /api route when configured", async () => {
+    const response = await app.fetch(
+      new Request("http://localhost/api/stats"),
+      gatedEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(401);
+    expect(currentSqlClient).toBeNull();
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("lets CORS preflight through the auth gate even when a token is configured", async () => {
+    // Browsers send the OPTIONS preflight without an Authorization header;
+    // it must succeed (204) so the real authenticated request can follow.
+    const response = await app.fetch(
+      new Request("http://localhost/api/stats", {
+        method: "OPTIONS",
+        headers: {
+          Origin: "https://example.com",
+          "Access-Control-Request-Method": "GET",
+          "Access-Control-Request-Headers": "authorization",
+        },
+      }),
+      gatedEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(204);
+    expect(currentSqlClient).toBeNull();
+    expect(response.headers.get("Access-Control-Allow-Headers")).toContain(
+      "authorization"
+    );
+  });
+
+  it("rejects a wrong bearer token when configured", async () => {
+    const response = await app.fetch(
+      new Request("http://localhost/api/stats", {
+        headers: { Authorization: "Bearer wrong-token" },
+      }),
+      gatedEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(401);
+    expect(currentSqlClient).toBeNull();
+  });
+
+  it("allows /api/credentials with the configured bearer token", async () => {
+    currentSqlClient = createSqlClient([
+      [{ credential_id: "abc", contract_count: 2, signer_types: ["External"] }],
+    ]);
+
+    const response = await app.fetch(
+      new Request("http://localhost/api/credentials", {
+        headers: { Authorization: "Bearer s3cret-token" },
+      }),
+      gatedEnv,
+      createExecutionContext()
+    );
+
+    expect(response.status).toBe(200);
+    expect(currentSqlClient?.end).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toEqual({
+      credentials: [
+        { credential_id: "abc", contract_count: 2, signer_types: ["External"] },
+      ],
+      count: 1,
+    });
+  });
+});

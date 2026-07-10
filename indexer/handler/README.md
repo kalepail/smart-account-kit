@@ -15,8 +15,33 @@ This worker queries a PostgreSQL database populated by the Goldsky indexing pipe
 | `GET /api/lookup/address/:address` | Find contracts by G-address or C-address |
 | `GET /api/contract/:contractId` | Get contract details with active signers and policies |
 | `GET /api/contract/:contractId/signers` | Get all signers for a contract |
-| `GET /api/credentials` | List all credential IDs (debugging) |
+| `GET /api/credentials` | List all credential IDs (admin/debug — see Authentication) |
 | `GET /api/stats` | Get indexer statistics |
+
+## Authentication
+
+The handler ships as a **public reference implementation**: with no secret
+configured, every route except `/api/credentials` is open (CORS is wide open so
+browser SDK clients can call it cross-origin). The health check `GET /` is
+always public.
+
+Set the optional `INDEXER_AUTH_TOKEN` secret to run a **private deployment**:
+
+| `INDEXER_AUTH_TOKEN` | `/api/*` routes | `/api/credentials` |
+|----------------------|-----------------|--------------------|
+| unset (default) | public | `403 Forbidden` (no token can authorize it) |
+| set | require `Authorization: Bearer <token>`, else `401` | requires the same bearer token |
+
+The `/api/credentials` route enumerates every indexed credential ID, so it is
+treated as admin/debug: it is never reachable without a configured-and-presented
+token. This matches the SDK client, which already sends configured tokens as
+`Authorization: Bearer <token>` (`indexerAuthToken`), and preserves wire
+compatibility with Mercury-style providers that gate the same REST surface.
+
+```bash
+wrangler secret put INDEXER_AUTH_TOKEN            # testnet
+wrangler secret put INDEXER_AUTH_TOKEN --env production
+```
 
 ## Deployment
 

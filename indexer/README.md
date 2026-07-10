@@ -78,10 +78,10 @@ cd goldsky
 # Install Turbo extension if needed
 goldsky turbo
 
-# Testnet: Turbo on stellar_testnet.events v1.2.0, start_at earliest
+# Testnet: Turbo on stellar_testnet.events v1.2.0, start_at 1799808 (~2026-04-01)
 goldsky turbo apply ./pipeline-testnet.yaml
 
-# Mainnet: Turbo on stellar_mainnet.events v1.2.0, start_at 60343871
+# Mainnet: Turbo on stellar_mainnet.events v1.2.0, start_at 60343871 (~2026-01-01)
 goldsky turbo apply ./pipeline-mainnet.yaml
 ```
 
@@ -126,13 +126,33 @@ Get the active signers associated with a contract.
 ```
 GET /api/credentials
 ```
-List indexed credential IDs. This is a debugging/administrative endpoint and should not be exposed by a provider unless intended.
+List indexed credential IDs. This is an admin/debug endpoint. In the reference handler it is **never** publicly reachable: it returns `403` unless `INDEXER_AUTH_TOKEN` is configured and presented as a bearer token (see [Authentication](#authentication)).
 
 ### Stats
 ```
 GET /api/stats
 ```
 Get indexer statistics (event counts, unique contracts, etc.).
+
+## Authentication
+
+The reference Cloudflare handler is a **public reference implementation** by
+default. Access control is governed by the optional `INDEXER_AUTH_TOKEN` secret
+on the handler (see [`handler/README.md`](./handler/README.md#authentication)):
+
+| `INDEXER_AUTH_TOKEN` | `GET /` | `/api/*` (except credentials) | `/api/credentials` |
+|----------------------|---------|-------------------------------|--------------------|
+| unset (default) | public | public | `403 Forbidden` |
+| set | public | require `Authorization: Bearer <token>` | require the same bearer token |
+
+The SDK sends its configured `indexerAuthToken` as `Authorization: Bearer <token>`
+on every request, so the same client works against the open reference handler, a
+token-gated private deployment, or a Mercury-compatible provider without code
+changes. CORS is intentionally left wide open (read-only data API); when access
+must be restricted, use the bearer token rather than origin allow-lists.
+
+Browser applications should only embed public or tightly scoped indexer tokens.
+Keep catch-up, admin, and other privileged credentials in server-side tooling.
 
 ## Events Indexed
 
@@ -158,7 +178,7 @@ The indexer client is integrated into the Smart Account Kit SDK and can be used 
 
 The contract-detail API turns the raw event stream into current active rule state so the SDK can resolve rule IDs without guessing after deletions. If it is unavailable, the SDK probes a bounded low-ID range on-chain by default; sparse or higher-numbered rules still need an indexer.
 
-For this project, testnet intentionally uses `start_at: earliest` so it replays all events still available in the current testnet history, including events from before the pipeline was first deployed.
+For this project, testnet pins `start_at: 1799808` (the first ledger at or after 2026-04-01 UTC) rather than replaying the full testnet epoch, so the pipeline catches up quickly after a reset. See [`goldsky/README.md`](./goldsky/README.md) for the rationale.
 
 ```typescript
 import { SmartAccountKit, IndexedDBStorage } from 'smart-account-kit';
@@ -220,12 +240,10 @@ curl "$INDEXER_URL/api/stats"
 # Lookup credential
 curl "$INDEXER_URL/api/lookup/<credential-id-hex>"
 
-# Add bearer auth when required by the selected provider
+# Add bearer auth when required by the selected provider (see Authentication)
 curl -H "Authorization: Bearer $INDEXER_TOKEN" \
   "$INDEXER_URL/api/stats"
 ```
-
-Browser applications should only embed public or tightly scoped indexer tokens. Keep catch-up, admin, and other privileged credentials in server-side tooling.
 
 ## Relayer Proxy
 
@@ -275,6 +293,26 @@ POST /
 Body: { "func": "base64-encoded-func", "auth": ["base64-auth-entry", ...] }
 Body: { "xdr": "base64-encoded-xdr" }
 ```
+Provide **either** `func` + `auth` (Relayer builds and signs with channel
+accounts — used for Address-credential operations like transfers) **or** `xdr`
+(Relayer fee-bumps an already-signed transaction — used for source-account auth
+like deployment). Supplying both, or neither, returns `400`. On testnet, if a
+channel account is missing after a network reset, the proxy funds it via
+Friendbot and retries for up to 5 minutes.
+
+**Fee Usage**
+```
+GET /fee-usage
+```
+Report whether the caller's IP has a minted Relayer API key and when it was
+created. Detailed fee accounting is not exposed by the managed Relayer service.
+
+**Status**
+```
+GET /status
+```
+Return the resolved client IP, network, and whether an API key has been minted
+for that IP.
 
 ### SDK Integration
 

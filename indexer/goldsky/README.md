@@ -10,7 +10,7 @@ These pipelines filter Stellar contract events for smart account operations and 
 
 | File | Network | Description |
 |------|---------|-------------|
-| `pipeline-testnet.yaml` | Testnet | Turbo pipeline on `stellar_testnet.events` v1.2.0 with `start_at: earliest` |
+| `pipeline-testnet.yaml` | Testnet | Turbo pipeline on `stellar_testnet.events` v1.2.0 starting from ledger `1799808` (approx. 2026-04-01 UTC) |
 | `pipeline-mainnet.yaml` | Mainnet | Turbo pipeline on `stellar_mainnet.events` v1.2.0 starting from ledger `60343871` (approx. 2026-01-01 UTC) |
 | `schema-inspect.yaml` | Mainnet | Blackhole inspection pipeline for validating current Stellar dataset schemas |
 
@@ -80,9 +80,9 @@ The pipeline creates and populates the `smart_account_signer_events` table. Run 
 ## Notes
 
 - Goldsky now supports Turbo for both `stellar_mainnet.*` and `stellar_testnet.*` datasets.
-- Mainnet uses a ledger-sequence `start_at` so backfill starts around January 1, 2026 UTC instead of replaying full history.
-- Testnet intentionally uses `start_at: earliest` so it captures all events still available in the current testnet epoch, including events from before the pipeline was deployed.
-- Stellar testnet still resets frequently, so `earliest` only covers the current reset window rather than all historical testnet activity.
+- Mainnet uses a ledger-sequence `start_at` (`60343871`) so backfill starts around January 1, 2026 UTC instead of replaying full history.
+- Testnet pins `start_at: 1799808` — the first ledger at or after 2026-04-01T00:00:00Z (ledger 1,799,808 closed at 2026-04-01T00:00:02Z). This starts the backfill from a recent month boundary so the pipeline catches up quickly after a reset rather than replaying the entire current testnet epoch.
+- Stellar testnet still resets frequently, so this pin only covers activity since the current reset window; older testnet history is not available to replay regardless of `start_at`.
 
 ## Related
 

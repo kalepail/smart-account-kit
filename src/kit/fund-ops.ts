@@ -49,6 +49,30 @@ import {
 } from "../errors";
 import { failedTransaction, simulationFailure } from "../contract-errors";
 
+/**
+ * Friendbot answers with HTTP 200 as soon as its create-account transaction is
+ * submitted, which can land a ledger or two ahead of the configured RPC. Poll
+ * briefly so the freshly funded temp account is visible before we build the
+ * transfer, instead of failing on a transient "Account not found".
+ */
+const FRIENDBOT_ACCOUNT_LOOKUP_ATTEMPTS = 10;
+const FRIENDBOT_ACCOUNT_LOOKUP_DELAY_MS = 1000;
+
+async function getAccountWithRetry(server: rpc.Server, publicKey: string) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < FRIENDBOT_ACCOUNT_LOOKUP_ATTEMPTS; attempt++) {
+    try {
+      return await server.getAccount(publicKey);
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, FRIENDBOT_ACCOUNT_LOOKUP_DELAY_MS)
+      );
+    }
+  }
+  throw lastError;
+}
+
 export async function fundWallet(
   deps: {
     getContractId: () => string | undefined;
@@ -84,7 +108,7 @@ export async function fundWallet(
     }
 
     const RESERVE_XLM = FRIENDBOT_RESERVE_XLM;
-    let sourceAccount = await deps.rpc.getAccount(tempKeypair.publicKey());
+    let sourceAccount = await getAccountWithRetry(deps.rpc, tempKeypair.publicKey());
 
     const fromAddress = Address.fromString(tempKeypair.publicKey());
 

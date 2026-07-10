@@ -1719,3 +1719,71 @@ button.small .spinner {
 .contract-picker-modal .modal-footer button {
   width: 100%;
 }
+
+/* Context rule count badge (active / total created) */
+.rule-count-badge {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #71717a;
+  margin-left: 8px;
+}
+
+/* Policy inspector — live get/set via the typed policy clients */
+.policies-list .policy-item {
+  flex-wrap: wrap;
+}
+
+.policy-inspector {
+  flex-basis: 100%;
+  margin-top: 4px;
+}
+
+.policy-inspector-toggle {
+  width: auto;
+  background: transparent;
+  border: 1px solid #3b82f6;
+  color: #3b82f6;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.policy-inspector-toggle:hover {
+  background: #3b82f610;
+}
+
+.policy-inspector-body {
+  margin-top: 8px;
+  padding: 10px;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.policy-inspector-weighted,
+.policy-inspector-weights {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.policy-inspector-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: #a1a1aa;
+}
+
+.policy-inspector-row .signer-id {
+  flex: 1;
+  min-width: 120px;
+  font-family: monospace;
+}

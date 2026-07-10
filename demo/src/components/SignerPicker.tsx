@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Buffer } from "buffer";
 import type { Signer } from "smart-account-kit-bindings";
 import type { SelectedSigner } from "smart-account-kit";
 import {
@@ -31,6 +32,17 @@ interface SignerPickerProps {
   disconnectWalletByAddress: (address: string) => void;
   /** Function to add a signer from secret key (for manually imported G-addresses) */
   addFromSecret?: (secretKey: string) => { address: string } | null;
+  /** Function to register an Ed25519 signer from a secret key */
+  addEd25519FromSecret?: (
+    secretKey: string
+  ) => { address: string; publicKey: string } | null;
+  /** Whether a registered Ed25519 signer can sign for the given signer */
+  canSignEd25519?: (signer: Signer) => boolean;
+}
+
+/** Hex-encode an External signer's 32-byte Ed25519 key data. */
+function ed25519KeyHex(signer: Signer): string {
+  return Buffer.from(signer.values[1] as Buffer).toString("hex");
 }
 
 /**
@@ -56,6 +68,8 @@ export function SignerPicker({
   connectWallet,
   disconnectWalletByAddress,
   addFromSecret,
+  addEd25519FromSecret,
+  canSignEd25519,
 }: SignerPickerProps) {
   // Helper to check if we can sign for an address
   const canSignFor = useCallback((address: string) => {
@@ -69,11 +83,17 @@ export function SignerPicker({
   const [selectedSignerIds, setSelectedSignerIds] = useState<Set<number>>(new Set());
   const [isConnecting, setIsConnecting] = useState(false);
 
-  // Secret key input state
+  // Secret key input state (delegated G-address signers)
   const [secretKeyInputAddress, setSecretKeyInputAddress] = useState<string | null>(null);
   const [secretKeyValue, setSecretKeyValue] = useState("");
   const [secretKeyError, setSecretKeyError] = useState<string | null>(null);
   const [isAddingSecret, setIsAddingSecret] = useState(false);
+
+  // Secret key input state (Ed25519 signers, keyed by key-data hex)
+  const [ed25519InputKey, setEd25519InputKey] = useState<string | null>(null);
+  const [ed25519Secret, setEd25519Secret] = useState("");
+  const [ed25519Error, setEd25519Error] = useState<string | null>(null);
+  const [ed25519Adding, setEd25519Adding] = useState(false);
 
   // Categorize signers
   const passkeySigners = availableSigners.filter((s) => {
@@ -83,6 +103,14 @@ export function SignerPicker({
   });
 
   const delegatedSigners = availableSigners.filter((s) => s.tag === "Delegated");
+
+  // Ed25519 External signers: External with 32-byte key data and no credential ID
+  const ed25519Signers = availableSigners.filter((s) => {
+    if (s.tag !== "External") return false;
+    if (getCredentialIdFromSigner(s) !== null) return false;
+    const keyData = s.values[1] as Buffer;
+    return keyData?.length === 32;
+  });
 
   // Auto-select active passkey on open
   useEffect(() => {
@@ -189,6 +217,53 @@ export function SignerPicker({
     setSecretKeyError(null);
   };
 
+  // Register an Ed25519 signer's keypair from its secret key.
+  const handleAddEd25519Secret = () => {
+    if (!addEd25519FromSecret || !ed25519InputKey) return;
+
+    const secretKey = ed25519Secret.trim();
+    if (!secretKey.startsWith("S") || secretKey.length !== 56) {
+      setEd25519Error("Invalid secret key. Must start with S and be 56 characters.");
+      return;
+    }
+
+    setEd25519Adding(true);
+    setEd25519Error(null);
+
+    try {
+      const result = addEd25519FromSecret(secretKey);
+      if (result) {
+        if (result.publicKey.toLowerCase() !== ed25519InputKey.toLowerCase()) {
+          setEd25519Error(
+            `Secret key doesn't match this signer. Got ${result.publicKey.slice(0, 8)}...`
+          );
+          return;
+        }
+        const signerIndex = availableSigners.findIndex(
+          (s) =>
+            s.tag === "External" &&
+            getCredentialIdFromSigner(s) === null &&
+            ed25519KeyHex(s).toLowerCase() === ed25519InputKey.toLowerCase()
+        );
+        if (signerIndex >= 0) {
+          setSelectedSignerIds((prev) => new Set([...prev, signerIndex]));
+        }
+        setEd25519InputKey(null);
+        setEd25519Secret("");
+      }
+    } catch (err) {
+      setEd25519Error(err instanceof Error ? err.message : "Failed to add Ed25519 key");
+    } finally {
+      setEd25519Adding(false);
+    }
+  };
+
+  const cancelEd25519Input = () => {
+    setEd25519InputKey(null);
+    setEd25519Secret("");
+    setEd25519Error(null);
+  };
+
   const handleConfirm = () => {
     const selected: SelectedSigner[] = [];
 
@@ -203,6 +278,12 @@ export function SignerPicker({
             signer,
             type: "passkey",
             credentialId: credId,
+          });
+        } else if (canSignEd25519?.(signer)) {
+          selected.push({
+            signer,
+            type: "ed25519",
+            ed25519PublicKey: ed25519KeyHex(signer),
           });
         }
       } else if (signer.tag === "Delegated") {
@@ -380,6 +461,108 @@ export function SignerPicker({
                               disabled={isAddingSecret || !secretKeyValue.trim()}
                             >
                               {isAddingSecret ? <span className="spinner" /> : "Add"}
+                            </button>
+                          </div>
+                          <p className="secret-key-warning">
+                            ⚠️ Your secret key is stored in memory only and will be cleared on refresh.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Ed25519 Signers */}
+          {ed25519Signers.length > 0 && (
+            <div className="signer-section">
+              <h4>Ed25519 Signers</h4>
+              <div className="signer-list">
+                {ed25519Signers.map((signer) => {
+                  const globalIndex = availableSigners.indexOf(signer);
+                  const keyHex = ed25519KeyHex(signer);
+                  const isRegistered = canSignEd25519?.(signer) ?? false;
+                  const isSelected = selectedSignerIds.has(globalIndex);
+                  const isEnteringSecret = ed25519InputKey === keyHex;
+
+                  return (
+                    <div key={globalIndex} className="delegated-signer-wrapper">
+                      <label
+                        className={`signer-item ${isSelected ? "selected" : ""} ${!isRegistered ? "disabled" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSigner(globalIndex)}
+                          disabled={!isRegistered}
+                        />
+                        <div className="signer-info">
+                          <span className="signer-label">
+                            {formatSignerLabel(signer)}
+                            {isRegistered && <span className="badge connected">Ready</span>}
+                          </span>
+                          <span className="signer-type">
+                            {isRegistered ? "Ready to sign" : "Enter secret key to sign"}
+                          </span>
+                        </div>
+                        {!isRegistered && addEd25519FromSecret && !isEnteringSecret && (
+                          <button
+                            type="button"
+                            className="small secondary secret-key-btn"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setEd25519InputKey(keyHex);
+                              setEd25519Secret("");
+                              setEd25519Error(null);
+                            }}
+                            title="Enter Ed25519 secret key for this signer"
+                          >
+                            🔑 Enter Key
+                          </button>
+                        )}
+                      </label>
+
+                      {isEnteringSecret && (
+                        <div className="secret-key-input-form">
+                          <div className="secret-key-header">
+                            <span>Enter Ed25519 secret key for {keyHex.slice(0, 8)}...</span>
+                            <button
+                              type="button"
+                              className="small secondary close-btn"
+                              onClick={cancelEd25519Input}
+                            >
+                              ×
+                            </button>
+                          </div>
+                          <input
+                            type="password"
+                            className="secret-key-input"
+                            value={ed25519Secret}
+                            onChange={(e) => setEd25519Secret(e.target.value)}
+                            placeholder="S..."
+                            autoFocus
+                          />
+                          {ed25519Error && (
+                            <div className="secret-key-error">{ed25519Error}</div>
+                          )}
+                          <div className="secret-key-actions">
+                            <button
+                              type="button"
+                              className="small secondary"
+                              onClick={cancelEd25519Input}
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              className="small"
+                              onClick={handleAddEd25519Secret}
+                              disabled={ed25519Adding || !ed25519Secret.trim()}
+                            >
+                              {ed25519Adding ? <span className="spinner" /> : "Add"}
                             </button>
                           </div>
                           <p className="secret-key-warning">

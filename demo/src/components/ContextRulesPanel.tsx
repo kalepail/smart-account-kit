@@ -11,6 +11,8 @@ import {
   formatContextType,
 } from "../utils/sdk";
 import { toSimpleResult } from "../utils/tx";
+import type { KnownPolicy } from "../config";
+import { PolicyInspector } from "./PolicyInspector";
 
 interface ContextRulesPanelProps {
   kit: SmartAccountKit;
@@ -18,6 +20,10 @@ interface ContextRulesPanelProps {
   onLog: (message: string, type?: "info" | "success" | "error") => void;
   onAddRule: () => void;
   onEditRule: (rule: ContextRule) => void;
+  /** Known policy contracts (for live policy inspection) */
+  knownPolicies: KnownPolicy[];
+  /** Active passkey credential id (for signing policy setters) */
+  activeCredentialId: string | null;
   /** All connected wallets */
   connectedWallets: ConnectedWallet[];
   /** Function to connect external wallet */
@@ -51,10 +57,13 @@ export function ContextRulesPanel({
   onLog,
   onAddRule,
   onEditRule,
+  knownPolicies,
+  activeCredentialId,
   connectedWallets,
   connectWallet,
 }: ContextRulesPanelProps) {
   const [rules, setRules] = useState<ContextRule[]>([]);
+  const [ruleCount, setRuleCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -70,6 +79,13 @@ export function ContextRulesPanel({
     try {
       const activeRules = await kit.rules.list();
       setRules(activeRules);
+      // Total rules ever created (get_context_rules_count) — a monotonic
+      // counter, distinct from the number of currently-active rules.
+      try {
+        setRuleCount(await kit.rules.count());
+      } catch {
+        // count is best-effort; ignore failures
+      }
       if (activeRules.length === 0 && allowRetry) {
         retryTimeoutRef.current = setTimeout(() => {
           void fetchRules(false);
@@ -170,7 +186,17 @@ export function ContextRulesPanel({
   return (
     <div className="card">
       <div className="section-header">
-        <h3>Context Rules (On-Chain)</h3>
+        <h3>
+          Context Rules (On-Chain)
+          {ruleCount !== null && (
+            <span
+              className="rule-count-badge"
+              title="Active rules / total rules ever created (get_context_rules_count)"
+            >
+              {" "}{rules.length} active / {ruleCount} created
+            </span>
+          )}
+        </h3>
         <div style={{ display: "flex", gap: "8px" }}>
           <button className="small secondary" onClick={() => void fetchRules()} disabled={loading}>
             {loading ? <span className="spinner" /> : "Refresh"}
@@ -260,12 +286,26 @@ export function ContextRulesPanel({
                     <div className="detail-empty">No policies (signer-only rule)</div>
                   ) : (
                     <div className="policies-list">
-                      {rule.policies.map((policyAddr, idx) => (
-                        <div key={idx} className="policy-item">
-                          <span className="policy-icon">P</span>
-                          <span className="policy-address">{truncateAddress(policyAddr)}</span>
-                        </div>
-                      ))}
+                      {rule.policies.map((policyAddr, idx) => {
+                        const knownPolicy = knownPolicies.find(
+                          (p) => p.address === policyAddr
+                        );
+                        return (
+                          <div key={idx} className="policy-item">
+                            <span className="policy-icon">P</span>
+                            <span className="policy-address">{truncateAddress(policyAddr)}</span>
+                            <PolicyInspector
+                              kit={kit}
+                              rule={rule}
+                              policyAddress={policyAddr}
+                              knownPolicy={knownPolicy}
+                              activeCredentialId={activeCredentialId}
+                              onLog={onLog}
+                              onChanged={() => void fetchRules()}
+                            />
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

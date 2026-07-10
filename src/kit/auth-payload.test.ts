@@ -231,12 +231,20 @@ describe("auth-payload", () => {
 
   it("rejects out-of-range signature expirations without mutating the entry", () => {
     const negativeEntry = makeAuthEntry(makeAccount(19));
+    const negativeFractionEntry = makeAuthEntry(makeAccount(21));
     const oversizedEntry = makeAuthEntry(makeAccount(20));
 
     expect(() =>
       buildSignaturePayload("Test SDF Network ; September 2015", negativeEntry, -1)
     ).toThrow("Signature expiration ledger must fit in u32");
     expect(getAddressCredentials(negativeEntry.credentials()).signatureExpirationLedger()).toBe(1);
+
+    expect(() =>
+      buildSignaturePayload("Test SDF Network ; September 2015", negativeFractionEntry, -0.5)
+    ).toThrow("Signature expiration ledger must fit in u32");
+    expect(
+      getAddressCredentials(negativeFractionEntry.credentials()).signatureExpirationLedger()
+    ).toBe(1);
 
     expect(() =>
       buildSignaturePayload("Test SDF Network ; September 2015", oversizedEntry, 0x1_0000_0000)

@@ -699,8 +699,13 @@ import type {
 #### Using via SmartAccountKit (Recommended)
 
 ```typescript
-// Indexer is auto-configured for testnet/mainnet
-const kit = new SmartAccountKit({ /* config */ });
+// Indexer is auto-configured for testnet/mainnet. A custom provider may also
+// receive an API key or JWT as Authorization: Bearer <token>.
+const kit = new SmartAccountKit({
+  /* required config */
+  indexerUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
+  indexerAuthToken: 'your-indexer-token',
+});
 
 // Discover contracts by credential ID
 const contracts = await kit.discoverContractsByCredential(credentialId);
@@ -727,8 +732,10 @@ const mainnetIndexer = IndexerClient.forNetwork('Public Global Stellar Network ;
 
 // Or with a custom URL
 const indexer = new IndexerClient({
-  baseUrl: 'https://smart-account-indexer.sdf-ecosystem.workers.dev',
+  baseUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
   timeout: 10000,
+  // Optional API key or JWT; sent as Authorization: Bearer <token>
+  authToken: 'your-indexer-token',
 });
 
 // Lookup by credential ID
@@ -778,6 +785,10 @@ pnpm run build:all
 ### Environment Configuration
 
 The build script reads configuration from `demo/.env` to generate TypeScript bindings by fetching contract metadata from the Stellar network. The demo comes pre-configured with testnet contract addresses.
+
+The optimized Protocol 27 testnet/mainnet artifact hashes, deployed contract
+IDs, and transaction provenance are recorded in
+[`docs/deployments-protocol-27-2026-07-09.md`](docs/deployments-protocol-27-2026-07-09.md).
 
 Key variables in `demo/.env`:
 - `VITE_RPC_URL` - Stellar RPC endpoint

@@ -138,6 +138,13 @@ export interface IndexerConfig {
   baseUrl: string;
   /** Request timeout in milliseconds (default: 10000) */
   timeout?: number;
+  /**
+   * Optional API key or JWT sent as an Authorization bearer token.
+   *
+   * Browser applications should only use tokens that are safe to expose to
+   * end users. Keep privileged/admin tokens in a server-side integration.
+   */
+  authToken?: string;
 }
 
 /**
@@ -175,11 +182,13 @@ export const DEFAULT_INDEXER_URLS: Record<string, string> = {
 export class IndexerClient {
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readonly authToken?: string;
 
   constructor(config: IndexerConfig) {
     // Remove trailing slash if present
     this.baseUrl = config.baseUrl.replace(/\/$/, "");
     this.timeout = config.timeout ?? DEFAULT_INDEXER_TIMEOUT_MS;
+    this.authToken = config.authToken;
   }
 
   /**
@@ -187,12 +196,16 @@ export class IndexerClient {
    * Uses the default indexer URL for known networks.
    *
    * @param networkPassphrase - The Stellar network passphrase
+   * @param config - Optional timeout and bearer-token configuration
    * @returns IndexerClient configured for the network, or null if no default URL exists
    */
-  static forNetwork(networkPassphrase: string): IndexerClient | null {
+  static forNetwork(
+    networkPassphrase: string,
+    config: Omit<IndexerConfig, "baseUrl"> = {}
+  ): IndexerClient | null {
     const url = DEFAULT_INDEXER_URLS[networkPassphrase];
     if (!url) return null;
-    return new IndexerClient({ baseUrl: url });
+    return new IndexerClient({ baseUrl: url, ...config });
   }
 
   /**
@@ -299,12 +312,17 @@ export class IndexerClient {
   private async fetch<T>(path: string): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+    };
+
+    if (this.authToken) {
+      headers.Authorization = `Bearer ${this.authToken}`;
+    }
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        headers: {
-          Accept: "application/json",
-        },
+        headers,
         signal: controller.signal,
       });
 

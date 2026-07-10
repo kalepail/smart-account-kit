@@ -182,7 +182,8 @@ export interface SmartAccountConfig {
    * ```typescript
    * const kit = new SmartAccountKit({
    *   // ... other config
-   *   indexerUrl: 'https://smart-account-indexer.sdf-ecosystem.workers.dev',
+   *   indexerUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
+   *   indexerAuthToken: 'your-indexer-token',
    * });
    *
    * // Discover all contracts for a credential ID
@@ -190,6 +191,15 @@ export interface SmartAccountConfig {
    * ```
    */
   indexerUrl?: string | false;
+
+  /**
+   * Optional API key or JWT sent to the configured indexer as
+   * `Authorization: Bearer <token>`.
+   *
+   * Browser applications should only use tokens that are safe to expose to
+   * end users. Keep privileged/admin tokens in a server-side integration.
+   */
+  indexerAuthToken?: string;
 
   /**
    * Optional on-chain probing configuration for current context-rule discovery.

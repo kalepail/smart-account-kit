@@ -86,9 +86,12 @@ export function normalizeSignatureExpirationLedger(expiration: number): number {
   if (!Number.isFinite(expiration)) {
     throw new Error("Signature expiration ledger must be a finite number");
   }
+  if (expiration < 0) {
+    throw new Error("Signature expiration ledger must fit in u32");
+  }
 
   const normalizedExpiration = Math.ceil(expiration);
-  if (normalizedExpiration < 0 || normalizedExpiration > 0xffffffff) {
+  if (normalizedExpiration > 0xffffffff) {
     throw new Error("Signature expiration ledger must fit in u32");
   }
 

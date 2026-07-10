@@ -6,8 +6,10 @@
 #
 # Prerequisites:
 # - Stellar CLI installed (`stellar --version`)
-# - Configuration in demo/.env (VITE_* variables)
-# - Use VITE_ACCOUNT_WASM_HASH for the default repo flow; VITE_ACCOUNT_CONTRACT_ID is optional when targeting a specific deployed smart account instance
+# - Configuration in demo/.env (VITE_* variables), or ACCOUNT_WASM pointing
+#   to a local optimized smart-account WASM
+# - Use VITE_ACCOUNT_WASM_HASH for a deployed WASM; VITE_ACCOUNT_CONTRACT_ID
+#   is optional when targeting a specific deployed smart-account instance
 
 set -e
 
@@ -15,6 +17,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BINDINGS_DIR="$KIT_DIR/packages/smart-account-kit-bindings"
 DEMO_ENV="$KIT_DIR/demo/.env"
+EXISTING_BINDINGS_VERSION=$(node -p "require('$BINDINGS_DIR/package.json').version" 2>/dev/null || true)
+CURRENT_VERSION="${BINDINGS_VERSION:-$EXISTING_BINDINGS_VERSION}"
+
+if [ -z "$CURRENT_VERSION" ] || [ "$CURRENT_VERSION" = "0.0.0" ]; then
+    echo "Error: set BINDINGS_VERSION when no released binding version can be preserved" >&2
+    exit 1
+fi
 
 # Colors
 GREEN='\033[0;32m'
@@ -35,16 +44,19 @@ if [ -f "$DEMO_ENV" ]; then
         fi
     done < "$DEMO_ENV"
 else
-    echo -e "${RED}Error: demo/.env not found${NC}"
-    exit 1
+    if [ -z "${ACCOUNT_WASM:-}" ] && [ -z "${VITE_ACCOUNT_WASM:-}" ]; then
+        echo -e "${RED}Error: demo/.env not found and no local ACCOUNT_WASM was provided${NC}"
+        exit 1
+    fi
 fi
 
 # Map VITE_ variables
-STELLAR_RPC_URL="${STELLAR_RPC_URL:-$VITE_RPC_URL}"
-STELLAR_NETWORK_PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-$VITE_NETWORK_PASSPHRASE}"
+STELLAR_RPC_URL="${STELLAR_RPC_URL:-${VITE_RPC_URL:-}}"
+STELLAR_NETWORK_PASSPHRASE="${STELLAR_NETWORK_PASSPHRASE:-${VITE_NETWORK_PASSPHRASE:-}}"
 STELLAR_NETWORK="${STELLAR_NETWORK:-${VITE_NETWORK:-}}"
-ACCOUNT_WASM_HASH="${ACCOUNT_WASM_HASH:-$VITE_ACCOUNT_WASM_HASH}"
-ACCOUNT_CONTRACT_ID="${ACCOUNT_CONTRACT_ID:-$VITE_ACCOUNT_CONTRACT_ID}"
+ACCOUNT_WASM_HASH="${ACCOUNT_WASM_HASH:-${VITE_ACCOUNT_WASM_HASH:-}}"
+ACCOUNT_CONTRACT_ID="${ACCOUNT_CONTRACT_ID:-${VITE_ACCOUNT_CONTRACT_ID:-}}"
+ACCOUNT_WASM="${ACCOUNT_WASM:-${VITE_ACCOUNT_WASM:-}}"
 
 if [ -z "$STELLAR_NETWORK" ]; then
     case "$STELLAR_NETWORK_PASSPHRASE" in
@@ -63,35 +75,44 @@ if ! command -v stellar &> /dev/null; then
     exit 1
 fi
 
-if [ -z "$STELLAR_RPC_URL" ] || [ -z "$STELLAR_NETWORK_PASSPHRASE" ]; then
+if [ -z "$ACCOUNT_WASM" ] && { [ -z "$STELLAR_RPC_URL" ] || [ -z "$STELLAR_NETWORK_PASSPHRASE" ]; }; then
     echo -e "${RED}Error: RPC URL or network passphrase not set in demo/.env${NC}"
     exit 1
 fi
 
-if [ -z "$ACCOUNT_WASM_HASH" ] && [ -z "$ACCOUNT_CONTRACT_ID" ]; then
-    echo -e "${RED}Error: WASM hash or contract ID must be set in demo/.env${NC}"
+if [ -z "$ACCOUNT_WASM" ] && [ -z "$ACCOUNT_WASM_HASH" ] && [ -z "$ACCOUNT_CONTRACT_ID" ]; then
+    echo -e "${RED}Error: local WASM, WASM hash, or contract ID must be configured${NC}"
+    exit 1
+fi
+
+if [ -n "$ACCOUNT_WASM" ] && [ ! -f "$ACCOUNT_WASM" ]; then
+    echo -e "${RED}Error: local WASM not found: $ACCOUNT_WASM${NC}"
     exit 1
 fi
 
 # Step 1: Generate bindings
 echo -e "${YELLOW}Generating TypeScript bindings...${NC}"
 
-STELLAR_CMD="stellar contract bindings typescript"
-if [ -n "$STELLAR_NETWORK" ]; then
-    STELLAR_CMD="$STELLAR_CMD --network \"$STELLAR_NETWORK\""
+STELLAR_CMD=(stellar contract bindings typescript)
+if [ -n "$ACCOUNT_WASM" ]; then
+    STELLAR_CMD+=(--wasm "$ACCOUNT_WASM")
 else
-    STELLAR_CMD="$STELLAR_CMD --rpc-url \"$STELLAR_RPC_URL\""
-    STELLAR_CMD="$STELLAR_CMD --network-passphrase \"$STELLAR_NETWORK_PASSPHRASE\""
+    if [ -n "$STELLAR_NETWORK" ]; then
+        STELLAR_CMD+=(--network "$STELLAR_NETWORK")
+    else
+        STELLAR_CMD+=(--rpc-url "$STELLAR_RPC_URL")
+        STELLAR_CMD+=(--network-passphrase "$STELLAR_NETWORK_PASSPHRASE")
+    fi
+
+    if [ -n "$ACCOUNT_WASM_HASH" ]; then
+        STELLAR_CMD+=(--wasm-hash "$ACCOUNT_WASM_HASH")
+    else
+        STELLAR_CMD+=(--contract-id "$ACCOUNT_CONTRACT_ID")
+    fi
 fi
 
-if [ -n "$ACCOUNT_WASM_HASH" ]; then
-    STELLAR_CMD="$STELLAR_CMD --wasm-hash $ACCOUNT_WASM_HASH"
-else
-    STELLAR_CMD="$STELLAR_CMD --contract-id $ACCOUNT_CONTRACT_ID"
-fi
-
-STELLAR_CMD="$STELLAR_CMD --output-dir \"$BINDINGS_DIR\" --overwrite"
-eval $STELLAR_CMD
+STELLAR_CMD+=(--output-dir "$BINDINGS_DIR" --overwrite)
+"${STELLAR_CMD[@]}"
 
 echo -e "${GREEN}Bindings generated${NC}"
 
@@ -100,19 +121,12 @@ echo -e "${YELLOW}Patching package.json...${NC}"
 
 cd "$BINDINGS_DIR"
 
-# Preserve version if it exists and isn't 0.0.0. Allow callers to force a
-# specific publish version via BINDINGS_VERSION.
-CURRENT_VERSION="${BINDINGS_VERSION:-}"
-if [ -z "$CURRENT_VERSION" ]; then
-    CURRENT_VERSION=$(node -p "require('./package.json').version || '0.1.0'" 2>/dev/null || echo "0.1.0")
-fi
-if [ "$CURRENT_VERSION" = "0.0.0" ]; then
-    CURRENT_VERSION="0.1.0"
-fi
+STELLAR_SDK_PEER=$(node -p "require('$KIT_DIR/package.json').peerDependencies['@stellar/stellar-sdk']")
 
 node -e "
 const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const rootPkg = JSON.parse(fs.readFileSync('$KIT_DIR/package.json', 'utf8'));
 pkg.version = '$CURRENT_VERSION';
 pkg.description = 'TypeScript bindings for OpenZeppelin Smart Account contracts on Stellar/Soroban';
 pkg.main = 'dist/index.js';
@@ -122,12 +136,39 @@ pkg.files = ['dist'];
 pkg.author = 'OpenZeppelin';
 pkg.license = 'MIT';
 pkg.repository = { type: 'git', url: 'https://github.com/kalepail/smart-account-kit' };
-pkg.peerDependencies = { '@stellar/stellar-sdk': '15.0.1' };
+pkg.peerDependencies = { '@stellar/stellar-sdk': '$STELLAR_SDK_PEER' };
+pkg.devDependencies = {
+  ...(pkg.devDependencies || {}),
+  typescript: rootPkg.devDependencies.typescript,
+};
 pkg.publishConfig = { registry: 'https://registry.npmjs.org/', access: 'public' };
 if (pkg.dependencies && pkg.dependencies['@stellar/stellar-sdk']) {
     delete pkg.dependencies['@stellar/stellar-sdk'];
 }
 fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
+
+# TypeScript 6 needs an explicit rootDir for the generated package layout.
+node -e "
+const fs = require('fs');
+const path = 'tsconfig.json';
+const source = fs.readFileSync(path, 'utf8');
+const patched = source.replace(
+  /\/\/ \"rootDir\": \"\.\/\",[^\n]*/,
+  '\"rootDir\": \"./src\",'
+);
+if (patched === source) {
+  throw new Error('Could not patch rootDir in generated tsconfig.json');
+}
+fs.writeFileSync(path, patched.endsWith('\\n') ? patched : patched + '\\n');
+"
+
+# Keep generated sources compatible with the repository's whitespace checks.
+node -e "
+const fs = require('fs');
+const path = 'src/index.ts';
+const source = fs.readFileSync(path, 'utf8');
+fs.writeFileSync(path, source.replace(/[ \\t]+$/gm, ''));
 "
 
 # Step 3: Install and build

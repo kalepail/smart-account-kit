@@ -22,10 +22,10 @@ import { ContextRulesPanel, ContextRuleBuilder, ActiveSignerDisplay, SignerPicke
 const CONFIG = {
   rpcUrl: import.meta.env.VITE_RPC_URL || "https://soroban-testnet.stellar.org",
   networkPassphrase: import.meta.env.VITE_NETWORK_PASSPHRASE || Networks.TESTNET,
-  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611",
-  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU",
+  accountWasmHash: import.meta.env.VITE_ACCOUNT_WASM_HASH || "1b5f4534a76322da2ad7c745f6900857a6802b0ca79850c35a03561df997785a",
+  webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F",
   nativeTokenContract: import.meta.env.VITE_NATIVE_TOKEN_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
-  ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CCJOUKLCZVCXS4VIBBEA7S3SPWZQS5DPE5A4YG67RA3Z7E3SJZAUJFQA",
+  ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CAAVTMCBXEIBPR64EAASKFXERVPYFZA2JYP5A3BG6PESWEFUJX5IHKN4",
   // Relayer fee sponsoring (optional)
   relayerUrl: import.meta.env.VITE_RELAYER_URL || "",
 };
@@ -36,13 +36,13 @@ const KNOWN_POLICIES = [
     type: "threshold" as const,
     name: "Threshold (M-of-N)",
     description: "Requires M signatures out of N total signers",
-    address: import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || "CB2WQXF2XXDGUV2CTVQ23RLN3ESI3IY5KKX3KVXWBNRTTWDHZM76NVKJ",
+    address: import.meta.env.VITE_THRESHOLD_POLICY_ADDRESS || "CB3FATQKCIRIQOCYRUPCQ2KREQ7T4RPKS7EAEOZWPEPUKWEDRVROBCEG",
   },
   {
     type: "spending_limit" as const,
     name: "Spending Limit",
     description: "Limits spending to a maximum amount per time period",
-    address: import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || "CBBZ2XP4LBDEO2EELTZKJSPQZDREFKCULL6CKIUQO53S42RZABOYQUK3",
+    address: import.meta.env.VITE_SPENDING_LIMIT_POLICY_ADDRESS || "CABXBYJNZ7IUW4G3D6BND5YCAQF3ASSDMDAOKQQ63UYFSO7WUU2TIP5G",
   },
   {
     type: "weighted_threshold" as const,

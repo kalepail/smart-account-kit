@@ -390,12 +390,18 @@ export class SmartAccountKit {
     if (config.indexerUrl === false) {
       this.indexer = null;
     } else if (typeof config.indexerUrl === "string") {
-      this.indexer = new IndexerClient({ baseUrl: config.indexerUrl });
+      this.indexer = new IndexerClient({
+        baseUrl: config.indexerUrl,
+        authToken: config.indexerAuthToken,
+      });
     } else {
       // Try to use default URL for this network
       const defaultUrl = DEFAULT_INDEXER_URLS[this.networkPassphrase];
       this.indexer = defaultUrl
-        ? new IndexerClient({ baseUrl: defaultUrl })
+        ? new IndexerClient({
+            baseUrl: defaultUrl,
+            authToken: config.indexerAuthToken,
+          })
         : null;
     }
 

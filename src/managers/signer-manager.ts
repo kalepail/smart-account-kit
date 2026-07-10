@@ -124,14 +124,23 @@ export class SignerManager {
    *
    * @param contextRuleId - The context rule to add the signers to
    * @param signers - The signers to add
+   * @param options.existingSignerCount - Number of signers already on the target
+   *   rule. Pass this so the batch is pre-checked against the rule-level
+   *   `MAX_SIGNERS` limit (existing + new). When omitted it defaults to 0, so
+   *   only the size of this batch is checked and the contract enforces the
+   *   rule-level limit at simulation.
    * @returns Assembled transaction that adds the signers when signed and sent
-   * @throws {ValidationError} If the batch would exceed MAX_SIGNERS or a signer
-   *   is invalid
+   * @throws {ValidationError} If the batch (plus `existingSignerCount`) would
+   *   exceed `MAX_SIGNERS` or a signer is invalid
    * @throws Error if not connected to a wallet
    */
-  async addBatch(contextRuleId: number, signers: ContractSigner[]) {
+  async addBatch(
+    contextRuleId: number,
+    signers: ContractSigner[],
+    options?: { existingSignerCount?: number }
+  ) {
     const { wallet } = this.deps.requireWallet();
-    validateSigners(signers);
+    validateSigners(signers, options?.existingSignerCount ?? 0);
     return wallet.batch_add_signer({
       context_rule_id: contextRuleId,
       signers,

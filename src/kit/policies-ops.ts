@@ -7,25 +7,57 @@ import type {
   SpendingLimitAccountParams,
   WeightedThresholdAccountParams,
 } from "../contract-types";
-import { signerToScVal } from "./auth-payload";
+import { compareScVal, signerToScVal } from "./auth-payload";
 import { buildI128ScVal } from "./tx-ops";
+
+const I128_MAX = (1n << 127n) - 1n;
+const I128_MIN = -(1n << 127n);
 
 function symbolEntry(key: string, val: xdr.ScVal): xdr.ScMapEntry {
   return new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(key), val });
 }
 
 function requireU32(value: unknown, field: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+  // Accept numbers, bigints, and decimal numeric strings (the generated spec's
+  // stringToScVal accepts string numerics for large ints, so callers reasonably
+  // pass e.g. "8640" for period_ledgers).
+  let big: bigint;
+  if (typeof value === "number") {
+    if (!Number.isInteger(value)) {
+      throw new Error(`${field} must be a u32`);
+    }
+    big = BigInt(value);
+  } else if (typeof value === "bigint") {
+    big = value;
+  } else if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    big = BigInt(value.trim());
+  } else {
     throw new Error(`${field} must be a u32`);
   }
-  return value;
+  if (big < 0n || big > 0xffffffffn) {
+    throw new Error(`${field} must be a u32`);
+  }
+  return Number(big);
 }
 
 function requireI128(value: unknown, field: string): bigint {
-  if (typeof value !== "bigint" && typeof value !== "number") {
-    throw new Error(`${field} must be a bigint or number`);
+  let big: bigint;
+  if (typeof value === "bigint") {
+    big = value;
+  } else if (typeof value === "number") {
+    if (!Number.isInteger(value)) {
+      throw new Error(`${field} must be an integer, bigint, or numeric string`);
+    }
+    big = BigInt(value);
+  } else if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
+    big = BigInt(value.trim());
+  } else {
+    throw new Error(`${field} must be an integer, bigint, or numeric string`);
   }
-  return BigInt(value);
+  if (big < I128_MIN || big > I128_MAX) {
+    throw new Error(`${field} is out of i128 range`);
+  }
+  return big;
 }
 
 function encodeThresholdParams(params: unknown): xdr.ScVal {
@@ -58,8 +90,10 @@ function encodeWeightedThresholdParams(params: unknown): xdr.ScVal {
       })
     );
   }
-  // Signer (vector) keys sort by their canonical XDR encoding.
-  weightEntries.sort((a, b) => a.key().toXDR("hex").localeCompare(b.key().toXDR("hex")));
+  // Signer (vector) keys must be in Soroban host-sort order, not XDR-hex order:
+  // same-verifier signers differ only in variable-length keyData, where the two
+  // orders diverge and the host would reject the map. See compareScVal.
+  weightEntries.sort((a, b) => compareScVal(a.key(), b.key()));
   return xdr.ScVal.scvMap([
     symbolEntry("signer_weights", xdr.ScVal.scvMap(weightEntries)),
     symbolEntry("threshold", xdr.ScVal.scvU32(requireU32(threshold, "threshold"))),
@@ -85,7 +119,6 @@ const POLICY_PARAM_ENCODERS: Record<
  * @throws {ValidationError} If the params don't match the expected shape
  */
 export function convertPolicyParams(
-  _wallet: SmartAccountClient | undefined,
   policyType: "threshold" | "spending_limit" | "weighted_threshold",
   params: unknown
 ): xdr.ScVal {
@@ -122,7 +155,7 @@ export function buildConstructorPolicies(
   for (const policy of policies) {
     let scParams: xdr.ScVal;
     if (policy.type && policy.type !== "custom") {
-      scParams = convertPolicyParams(undefined, policy.type, policy.installParams);
+      scParams = convertPolicyParams(policy.type, policy.installParams);
     } else if (policy.installParams instanceof xdr.ScVal) {
       scParams = policy.installParams;
     } else {
@@ -156,18 +189,31 @@ export function buildPoliciesScVal(
     let scParams: xdr.ScVal;
 
     if (policyType && policyType !== "custom") {
-      scParams = convertPolicyParams(wallet, policyType, params);
+      scParams = convertPolicyParams(policyType, params);
+    } else if (params instanceof xdr.ScVal) {
+      scParams = params;
     } else {
+      // Custom (or unknown-type) policy: convert via the wallet spec. Never
+      // silently fall back to Void — shipping the wrong ScVal shape on-chain is
+      // a correctness hazard, so surface a typed error instead (mirrors
+      // convertPolicyParams / buildConstructorPolicies).
       const walletObj = wallet as unknown as Record<string, unknown>;
       const spec = walletObj.spec as { nativeToScVal?: (val: unknown, type: xdr.ScSpecTypeDef) => xdr.ScVal } | undefined;
-      if (spec && typeof spec.nativeToScVal === "function") {
-        try {
-          scParams = spec.nativeToScVal(params, xdr.ScSpecTypeDef.scSpecTypeVal());
-        } catch {
-          scParams = xdr.ScVal.scvVoid();
-        }
-      } else {
-        scParams = xdr.ScVal.scvVoid();
+      if (!spec || typeof spec.nativeToScVal !== "function") {
+        throw new ValidationError(
+          `Policy ${address}: custom policy params could not be converted — provide installParams as an xdr.ScVal or set a known policy 'type'.`,
+          SmartAccountErrorCode.INVALID_INPUT,
+          { address }
+        );
+      }
+      try {
+        scParams = spec.nativeToScVal(params, xdr.ScSpecTypeDef.scSpecTypeVal());
+      } catch (error) {
+        throw new ValidationError(
+          `Policy ${address}: failed to convert custom policy params into an ScVal.`,
+          SmartAccountErrorCode.INVALID_INPUT,
+          { address, cause: error instanceof Error ? error.message : String(error) }
+        );
       }
     }
 
@@ -177,11 +223,9 @@ export function buildPoliciesScVal(
     }));
   }
 
-  entries.sort((a, b) => {
-    const aXdr = a.key().toXDR("hex");
-    const bXdr = b.key().toXDR("hex");
-    return aXdr.localeCompare(bXdr);
-  });
+  // Address keys are fixed-width, but use the shared host-order comparator for
+  // consistency and to avoid locale-sensitive string comparison.
+  entries.sort((a, b) => compareScVal(a.key(), b.key()));
 
   return xdr.ScVal.scvMap(entries);
 }

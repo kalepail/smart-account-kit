@@ -13,7 +13,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import type { xdr } from "@stellar/stellar-sdk";
-import type { SmartAccountError, SmartAccountErrorCode } from "./errors";
+import type { SmartAccountError } from "./errors";
 import type { WalletStorage } from "./external-signers";
 
 // ============================================================================
@@ -400,10 +400,8 @@ export interface TransactionSuccess {
  */
 export interface TransactionFailure {
   success: false;
-  /** The typed error describing the failure. */
+  /** The typed error describing the failure. Branch on `error.code`. */
   error: SmartAccountError;
-  /** Convenience mirror of `error.code` for quick branching. */
-  code: SmartAccountErrorCode;
   /** Transaction hash, when one was assigned before the failure. */
   hash?: string;
 }

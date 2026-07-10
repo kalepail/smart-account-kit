@@ -10,7 +10,7 @@ import { xdr } from "@stellar/stellar-sdk";
 import type { rpc } from "@stellar/stellar-sdk";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/browser";
 import type { SmartAccountEventEmitter } from "../events";
-import type { StorageAdapter, StoredCredential, SubmissionMethod, SubmissionOptions, TransactionResult } from "../types";
+import type { PolicyConfig, StorageAdapter, StoredCredential, SubmissionMethod, SubmissionOptions, TransactionResult } from "../types";
 
 /** Dependencies required by CredentialManager */
 export interface CredentialManagerDeps {
@@ -34,10 +34,15 @@ export interface CredentialManagerDeps {
     credentialId: string;
     publicKey: Uint8Array;
   }>;
-  /** Build a deploy transaction */
+  /**
+   * Build a deploy transaction. `policies` are the constructor policies to
+   * install on the new wallet's default context rule; when omitted the kit's
+   * `config.defaultPolicies` are used (wired in the dependency closure).
+   */
   buildDeployTransaction: (
     credentialIdBuffer: Buffer,
-    publicKey: Uint8Array
+    publicKey: Uint8Array,
+    policies?: PolicyConfig[]
   ) => Promise<{ built?: { toXDR: () => string }; signed?: { toXDR: () => string } }>;
   /** Sign deploy transaction with deployer keypair (envelope signature) */
   signWithDeployer: (tx: unknown) => Promise<void>;
@@ -135,10 +140,15 @@ export class CredentialManager {
 
   /**
    * Deploy a wallet using an existing pending credential.
+   *
+   * @param options.policies - Constructor policies to install on the new
+   *   wallet's default context rule. Overrides `config.defaultPolicies` when
+   *   provided; when omitted, `config.defaultPolicies` are honored (matching
+   *   {@link SmartAccountKit.createWallet}).
    */
   async deploy(
     credentialId: string,
-    options?: { autoSubmit?: boolean; forceMethod?: SubmissionMethod }
+    options?: { autoSubmit?: boolean; forceMethod?: SubmissionMethod; policies?: PolicyConfig[] }
   ): Promise<{
     contractId: string;
     signedTransaction: string;
@@ -154,7 +164,8 @@ export class CredentialManager {
 
     const deployTx = await this.deps.buildDeployTransaction(
       credentialIdBuffer,
-      credential.publicKey
+      credential.publicKey,
+      options?.policies
     );
 
     // Sign the deployment transaction with the deployer keypair

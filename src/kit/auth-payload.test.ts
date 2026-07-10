@@ -14,9 +14,11 @@ import {
   buildSignaturePreimage,
   buildSignaturePayload,
   buildWebAuthnSignatureBytes,
+  compareScVal,
   createAddressCredentials,
   getAddressCredentials,
   readAuthPayload,
+  signerToScVal,
   upsertAuthPayloadSigner,
   writeAuthPayload,
 } from "./auth-payload";
@@ -264,5 +266,81 @@ describe("auth-payload", () => {
       buildSignaturePayload("Test SDF Network ; September 2015", oversizedEntry, 0x1_0000_0000)
     ).toThrow("Signature expiration ledger must fit in u32");
     expect(getAddressCredentials(oversizedEntry.credentials()).signatureExpirationLedger()).toBe(1);
+  });
+});
+
+describe("compareScVal (Soroban host key order)", () => {
+  // A shared webauthn verifier: two passkey signers on one contract carry the
+  // same verifier address, so their Signer keys differ only in the trailing
+  // variable-length keyData Bytes — exactly where host order and XDR order can
+  // diverge.
+  const VERIFIER = "CCF65VXVORNOZBRR3EG3GZYSFS3ALDG44CDYN5T5KRWKYX6RXLKLXER4";
+
+  function externalKey(keyData: Buffer): xdr.ScVal {
+    return signerToScVal({ tag: "External", values: [VERIFIER, keyData] });
+  }
+
+  it("orders same-verifier keys by keyData content, diverging from XDR-hex length order", () => {
+    // keyData chosen so XDR-hex (length-major) and host (content-major) disagree:
+    // 81 bytes of 0x02 vs 97 bytes of 0x01. buildKeyData (65-byte pubkey +
+    // variable-length credential id) makes such mixed-length pairs realistic.
+    const shorterHigher = Buffer.alloc(81, 0x02);
+    const longerLower = Buffer.alloc(97, 0x01);
+    const keyA = externalKey(shorterHigher);
+    const keyB = externalKey(longerLower);
+
+    // XDR-hex order (the old sort) is length-major: the 4-byte length prefix
+    // 0x00000051 (81) < 0x00000061 (97), so the shorter key sorts first
+    // regardless of content.
+    const xdrOrder = [keyA, keyB].sort((a, b) =>
+      a.toXDR("hex").localeCompare(b.toXDR("hex"))
+    );
+    expect(xdrOrder[0]).toBe(keyA);
+
+    // Host order compares keyData content first: 0x01 < 0x02, so the longer,
+    // content-lower key sorts FIRST — the opposite order. The host would reject
+    // an ScMap ordered the old (XDR-hex) way.
+    const hostOrder = [keyA, keyB].sort(compareScVal);
+    expect(hostOrder[0]).toBe(keyB);
+
+    // The comparator reduces to a content comparison of the keyData bytes.
+    expect(Buffer.compare(shorterHigher, longerLower)).toBe(1);
+    expect(compareScVal(keyA, keyB)).toBe(1);
+  });
+
+  it("treats a shorter keyData that prefixes a longer one as smaller (Rust slice order)", () => {
+    const prefix = Buffer.alloc(81, 0x05);
+    const longer = Buffer.concat([Buffer.alloc(81, 0x05), Buffer.alloc(16, 0x05)]);
+    expect(compareScVal(externalKey(prefix), externalKey(longer))).toBeLessThan(0);
+  });
+
+  it("orders the Delegated variant before External by the variant symbol", () => {
+    const delegated = signerToScVal({ tag: "Delegated", values: [makeAccount(4)] });
+    expect(compareScVal(delegated, externalKey(Buffer.alloc(65, 1)))).toBeLessThan(0);
+  });
+
+  it("writeAuthPayload emits the signer map in ascending host order", () => {
+    const signerA: Signer = { tag: "External", values: [VERIFIER, Buffer.alloc(81, 0x02)] };
+    const signerB: Signer = { tag: "External", values: [VERIFIER, Buffer.alloc(97, 0x01)] };
+
+    // Insert in XDR-hex order [A, B]; the encoder must re-sort to host order.
+    const payload: AuthPayload = {
+      context_rule_ids: [],
+      signers: new Map([
+        [signerA, Buffer.from("aa", "hex")],
+        [signerB, Buffer.from("bb", "hex")],
+      ]),
+    };
+
+    const encoded = writeAuthPayload(payload);
+    const signersEntry = (encoded.map() ?? []).find(
+      (entry) => entry.key().sym().toString() === "signers"
+    );
+    const signerKeys = (signersEntry?.val().map() ?? []).map((entry) => entry.key());
+
+    // Host order puts the content-lower (longer) key first.
+    expect(signerKeys[0].toXDR("hex")).toBe(signerToScVal(signerB).toXDR("hex"));
+    expect(signerKeys[1].toXDR("hex")).toBe(signerToScVal(signerA).toXDR("hex"));
+    expect(compareScVal(signerKeys[0], signerKeys[1])).toBeLessThan(0);
   });
 });

@@ -33,6 +33,12 @@ export async function createWallet(
         userVerification?: "discouraged" | "preferred" | "required";
       }
     ) => Promise<{ rawResponse: RegistrationResponseJSON; credentialId: string; publicKey: Uint8Array }>;
+    /**
+     * Validate (and thereby convert) the constructor policies up front. Called
+     * before the WebAuthn ceremony so an invalid policy config fails fast
+     * instead of orphaning a freshly-created passkey + pending credential.
+     */
+    validateConstructorPolicies?: () => void;
     buildDeployTransaction: (
       credentialIdBuffer: Buffer,
       publicKey: Uint8Array
@@ -64,6 +70,10 @@ export async function createWallet(
     forceMethod?: SubmissionMethod;
   }
 ): Promise<CreateWalletResult & { submitResult?: TransactionResult; fundResult?: TransactionResult & { amount?: number } }> {
+  // Validate constructor policies BEFORE the WebAuthn ceremony: a bad policy
+  // config must fail fast, not after we've created (and would orphan) a passkey.
+  deps.validateConstructorPolicies?.();
+
   const { rawResponse, credentialId, publicKey } = await deps.createPasskey(
     appName,
     userName,

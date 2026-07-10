@@ -21,6 +21,7 @@ import {
   signersEqual,
 } from "../signer-utils";
 import type { ContractDetailsResponse } from "../indexer";
+import { decodeContractError } from "../contract-errors";
 import {
   BASE_FEE,
   DEFAULT_MAX_CONSECUTIVE_PROBE_MISSES,
@@ -251,13 +252,18 @@ function decodeContextRuleWithSpec(
     }
 
     if (injected.length !== entries.length) {
-      // Struct maps are keyed by symbols in ascending (alphabetical) order,
-      // matching the generated spec's field order. The spec reads fields
-      // positionally, so the map must be sorted this way or decoding a later
-      // field's ScVal against the wrong slot fails.
-      injected.sort((a, b) =>
-        a.key().sym().toString().localeCompare(b.key().sym().toString())
-      );
+      // Struct maps are keyed by symbols in ascending bytewise order, matching
+      // the generated spec's field order. The spec reads fields positionally, so
+      // the map must be sorted this way or decoding a later field's ScVal
+      // against the wrong slot fails. Use a bytewise comparison, NOT
+      // localeCompare: a locale-tailored collation (e.g. Lithuanian, where 'y'
+      // sorts near 'i') can reorder field names like policies/policy_ids and
+      // misalign the positional decode.
+      injected.sort((a, b) => {
+        const aKey = a.key().sym().toString();
+        const bKey = b.key().sym().toString();
+        return aKey < bKey ? -1 : aKey > bKey ? 1 : 0;
+      });
       toDecode = xdr.ScVal.scvMap(injected);
     }
   }
@@ -276,6 +282,25 @@ function decodeContextRuleWithSpec(
   return rule;
 }
 
+/**
+ * Best-effort access to an AssembledTransaction's raw simulation return value.
+ * Returns `undefined` when the transaction hasn't been simulated or the raw
+ * retval isn't reachable (e.g. lightweight test doubles), so callers can fall
+ * back to `.result`.
+ */
+function rawSimulationRetval(
+  tx: AssembledTransaction<ContextRule>
+): xdr.ScVal | undefined {
+  try {
+    const data = (tx as unknown as {
+      simulationData?: { result?: { retval?: xdr.ScVal } };
+    }).simulationData;
+    return data?.result?.retval;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function readContextRule(
   wallet: ContextRuleQueryClient,
   contextRuleId: number,
@@ -287,6 +312,20 @@ export async function readContextRule(
   }
 
   const ruleTx = await wallet.get_context_rule({ context_rule_id: contextRuleId });
+
+  // Prefer the missing-id shim: `.result` runs the bindings' plain
+  // funcResToNative, which FAILS against a deployed contract that omits the
+  // aligned signer_ids/policy_ids fields. When the wallet client exposes its
+  // spec and we can reach the raw retval, decode + hydrate through the same
+  // shim the RPC path uses. Fall back to `.result` only when neither is
+  // available (spec-conformant results and test doubles decode fine that way).
+  if (wallet.spec) {
+    const retval = rawSimulationRetval(ruleTx);
+    if (retval) {
+      const rule = decodeContextRuleWithSpec(wallet.spec, retval);
+      return hydrateContextRuleIds(wallet, rule);
+    }
+  }
   return ruleTx.result;
 }
 
@@ -309,6 +348,10 @@ export async function listContextRules(
   }
 
   const discoveredRuleIds = new Set<number>(details?.contextRules.map((rule) => rule.context_rule_id) ?? []);
+  // Cache rules read during probing so the final read phase can reuse them
+  // instead of re-simulating + re-hydrating the same rule (behavior-preserving:
+  // same function, same deps, same decode).
+  const probedRules = new Map<number, ContextRule>();
 
   if (probeConfig) {
     const maxRuleId = probeConfig.maxRuleId ?? DEFAULT_MAX_PROBED_RULE_ID;
@@ -320,6 +363,7 @@ export async function listContextRules(
       try {
         const rule = await readContextRule(wallet, contextRuleId, deps);
         discoveredRuleIds.add(rule.id);
+        probedRules.set(rule.id, rule);
         misses = 0;
       } catch {
         misses += 1;
@@ -343,6 +387,12 @@ export async function listContextRules(
   const contextRuleIds = [...discoveredRuleIds].sort((a, b) => a - b);
   const rules = await Promise.all(
     contextRuleIds.map(async (contextRuleId) => {
+      // Reuse a rule already read during probing; only indexer-discovered ids
+      // that were never probed need a fresh read here.
+      const cached = probedRules.get(contextRuleId);
+      if (cached) {
+        return cached;
+      }
       try {
         return await readContextRule(wallet, contextRuleId, deps);
       } catch (error) {
@@ -404,11 +454,13 @@ export async function findWebAuthnSignerInRules(
 export async function findWebAuthnSignerForCredential(
   wallet: ContextRuleQueryClient,
   credentialId: string,
-  deps?: ContextRuleDiscoveryDeps
+  deps?: ContextRuleDiscoveryDeps,
+  /** Pre-fetched rules snapshot; skips a redundant listContextRules enumeration. */
+  rules?: ContextRule[]
 ): Promise<ContractSigner> {
-  const rules = await listContextRules(wallet, deps);
+  const resolvedRules = rules ?? (await listContextRules(wallet, deps));
   const matchingSigners = collectUniqueSigners(
-    rules.flatMap((rule) =>
+    resolvedRules.flatMap((rule) =>
       rule.signers.filter((signer) => getCredentialIdFromSigner(signer) === credentialId)
     )
   );
@@ -430,9 +482,11 @@ export async function resolveContextRuleIdsForEntry(
   wallet: ContextRuleQueryClient,
   entry: xdr.SorobanAuthorizationEntry,
   selectedSigners: ContractSigner[],
-  deps?: ContextRuleDiscoveryDeps
+  deps?: ContextRuleDiscoveryDeps,
+  /** Pre-fetched rules snapshot; skips a redundant listContextRules enumeration. */
+  rulesSnapshot?: ContextRule[]
 ): Promise<number[]> {
-  const rules = await listContextRules(wallet, deps);
+  const rules = rulesSnapshot ?? (await listContextRules(wallet, deps));
   const contexts = buildInvocationContextTypes(entry);
 
   return contexts.map((contextType) => {
@@ -547,9 +601,16 @@ function isMissingContextRuleError(error: unknown): boolean {
     return false;
   }
 
+  // Prefer the centralized contract-error registry: a rendered
+  // `Error(Contract, #3000)` decodes to the ContextRuleNotFound entry.
+  if (decodeContractError(error.message)?.name === "ContextRuleNotFound") {
+    return true;
+  }
+
+  // Text markers for paths that surface the miss as a plain Error before typed
+  // decoding runs (the RPC read path and the test mock's "Rule N not found").
   return (
     /ContextRuleNotFound/i.test(error.message) ||
-    /Rule \d+ not found/i.test(error.message) ||
-    /Error\(Contract,\s*#3000\)/i.test(error.message)
+    /Rule \d+ not found/i.test(error.message)
   );
 }

@@ -348,7 +348,10 @@ describe("tx-ops", () => {
         getContractId: () => makeContractAddress("contract"),
         rpc: {
           getAccount: vi.fn().mockResolvedValue(account),
-          getContractData: vi.fn().mockRejectedValue(new Error("missing balance")),
+          // Real native balance read: 10,000 XLM = 100,000,000,000 stroops.
+          getAccountEntry: vi
+            .fn()
+            .mockResolvedValue({ balance: () => ({ toString: () => "100000000000" }) }),
           simulateTransaction,
         } as never,
         networkPassphrase: "Test SDF Network ; September 2015",

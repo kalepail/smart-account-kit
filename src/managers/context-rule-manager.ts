@@ -11,7 +11,7 @@ import type { rpc } from "@stellar/stellar-sdk";
 import type { Signer as ContractSigner, ContextRuleType, ContextRule } from "smart-account-kit-bindings";
 import type { ContractDetailsResponse } from "../indexer";
 import { getFilteredContextRules, listContextRules, readContextRule } from "../kit/context-rules";
-import { validateContextRule } from "../validation";
+import { validateContextRule, validateContextRuleName, validateValidUntil } from "../validation";
 
 /** Dependencies required by ContextRuleManager */
 export interface ContextRuleManagerDeps {
@@ -189,6 +189,7 @@ export class ContextRuleManager {
    * @throws Error if not connected to a wallet
    */
   async updateName(contextRuleId: number, name: string) {
+    validateContextRuleName(name);
     return this.deps.requireWallet().wallet.update_context_rule_name({
       context_rule_id: contextRuleId,
       name,
@@ -204,6 +205,7 @@ export class ContextRuleManager {
    * @throws Error if not connected to a wallet
    */
   async updateExpiration(contextRuleId: number, validUntil?: number) {
+    validateValidUntil(validUntil);
     return this.deps.requireWallet().wallet.update_context_rule_valid_until({
       context_rule_id: contextRuleId,
       valid_until: validUntil,

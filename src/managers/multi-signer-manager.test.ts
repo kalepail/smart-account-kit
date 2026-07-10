@@ -314,7 +314,7 @@ describe("MultiSignerManager", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error).toBeInstanceOf(SignerNotFoundError);
-      expect(result.code).toBe(SmartAccountErrorCode.SIGNER_NOT_FOUND);
+      expect(result.error.code).toBe(SmartAccountErrorCode.SIGNER_NOT_FOUND);
       expect(result.error.message).toContain(unsupportedAddress);
       expect(result.error.message).toContain(
         "Add an external signer for that address"

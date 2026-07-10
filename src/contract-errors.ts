@@ -180,7 +180,6 @@ export function failedTransaction(
   return {
     success: false,
     error,
-    code: error.code,
     ...(hash ? { hash } : {}),
   };
 }

@@ -112,11 +112,11 @@ describe("CONTRACT_ERROR_REGISTRY", () => {
 });
 
 describe("transaction failure helpers", () => {
-  it("failedTransaction mirrors the error code and omits an empty hash", () => {
+  it("failedTransaction exposes the error code via error.code and omits an empty hash", () => {
     const failure = failedTransaction(new ValidationError("bad input"));
     expect(failure.success).toBe(false);
     expect(failure.error).toBeInstanceOf(ValidationError);
-    expect(failure.code).toBe(SmartAccountErrorCode.INVALID_INPUT);
+    expect(failure.error.code).toBe(SmartAccountErrorCode.INVALID_INPUT);
     expect(failure.hash).toBeUndefined();
   });
 
@@ -128,7 +128,7 @@ describe("transaction failure helpers", () => {
   it("simulationFailure decodes a contract error when present", () => {
     const failure = simulationFailure("Error(Contract, #3221)");
     expect(failure.error).toBeInstanceOf(ContractError);
-    expect(failure.code).toBe(SmartAccountErrorCode.CONTRACT_ERROR);
+    expect(failure.error.code).toBe(SmartAccountErrorCode.CONTRACT_ERROR);
   });
 
   it("simulationFailure falls back to SimulationError", () => {

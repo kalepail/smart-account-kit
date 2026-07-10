@@ -11,6 +11,7 @@
 import {
   Address,
   Keypair,
+  Networks,
   Operation,
   Transaction,
   TransactionBuilder,
@@ -91,7 +92,9 @@ export async function fundWallet(
     return failedTransaction(new WalletNotConnectedError("fund a wallet"));
   }
 
-  if (!deps.networkPassphrase.includes("Test")) {
+  // Exact match: Futurenet's passphrase also contains "Test", but FRIENDBOT_URL
+  // and the funding flow are testnet-specific.
+  if (deps.networkPassphrase !== Networks.TESTNET) {
     return failedTransaction(new SubmissionError("fundWallet() only works on testnet"));
   }
 
@@ -112,31 +115,15 @@ export async function fundWallet(
 
     const fromAddress = Address.fromString(tempKeypair.publicKey());
 
-    const balanceKey = xdr.ScVal.scvVec([
-      xdr.ScVal.scvSymbol("Balance"),
-      xdr.ScVal.scvAddress(fromAddress.toScAddress()),
-    ]);
-
-    let balanceXlm: number;
-    try {
-      const balanceData = await deps.rpc.getContractData(
-        nativeTokenContract,
-        balanceKey
-      );
-      const val = balanceData.val.contractData().val();
-      if (val.switch().name === "scvI128") {
-        const i128 = val.i128();
-        const lo = BigInt(i128.lo().toString());
-        const hi = BigInt(i128.hi().toString());
-        const balanceStroops = (hi << BigInt(64)) | lo;
-        balanceXlm = stroopsToXlm(balanceStroops);
-      } else {
-        balanceXlm = 10_000;
-      }
-    } catch (error) {
-      console.warn("[SmartAccountKit] Failed to fetch temp account balance, using default:", error);
-      balanceXlm = 10_000;
-    }
+    // Read the temp account's real native balance from its classic AccountEntry.
+    // (The native SAC keeps a G-address's XLM in the classic account ledger
+    // entry, not in a ContractData `Balance` entry, so getContractData / a
+    // trustline-based getAssetBalance can't see it.) getAccountEntry throws if
+    // the account is missing, which propagates to the outer catch — no
+    // fabricated fallback balance.
+    const accountEntry = await deps.rpc.getAccountEntry(tempKeypair.publicKey());
+    const balanceStroops = BigInt(accountEntry.balance().toString());
+    const balanceXlm = stroopsToXlm(balanceStroops);
 
     const transferAmount = balanceXlm - RESERVE_XLM;
 

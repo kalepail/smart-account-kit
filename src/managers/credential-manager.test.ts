@@ -246,6 +246,38 @@ describe("CredentialManager", () => {
     });
   });
 
+  it("threads deploy() policies through to buildDeployTransaction", async () => {
+    const credentialId = base64url.encode("credential-policies");
+    const credential = {
+      credentialId,
+      publicKey: Buffer.alloc(65, 7),
+      contractId: "",
+      createdAt: 1,
+      deploymentStatus: "pending" as const,
+    };
+    const deps = makeDeps([credential]);
+    const deployTx = { signed: { toXDR: vi.fn().mockReturnValue("signed-xdr") } } as any;
+    deps.deriveContractAddress.mockReturnValue("CCONTRACT");
+    deps.buildDeployTransaction.mockResolvedValue(deployTx);
+    deps.signWithDeployer.mockResolvedValue(undefined);
+    const manager = new CredentialManager({
+      ...deps,
+      getContractId: vi.fn().mockReturnValue(undefined),
+      rpName: "App",
+    });
+
+    const policies = [{ address: "CPOLICY", type: "threshold" as const, installParams: { threshold: 2 } }];
+    await manager.deploy(credentialId, { policies });
+
+    // Regression: deploy() must honor its policies option (previously dropped by
+    // the dependency wiring, silently deploying with no constructor policies).
+    expect(deps.buildDeployTransaction).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      credential.publicKey,
+      policies
+    );
+  });
+
   it("syncs deployed credentials and leaves pending ones alone", async () => {
     const deployed = {
       credentialId: "cred-1",

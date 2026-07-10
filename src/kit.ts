@@ -44,6 +44,10 @@ import { MemoryStorage } from "./storage/memory";
 import {
   Client as SmartAccountClient,
 } from "smart-account-kit-bindings";
+import type {
+  ContextRule,
+  Signer as ContractSigner,
+} from "smart-account-kit-bindings";
 
 // Constants
 import {
@@ -138,13 +142,25 @@ import {
   sendAndPoll,
 } from "./kit/tx-ops";
 import { fundWallet } from "./kit/fund-ops";
-import { convertPolicyParams, buildPoliciesScVal } from "./kit/policies-ops";
+import { convertPolicyParams, buildPoliciesScVal, buildConstructorPolicies } from "./kit/policies-ops";
 import {
   findWebAuthnSignerForCredential,
+  listContextRules,
   resolveContextRuleIdsForEntry,
 } from "./kit/context-rules";
 import { normalizeSignatureExpirationLedger } from "./kit/auth-payload";
 import { validateAddress, validateAmount, xlmToStroops } from "./utils";
+
+/**
+ * Per-operation memo shared across all auth entries of a single sign/submit so
+ * the connected wallet's context rules (and matched signer) are enumerated once
+ * rather than per entry. Not persisted between operations, so it never serves a
+ * stale snapshot.
+ */
+type ConnectedContextRuleCache = {
+  rules?: Promise<ContextRule[]>;
+  signer?: Promise<ContractSigner>;
+};
 
 
 /**
@@ -504,8 +520,8 @@ export class SmartAccountKit {
       },
       initializeWallet: (contractId) => this.initializeWallet(contractId),
       createPasskey: (appName, userName) => this.createPasskey(appName, userName),
-        buildDeployTransaction: (credentialIdBuffer, publicKey) =>
-          this.buildDeployTransaction(credentialIdBuffer, publicKey),
+      buildDeployTransaction: (credentialIdBuffer, publicKey, policies) =>
+        this.buildDeployTransaction(credentialIdBuffer, publicKey, policies ?? this.defaultPolicies),
       signWithDeployer: (tx) => this.signWithDeployer(tx as contract.AssembledTransaction<null>),
       submitDeploymentTx: (tx, credentialId, options) =>
         this.submitDeploymentTx(tx as contract.AssembledTransaction<null>, credentialId, options),
@@ -782,6 +798,13 @@ export class SmartAccountKit {
         networkPassphrase: this.networkPassphrase,
         sessionExpiryMs: this.sessionExpiryMs,
         createPasskey: (name, user, selection) => this.createPasskey(name, user, selection),
+        validateConstructorPolicies: () => {
+          // Convert (and thus validate) up front so a bad policy config throws
+          // before the passkey ceremony rather than after it.
+          if (constructorPolicies?.length) {
+            buildConstructorPolicies(constructorPolicies);
+          }
+        },
         buildDeployTransaction: (credentialIdBuffer, publicKey) =>
           this.buildDeployTransaction(credentialIdBuffer, publicKey, constructorPolicies),
         signWithDeployer: (tx) => this.signWithDeployer(tx),
@@ -975,10 +998,11 @@ export class SmartAccountKit {
     transaction: contract.AssembledTransaction<T>,
     options?: SignOptions
   ): Promise<contract.AssembledTransaction<T>> {
+    const ctxRuleCache: ConnectedContextRuleCache = {};
     const resolvedOptions = {
       ...options,
       resolveContextRuleIds: options?.resolveContextRuleIds ?? ((entry: xdr.SorobanAuthorizationEntry) =>
-        this.resolveConnectedContextRuleIds(entry, options?.credentialId)),
+        this.resolveConnectedContextRuleIds(entry, options?.credentialId, ctxRuleCache)),
     };
 
     const signed = await sign(
@@ -1013,10 +1037,11 @@ export class SmartAccountKit {
     transaction: contract.AssembledTransaction<T>,
     options?: SignAndSubmitOptions
   ): Promise<TransactionResult> {
+    const ctxRuleCache: ConnectedContextRuleCache = {};
     const resolvedOptions = {
       ...options,
       resolveContextRuleIds: options?.resolveContextRuleIds ?? ((entry: xdr.SorobanAuthorizationEntry) =>
-        this.resolveConnectedContextRuleIds(entry, options?.credentialId)),
+        this.resolveConnectedContextRuleIds(entry, options?.credentialId, ctxRuleCache)),
     };
 
     return signAndSubmit(
@@ -1154,10 +1179,11 @@ export class SmartAccountKit {
       const transaction = await this.execute(tokenContract, "transfer", [
         ...buildTokenTransferTargetArgs(wallet, contractId, recipient, amountInStroops),
       ]);
+      const ctxRuleCache: ConnectedContextRuleCache = {};
       return this.signAndSubmit(transaction, {
         credentialId: options?.credentialId,
         resolveContextRuleIds: (entry) =>
-          this.resolveConnectedContextRuleIds(entry, options?.credentialId),
+          this.resolveConnectedContextRuleIds(entry, options?.credentialId, ctxRuleCache),
         forceMethod: options?.forceMethod,
       });
     } catch (err) {
@@ -1337,7 +1363,8 @@ export class SmartAccountKit {
 
   private async resolveConnectedContextRuleIds(
     entry: xdr.SorobanAuthorizationEntry,
-    credentialIdOverride?: string
+    credentialIdOverride?: string,
+    cache: ConnectedContextRuleCache = {}
   ): Promise<number[]> {
     const credentialId = credentialIdOverride ?? this._credentialId;
     if (!credentialId) {
@@ -1353,9 +1380,20 @@ export class SmartAccountKit {
       networkPassphrase: this.networkPassphrase,
       timeoutInSeconds: this.timeoutInSeconds,
     };
-    const signer = await findWebAuthnSignerForCredential(wallet, credentialId, discoveryDeps);
+    // Enumerate rules once and share the snapshot across the signer lookup AND
+    // every auth entry of this operation (2N → 1 enumeration). Signing never
+    // mutates rules, so the shared snapshot is safe.
+    if (!cache.rules) {
+      cache.rules = listContextRules(wallet, discoveryDeps);
+    }
+    const rules = await cache.rules;
 
-    return resolveContextRuleIdsForEntry(wallet, entry, [signer], discoveryDeps);
+    if (!cache.signer) {
+      cache.signer = findWebAuthnSignerForCredential(wallet, credentialId, discoveryDeps, rules);
+    }
+    const signer = await cache.signer;
+
+    return resolveContextRuleIdsForEntry(wallet, entry, [signer], discoveryDeps, rules);
   }
 
   /**
@@ -1448,7 +1486,7 @@ export class SmartAccountKit {
     policyType: "threshold" | "spending_limit" | "weighted_threshold",
     params: unknown
   ): unknown {
-    return convertPolicyParams(this.wallet, policyType, params);
+    return convertPolicyParams(policyType, params);
   }
 
   /**

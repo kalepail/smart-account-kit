@@ -180,7 +180,7 @@ describe("SmartAccountKit top-level surface", () => {
         contextRuleIds: [3],
       }),
     );
-    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined);
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined, expect.anything());
   });
 
   it("sign defaults context rule resolution to the connected credential", async () => {
@@ -209,7 +209,7 @@ describe("SmartAccountKit top-level surface", () => {
       transaction,
     );
 
-    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined);
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined, expect.anything());
     expect(signAuthEntry).toHaveBeenCalledWith(
       expect.any(xdr.SorobanAuthorizationEntry),
       expect.objectContaining({
@@ -306,7 +306,7 @@ describe("SmartAccountKit top-level surface", () => {
     );
     const [, signOptions] = signAndSubmit.mock.calls[0];
     await expect(signOptions.resolveContextRuleIds(makeAuthEntry(), 0)).resolves.toEqual([7]);
-    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined);
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), undefined, expect.anything());
     expect(result).toEqual({ success: true, hash: "transfer-hash" });
   });
 
@@ -336,7 +336,8 @@ describe("SmartAccountKit top-level surface", () => {
     await expect(signOptions.resolveContextRuleIds(makeAuthEntry(), 0)).resolves.toEqual([11]);
     expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(
       expect.any(xdr.SorobanAuthorizationEntry),
-      "cred-override"
+      "cred-override",
+      expect.anything()
     );
   });
 
@@ -391,7 +392,7 @@ describe("SmartAccountKit top-level surface", () => {
     );
 
     expect(result).toEqual(txResult);
-    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), "cred-override");
+    expect(resolveConnectedContextRuleIds).toHaveBeenCalledWith(expect.any(xdr.SorobanAuthorizationEntry), "cred-override", expect.anything());
     expect(signResimulateAndPrepare).toHaveBeenCalledTimes(1);
     expect(sendAndPoll).toHaveBeenCalledWith(preparedTx, { forceMethod: undefined });
   });

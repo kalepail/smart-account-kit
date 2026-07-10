@@ -278,6 +278,77 @@ export function readAuthPayload(signature: xdr.ScVal): AuthPayload {
   return payload;
 }
 
+/**
+ * Compare two ScVals in the order the Soroban host uses when it validates that
+ * an ScMap is sorted by key (host `metered_map::from_map`, which rejects an
+ * unsorted map with `InvalidInput`).
+ *
+ * This is deliberately NOT a comparison of the XDR byte encodings. XDR prefixes
+ * every variable-length payload (Bytes, Symbol, String, Vec) with a 4-byte
+ * length, so `toXDR("hex")` sorting is length-major; the host instead compares
+ * those payloads element-wise by content (Rust slice `Ord`), where a shorter
+ * value that is a prefix of a longer one sorts first. For two same-verifier
+ * External signer keys whose `keyData` differs only in length, the two orders
+ * diverge and the host rejects the installed/authorized map — see the tests.
+ *
+ * Only the shapes that appear as signer/policy map keys are handled precisely
+ * (Vec, Symbol, String, Bytes, Address). All other shapes are same-type here
+ * (the discriminant is compared first), so their fixed-width XDR encodings sort
+ * order-equivalently to the host.
+ */
+export function compareScVal(a: xdr.ScVal, b: xdr.ScVal): number {
+  const aType = a.switch().value;
+  const bType = b.switch().value;
+  if (aType !== bType) {
+    return aType < bType ? -1 : 1;
+  }
+
+  switch (a.switch().name) {
+    case "scvVec": {
+      const av = a.vec() ?? [];
+      const bv = b.vec() ?? [];
+      const len = Math.min(av.length, bv.length);
+      for (let i = 0; i < len; i += 1) {
+        const cmp = compareScVal(av[i], bv[i]);
+        if (cmp !== 0) return cmp;
+      }
+      return av.length - bv.length;
+    }
+    case "scvMap": {
+      const am = a.map() ?? [];
+      const bm = b.map() ?? [];
+      const len = Math.min(am.length, bm.length);
+      for (let i = 0; i < len; i += 1) {
+        const keyCmp = compareScVal(am[i].key(), bm[i].key());
+        if (keyCmp !== 0) return keyCmp;
+        const valCmp = compareScVal(am[i].val(), bm[i].val());
+        if (valCmp !== 0) return valCmp;
+      }
+      return am.length - bm.length;
+    }
+    case "scvSymbol":
+      return Buffer.compare(
+        Buffer.from(a.sym().toString(), "utf8"),
+        Buffer.from(b.sym().toString(), "utf8")
+      );
+    case "scvString":
+      return Buffer.compare(
+        Buffer.from(a.str().toString(), "utf8"),
+        Buffer.from(b.str().toString(), "utf8")
+      );
+    case "scvBytes":
+      return Buffer.compare(Buffer.from(a.bytes()), Buffer.from(b.bytes()));
+    case "scvAddress":
+      // ScAddress is a type discriminant plus a fixed-width key, so a byte
+      // comparison of the encoding matches the host's (type, key) ordering.
+      return Buffer.compare(a.address().toXDR(), b.address().toXDR());
+    default:
+      // Same-type scalar (or any unhandled shape): its XDR encoding is
+      // fixed-width for a given type, so a byte comparison is order-equivalent.
+      return Buffer.compare(a.toXDR(), b.toXDR());
+  }
+}
+
 export function writeAuthPayload(payload: AuthPayload): xdr.ScVal {
   const signerEntries = Array.from(payload.signers.entries()).map(
     ([signer, signatureBytes]) =>
@@ -287,7 +358,9 @@ export function writeAuthPayload(payload: AuthPayload): xdr.ScVal {
       })
   );
 
-  signerEntries.sort((a, b) => a.key().toXDR("hex").localeCompare(b.key().toXDR("hex")));
+  // Host order (see compareScVal): the smart account converts this signer map
+  // to a host object and rejects it if the keys are not in host-sort order.
+  signerEntries.sort((a, b) => compareScVal(a.key(), b.key()));
 
   return xdr.ScVal.scvMap([
     new xdr.ScMapEntry({

@@ -103,7 +103,7 @@ describe("submitDeploymentTx", () => {
       expect(result.error.message).toBe(
         "Transaction fee must be equal to the resource fee"
       );
-      expect(result.code).toBe(
+      expect(result.error.code).toBe(
         SmartAccountErrorCode.CREDENTIAL_DEPLOYMENT_FAILED
       );
     }

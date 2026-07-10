@@ -30,7 +30,7 @@ function makePasskeySigner() {
 describe("convertPolicyParams", () => {
   it("encodes threshold params for add_policy", () => {
     const client = makeClient();
-    const params = convertPolicyParams(client, "threshold", createThresholdParams(1));
+    const params = convertPolicyParams("threshold", createThresholdParams(1));
 
     expect(params).toBeInstanceOf(xdr.ScVal);
     expect(() =>
@@ -45,7 +45,6 @@ describe("convertPolicyParams", () => {
   it("encodes spending-limit params for add_policy", () => {
     const client = makeClient();
     const params = convertPolicyParams(
-      client,
       "spending_limit",
       createSpendingLimitParams(1_000_000n, 100)
     );
@@ -65,7 +64,6 @@ describe("convertPolicyParams", () => {
     const signer = makePasskeySigner();
     const weights = new Map([[signer, 1]]);
     const params = convertPolicyParams(
-      client,
       "weighted_threshold",
       createWeightedThresholdParams(1, weights)
     );
@@ -85,10 +83,38 @@ describe("convertPolicyParams", () => {
   });
 
   it("throws a ValidationError instead of silently returning unconverted params", () => {
-    const client = makeClient();
     // A threshold param shape that cannot be encoded as the UDT.
     expect(() =>
-      convertPolicyParams(client, "threshold", { not_a_threshold: "nope" })
+      convertPolicyParams("threshold", { not_a_threshold: "nope" })
+    ).toThrow(ValidationError);
+  });
+
+  it("accepts decimal numeric strings for u32/i128 params (parity with the spec)", () => {
+    // threshold (u32) as a string encodes identically to the numeric form.
+    expect(convertPolicyParams("threshold", { threshold: "3" }).toXDR("base64")).toBe(
+      convertPolicyParams("threshold", { threshold: 3 }).toXDR("base64")
+    );
+
+    // spending_limit mixes a u32 (period_ledgers) and an i128 (spending_limit);
+    // both accept numeric strings.
+    expect(
+      convertPolicyParams("spending_limit", {
+        period_ledgers: "100",
+        spending_limit: "1000000",
+      }).toXDR("base64")
+    ).toBe(
+      convertPolicyParams("spending_limit", {
+        period_ledgers: 100,
+        spending_limit: 1_000_000n,
+      }).toXDR("base64")
+    );
+  });
+
+  it("rejects non-numeric or out-of-range string params", () => {
+    expect(() => convertPolicyParams("threshold", { threshold: "3.5" })).toThrow(ValidationError);
+    expect(() => convertPolicyParams("threshold", { threshold: "-1" })).toThrow(ValidationError);
+    expect(() =>
+      convertPolicyParams("threshold", { threshold: "4294967296" })
     ).toThrow(ValidationError);
   });
 });
@@ -135,7 +161,7 @@ describe("buildConstructorPolicies", () => {
 
 describe("convertPolicyParams encoding (no embedded spec blobs)", () => {
   it("encodes threshold params to the pinned ScVal (byte-identical to the contract spec)", () => {
-    const scv = convertPolicyParams(undefined, "threshold", createThresholdParams(3));
+    const scv = convertPolicyParams("threshold", createThresholdParams(3));
     expect(scv.toXDR("base64")).toBe(
       "AAAAEQAAAAEAAAABAAAADwAAAAl0aHJlc2hvbGQAAAAAAAADAAAAAw=="
     );
@@ -143,7 +169,6 @@ describe("convertPolicyParams encoding (no embedded spec blobs)", () => {
 
   it("encodes spending-limit params to the pinned ScVal", () => {
     const scv = convertPolicyParams(
-      undefined,
       "spending_limit",
       createSpendingLimitParams(1_000_000n, 100)
     );
@@ -155,7 +180,6 @@ describe("convertPolicyParams encoding (no embedded spec blobs)", () => {
   it("round-trips weighted params through scValToNative", () => {
     const signer = makePasskeySigner();
     const scv = convertPolicyParams(
-      undefined,
       "weighted_threshold",
       createWeightedThresholdParams(1, new Map([[signer, 1]]))
     );

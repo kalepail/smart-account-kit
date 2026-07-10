@@ -18,18 +18,25 @@ import { SmartAccountError, SmartAccountErrorCode } from "./errors";
 /**
  * Best-effort detection of a user-cancelled wallet interaction (dismissed modal,
  * denied request) versus a genuine failure. StellarWalletsKit does not expose a
- * typed cancellation signal, so we match on common phrasing.
+ * typed cancellation signal, so we match on specific user-action phrasing.
+ *
+ * The phrases are intentionally narrow. Broad substrings like "closed" or
+ * "rejected" also appear in infrastructure failures — e.g. an extension crash
+ * ("message port closed before a response was received") or an allowlist
+ * rejection ("origin not in allowlist: rejected") — which must surface as
+ * errors rather than being swallowed as a silent cancellation.
  */
 function isUserCancellation(error: unknown): boolean {
   const message = (
     error instanceof Error ? error.message : String(error)
   ).toLowerCase();
   return (
-    message.includes("cancel") ||
-    message.includes("closed") ||
+    message.includes("user rejected") ||
+    message.includes("user denied") ||
+    message.includes("user cancel") ||
+    message.includes("modal closed") ||
+    message.includes("user closed") ||
     message.includes("dismiss") ||
-    message.includes("denied") ||
-    message.includes("rejected") ||
     message.includes("user did not")
   );
 }

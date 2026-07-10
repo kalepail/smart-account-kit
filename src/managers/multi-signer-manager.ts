@@ -56,6 +56,21 @@ import {
 } from "../errors";
 import { failedTransaction } from "../contract-errors";
 
+/**
+ * Generate a cryptographically random signed 64-bit nonce for a delegated auth
+ * entry. The nonce must be unique among the address's live nonces; a timestamp
+ * (`Date.now()`) collides when two delegated entries are built in the same
+ * millisecond (multiple smart-account auth entries in one transaction) or across
+ * two transactions signed by the same address in the same millisecond. A random
+ * i64 makes a collision astronomically unlikely, matching the SDK's own
+ * `authorizeEntry` nonce strategy.
+ */
+function randomDelegatedNonce(): xdr.Int64 {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return xdr.Int64.fromString(Buffer.from(bytes).readBigInt64BE(0).toString());
+}
+
 export interface MultiSignerOptions {
   onLog?: (message: string, type?: "info" | "success" | "error") => void;
   forceMethod?: SubmissionOptions["forceMethod"];
@@ -121,6 +136,16 @@ export class MultiSignerManager {
     return hasNonPasskey || signers.length > 1;
   }
 
+  /**
+   * Map contract signers to the {@link SelectedSigner}s this client can actually
+   * sign with (passkey, delegated wallet, or local Ed25519 key).
+   *
+   * A signer we cannot sign for is omitted. Delegated/passkey omissions are
+   * benign (they simply aren't offered), but an Ed25519 External signer with no
+   * matching local key is logged with a warning: its private key is memory-only
+   * and cannot be re-derived, so for an all-signers rule its omission would
+   * otherwise produce an opaque under-signed submission.
+   */
   buildSelectedSigners(
     signers: ContractSigner[],
     activeCredentialId?: string | null
@@ -161,6 +186,19 @@ export class MultiSignerManager {
           type: "ed25519",
           ed25519PublicKey: Buffer.from(keyData).toString("hex"),
         });
+      } else if (keyData) {
+        // Loud drop: an Ed25519 External signer with no matching local key is
+        // silently omitted (its private key is memory-only and gone after a
+        // page reload). It can NOT be re-derived. For an all-signers rule this
+        // would otherwise build an under-signed transaction that fails opaquely
+        // at __check_auth; surface it so the caller can re-import the key or
+        // exclude the signer. (For threshold/k-of-n rules, signing with the
+        // available subset is legitimate, so this is a warning, not a throw.)
+        console.warn(
+          `[SmartAccountKit] Ed25519 signer ${Buffer.from(keyData).toString("hex").slice(0, 16)}… ` +
+            "has no matching local key and will not sign. Re-import it via " +
+            "kit.externalSigners.addEd25519FromSecret() if this rule requires it."
+        );
       }
     }
 
@@ -390,7 +428,7 @@ export class MultiSignerManager {
 
           onLog(`Getting delegated auth from ${walletSigner.walletAddress.slice(0, 8)}...`);
 
-          const delegatedNonce = xdr.Int64.fromString(Date.now().toString());
+          const delegatedNonce = randomDelegatedNonce();
           const delegatedInvocation = new xdr.SorobanAuthorizedInvocation({
             function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(
               new xdr.InvokeContractArgs({

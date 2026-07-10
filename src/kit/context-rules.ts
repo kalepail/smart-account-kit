@@ -218,12 +218,12 @@ async function readContextRuleFromRpc(
 /**
  * Decode a `get_context_rule` result ScVal using the generated bindings spec.
  *
- * The deployed contract's `get_context_rule` return currently omits the aligned
- * `signer_ids`/`policy_ids` fields that the generated `ContextRule` struct
- * requires, so a plain `funcResToNative` fails. We inject empty id vectors for
- * the missing fields so the spec can decode the (complex, nested) remainder;
- * {@link hydrateContextRuleIds} then resolves the real ids via
- * `get_signer_id`/`get_policy_id`.
+ * The canonical Protocol 27 build (`1b5f4534…`) returns the aligned
+ * `signer_ids`/`policy_ids` fields and decodes directly. Wallets deployed from
+ * older account builds omit those fields, which makes a plain
+ * `funcResToNative` fail; for those we inject empty id vectors so the spec can
+ * decode the (complex, nested) remainder, and {@link hydrateContextRuleIds}
+ * then resolves the real ids via `get_signer_id`/`get_policy_id`.
  */
 function decodeContextRuleWithSpec(
   spec: NonNullable<ContextRuleQueryClient["spec"]>,

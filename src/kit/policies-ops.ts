@@ -1,6 +1,7 @@
 import { Address, xdr } from "@stellar/stellar-sdk";
 import { Spec as ContractSpec } from "@stellar/stellar-sdk/contract";
 import type { Client as SmartAccountClient } from "smart-account-kit-bindings";
+import { SmartAccountErrorCode, ValidationError } from "../errors";
 
 const POLICY_UDT_SPECS = {
   threshold: {
@@ -28,7 +29,7 @@ export function convertPolicyParams(
   _wallet: SmartAccountClient | undefined,
   policyType: "threshold" | "spending_limit" | "weighted_threshold",
   params: unknown
-): unknown {
+): xdr.ScVal {
   const policySpec = POLICY_UDT_SPECS[policyType];
 
   try {
@@ -47,8 +48,17 @@ export function convertPolicyParams(
     }
     return scVal;
   } catch (error) {
-    console.warn("[SmartAccountKit] Failed to convert policy params to ScVal:", error);
-    return params;
+    // Never silently fall back to unconverted params: shipping the wrong ScVal
+    // shape on-chain is a correctness hazard. Surface a typed error instead.
+    throw new ValidationError(
+      `Failed to convert ${policyType} policy parameters into a ${policySpec.udtName} ScVal. ` +
+        `Check that the params match the expected shape.`,
+      SmartAccountErrorCode.INVALID_INPUT,
+      {
+        policyType,
+        cause: error instanceof Error ? error.message : String(error),
+      }
+    );
   }
 }
 
@@ -70,8 +80,7 @@ export function buildPoliciesScVal(
     let scParams: xdr.ScVal;
 
     if (policyType && policyType !== "custom") {
-      const converted = convertPolicyParams(wallet, policyType, params);
-      scParams = converted instanceof xdr.ScVal ? converted : xdr.ScVal.scvVoid();
+      scParams = convertPolicyParams(wallet, policyType, params);
     } else {
       const walletObj = wallet as unknown as Record<string, unknown>;
       const spec = walletObj.spec as { nativeToScVal?: (val: unknown, type: xdr.ScSpecTypeDef) => xdr.ScVal } | undefined;

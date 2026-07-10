@@ -14,6 +14,8 @@ import type { SmartAccountEventEmitter } from "../events";
 import type { contract, rpc } from "@stellar/stellar-sdk";
 import { WEBAUTHN_TIMEOUT_MS, DEFAULT_SESSION_EXPIRY_MS } from "../constants";
 import { deriveContractAddress, generateChallenge } from "../utils";
+import { ValidationError } from "../errors";
+import { failedTransaction } from "../contract-errors";
 
 export async function createWallet(
   deps: {
@@ -124,7 +126,9 @@ export async function createWallet(
   let fundResult: (TransactionResult & { amount?: number }) | undefined;
   if (options?.autoFund && submitResult?.success) {
     if (!options.nativeTokenContract) {
-      fundResult = { success: false, hash: "", error: "nativeTokenContract is required for autoFund" };
+      fundResult = failedTransaction(
+        new ValidationError("nativeTokenContract is required for autoFund")
+      );
     } else {
       fundResult = await deps.fundWallet(options.nativeTokenContract, { forceMethod: options?.forceMethod });
     }

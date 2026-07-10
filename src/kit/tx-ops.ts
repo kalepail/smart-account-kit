@@ -28,6 +28,17 @@ import {
   getAddressCredentials,
 } from "./auth-payload";
 import { validateAddress, validateAmount, xlmToStroops, stroopsToXlm } from "../utils";
+import {
+  SmartAccountErrorCode,
+  SubmissionError,
+  WalletNotConnectedError,
+  wrapError,
+} from "../errors";
+import {
+  failedTransaction,
+  simulationFailure,
+  submissionFailure,
+} from "../contract-errors";
 
 type ResolveContextRuleIds = (
   entry: xdr.SorobanAuthorizationEntry,
@@ -70,29 +81,21 @@ export async function sendAndPoll(
   switch (method) {
     case "relayer": {
       if (!deps.relayer) {
-        return {
-          success: false,
-          hash: "",
-          error: "Relayer is not configured",
-        };
+        return failedTransaction(new SubmissionError("Relayer is not configured"));
       }
 
       const operations = transaction.operations;
       if (operations.length !== 1) {
-        return {
-          success: false,
-          hash: "",
-          error: "Relayer requires exactly one invokeHostFunction operation",
-        };
+        return failedTransaction(
+          new SubmissionError("Relayer requires exactly one invokeHostFunction operation")
+        );
       }
 
       const op = operations[0];
       if (op.type !== "invokeHostFunction") {
-        return {
-          success: false,
-          hash: "",
-          error: "Relayer only supports invokeHostFunction operations",
-        };
+        return failedTransaction(
+          new SubmissionError("Relayer only supports invokeHostFunction operations")
+        );
       }
 
       const invokeOp = op as Operation.InvokeHostFunction;
@@ -102,11 +105,9 @@ export async function sendAndPoll(
       const relayerResult = await deps.relayer.send(funcXdr, authXdrs);
 
       if (!relayerResult.success) {
-        return {
-          success: false,
-          hash: "",
-          error: relayerResult.error ?? "Relayer submission failed",
-        };
+        return submissionFailure(
+          relayerResult.error ?? "Relayer submission failed"
+        );
       }
 
       hash = relayerResult.hash ?? "";
@@ -118,11 +119,10 @@ export async function sendAndPoll(
       const sendResult = await deps.rpc.sendTransaction(transaction);
 
       if (sendResult.status === "ERROR") {
-        return {
-          success: false,
-          hash: sendResult.hash,
-          error: sendResult.errorResult?.toXDR("base64") ?? "Transaction submission failed",
-        };
+        return submissionFailure(
+          sendResult.errorResult?.toXDR("base64") ?? "Transaction submission failed",
+          sendResult.hash
+        );
       }
 
       hash = sendResult.hash;
@@ -143,18 +143,19 @@ export async function sendAndPoll(
   }
 
   if (txResult.status === "FAILED") {
-    return {
-      success: false,
-      hash,
-      error: "Transaction failed on-chain",
-    };
+    const resultXdr = txResult.resultXdr?.toXDR("base64");
+    return submissionFailure(
+      resultXdr
+        ? `Transaction failed on-chain: ${resultXdr}`
+        : "Transaction failed on-chain",
+      hash
+    );
   }
 
-  return {
-    success: false,
-    hash,
-    error: "Transaction confirmation timed out",
-  };
+  return failedTransaction(
+    new SubmissionError("Transaction confirmation timed out", hash),
+    hash
+  );
 }
 
 export function hasSourceAccountAuth(transaction: Transaction): boolean {
@@ -318,7 +319,7 @@ export async function sign(
 ): Promise<contract.AssembledTransaction<unknown>> {
   const contractId = deps.getContractId();
   if (!contractId) {
-    throw new Error("Not connected to a wallet. Call connectWallet() first.");
+    throw new WalletNotConnectedError("sign a transaction");
   }
 
   const credentialId = options?.credentialId ?? deps.getCredentialId();
@@ -369,30 +370,30 @@ export async function signAndSubmit(
   }
 ): Promise<TransactionResult> {
   if (!deps.getContractId()) {
-    return { success: false, hash: "", error: "Not connected to a wallet. Call connectWallet() first." };
+    return failedTransaction(new WalletNotConnectedError("submit a transaction"));
   }
 
   try {
     const builtTx = transaction.built;
     if (!builtTx) {
-      return { success: false, hash: "", error: "Transaction has no built transaction" };
+      return failedTransaction(new SubmissionError("Transaction has no built transaction"));
     }
 
     const operations = builtTx.operations;
     if (operations.length !== 1) {
-      return { success: false, hash: "", error: "Expected exactly one operation" };
+      return failedTransaction(new SubmissionError("Expected exactly one operation"));
     }
 
     const operation = operations[0];
     if (operation.type !== "invokeHostFunction") {
-      return { success: false, hash: "", error: "Expected invokeHostFunction operation" };
+      return failedTransaction(new SubmissionError("Expected invokeHostFunction operation"));
     }
 
     const invokeOp = operation as Operation.InvokeHostFunction;
 
     const simData = transaction.simulationData;
     if (!simData?.result?.auth) {
-      return { success: false, hash: "", error: "No simulation data or auth entries" };
+      return failedTransaction(new SubmissionError("No simulation data or auth entries"));
     }
 
       const preparedTx = await deps.signResimulateAndPrepare(
@@ -412,11 +413,7 @@ export async function signAndSubmit(
 
     return deps.sendAndPoll(preparedTx, submissionOpts);
   } catch (err) {
-    return {
-      success: false,
-      hash: "",
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
+    return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SIGNING_FAILED));
   }
 }
 
@@ -435,15 +432,11 @@ export async function fundWallet(
 ): Promise<TransactionResult & { amount?: number }> {
   const contractId = deps.getContractId();
   if (!contractId) {
-    return { success: false, hash: "", error: "Not connected to a wallet" };
+    return failedTransaction(new WalletNotConnectedError("fund a wallet"));
   }
 
   if (!deps.networkPassphrase.includes("Test")) {
-    return {
-      success: false,
-      hash: "",
-      error: "fundWallet() only works on testnet",
-    };
+    return failedTransaction(new SubmissionError("fundWallet() only works on testnet"));
   }
 
   try {
@@ -455,7 +448,7 @@ export async function fundWallet(
 
     if (!friendbotResponse.ok) {
       const text = await friendbotResponse.text();
-      return { success: false, hash: "", error: `Friendbot error: ${text}` };
+      return failedTransaction(new SubmissionError(`Friendbot error: ${text}`));
     }
 
     const RESERVE_XLM = FRIENDBOT_RESERVE_XLM;
@@ -492,7 +485,7 @@ export async function fundWallet(
     const transferAmount = balanceXlm - RESERVE_XLM;
 
     if (transferAmount <= 0) {
-      return { success: false, hash: "", error: "Insufficient balance after reserve" };
+      return failedTransaction(new SubmissionError("Insufficient balance after reserve"));
     }
 
     const amountInStroops = xlmToStroops(transferAmount);
@@ -518,7 +511,7 @@ export async function fundWallet(
     const simResult = await deps.rpc.simulateTransaction(simulationTx);
 
     if ("error" in simResult) {
-      return { success: false, hash: "", error: `Simulation failed: ${simResult.error}` };
+      return simulationFailure(simResult.error);
     }
 
     const authEntries = simResult.result?.auth || [];
@@ -567,11 +560,11 @@ export async function fundWallet(
       }
 
       if (credType === "sorobanCredentialsAddressWithDelegates") {
-        return {
-          success: false,
-          hash: "",
-          error: "ADDRESS_WITH_DELEGATES auth entries are not supported by fundWallet() yet",
-        };
+        return failedTransaction(
+          new SubmissionError(
+            "ADDRESS_WITH_DELEGATES auth entries are not supported by fundWallet() yet"
+          )
+        );
       }
 
       // For Address credentials, sign them
@@ -616,7 +609,7 @@ export async function fundWallet(
     const resimResult = await deps.rpc.simulateTransaction(txWithAuth);
 
     if ("error" in resimResult) {
-      return { success: false, hash: "", error: `Re-simulation failed: ${resimResult.error}` };
+      return simulationFailure(resimResult.error);
     }
 
     const txWithAuthXdr = txWithAuth.toXDR();
@@ -636,10 +629,6 @@ export async function fundWallet(
       amount: txResult.success ? transferAmount : undefined,
     };
   } catch (err) {
-    return {
-      success: false,
-      hash: "",
-      error: err instanceof Error ? err.message : "Unknown error",
-    };
+    return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SUBMISSION_FAILED));
   }
 }

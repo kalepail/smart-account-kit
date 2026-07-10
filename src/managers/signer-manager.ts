@@ -10,6 +10,7 @@ import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import type { SmartAccountEventEmitter } from "../events";
 import type { StorageAdapter, StoredCredential } from "../types";
 import { buildKeyData } from "../utils";
+import { SignerNotFoundError } from "../errors";
 
 /** Dependencies required by SignerManager */
 export interface SignerManagerDeps {
@@ -124,7 +125,9 @@ export class SignerManager {
     })).result;
 
     if (signerId === undefined || signerId === null) {
-      throw new Error(`Signer not found on context rule ${contextRuleId}`);
+      throw new SignerNotFoundError(
+        `signer on context rule ${contextRuleId}`
+      );
     }
 
     return wallet.remove_signer({

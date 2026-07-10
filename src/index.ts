@@ -43,6 +43,8 @@ export type {
   CreateWalletResult,
   ConnectWalletResult,
   TransactionResult,
+  TransactionSuccess,
+  TransactionFailure,
   SubmissionOptions,
   SubmissionMethod,
 
@@ -100,8 +102,20 @@ export {
   ValidationError,
   WebAuthnError,
   SessionError,
+  ContractError,
   wrapError,
 } from "./errors";
+
+// Contract error decoding
+export {
+  CONTRACT_ERROR_REGISTRY,
+  decodeContractError,
+  contractErrorFromCode,
+} from "./contract-errors";
+export type {
+  ContractErrorFamily,
+  ContractErrorInfo,
+} from "./contract-errors";
 
 // Utility functions
 export {

@@ -66,7 +66,15 @@ export class LocalStorageAdapter implements StorageAdapter {
         map.set(key, deserializeCredential(value));
       }
       return map;
-    } catch {
+    } catch (error) {
+      // Corrupt/unreadable storage: warn loudly rather than silently dropping
+      // the user's stored credentials. We still return an empty Map so the app
+      // keeps working, but the data loss is now visible.
+      console.error(
+        `[SmartAccountKit] Failed to parse stored credentials at "${this.storageKey}"; ` +
+          `treating storage as empty. Existing data was not overwritten.`,
+        error
+      );
       return new Map();
     }
   }
@@ -146,7 +154,12 @@ export class LocalStorageAdapter implements StorageAdapter {
     }
     try {
       return JSON.parse(data);
-    } catch {
+    } catch (error) {
+      console.error(
+        `[SmartAccountKit] Failed to parse stored session at "${SESSION_KEY}"; ` +
+          `ignoring the saved session.`,
+        error
+      );
       return null;
     }
   }

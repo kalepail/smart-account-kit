@@ -8,6 +8,8 @@ import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import type { Keypair } from "@stellar/stellar-sdk";
 import { getSubmissionMethod } from "./tx-ops";
+import { SmartAccountErrorCode, wrapError } from "../errors";
+import { decodeContractError, failedTransaction } from "../contract-errors";
 
 async function sendDeploymentTxViaRpc<T>(
   tx: contract.AssembledTransaction<T>
@@ -66,16 +68,14 @@ export async function submitDeploymentTx<T>(
       ledger,
     };
   } catch (err) {
-    const error = err instanceof Error ? err.message : "Transaction failed";
+    const error =
+      decodeContractError(err) ??
+      wrapError(err, SmartAccountErrorCode.CREDENTIAL_DEPLOYMENT_FAILED);
     await deps.storage.update(credentialId, {
       deploymentStatus: "failed",
-      deploymentError: error,
+      deploymentError: error.message,
     });
-    return {
-      success: false,
-      hash: "",
-      error,
-    };
+    return failedTransaction(error);
   }
 }
 

@@ -12,6 +12,7 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
+import type { SmartAccountError, SmartAccountErrorCode } from "./errors";
 
 // ============================================================================
 // Credential Storage Types
@@ -341,21 +342,38 @@ export interface ConnectWalletResult {
 }
 
 /**
- * Result of a transaction operation
+ * Successful result of a submission operation.
  */
-export interface TransactionResult {
-  /** Whether the transaction succeeded */
-  success: boolean;
-
+export interface TransactionSuccess {
+  success: true;
   /** Transaction hash */
   hash: string;
-
-  /** Error message (if failed) */
-  error?: string;
-
-  /** Ledger the transaction was included in (if successful) */
+  /** Ledger the transaction was included in */
   ledger?: number;
 }
+
+/**
+ * Failed result of a submission operation.
+ *
+ * Submission methods never throw for expected on-chain/relayer failures; they
+ * return this shape with a typed {@link SmartAccountError} (a
+ * {@link ContractError} when an on-chain contract code was decoded). All other
+ * SDK methods throw typed errors directly.
+ */
+export interface TransactionFailure {
+  success: false;
+  /** The typed error describing the failure. */
+  error: SmartAccountError;
+  /** Convenience mirror of `error.code` for quick branching. */
+  code: SmartAccountErrorCode;
+  /** Transaction hash, when one was assigned before the failure. */
+  hash?: string;
+}
+
+/**
+ * Result of a submission operation: a discriminated union on `success`.
+ */
+export type TransactionResult = TransactionSuccess | TransactionFailure;
 
 /**
  * Submission method for transactions

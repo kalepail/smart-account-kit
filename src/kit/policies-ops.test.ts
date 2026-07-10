@@ -9,6 +9,7 @@ import {
   createWeightedThresholdParams,
 } from "../builders";
 import { convertPolicyParams } from "./policies-ops";
+import { ValidationError } from "../errors";
 
 function makeClient() {
   return new SmartAccountClient({
@@ -81,5 +82,13 @@ describe("convertPolicyParams", () => {
         ]),
       })
     ).not.toThrow();
+  });
+
+  it("throws a ValidationError instead of silently returning unconverted params", () => {
+    const client = makeClient();
+    // A threshold param shape that cannot be encoded as the UDT.
+    expect(() =>
+      convertPolicyParams(client, "threshold", { not_a_threshold: "nope" })
+    ).toThrow(ValidationError);
   });
 });

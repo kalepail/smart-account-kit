@@ -13,6 +13,26 @@
 
 import type { ExternalWalletAdapter, ConnectedWallet } from "./types";
 import type { Networks } from "@stellar/stellar-sdk";
+import { SmartAccountError, SmartAccountErrorCode } from "./errors";
+
+/**
+ * Best-effort detection of a user-cancelled wallet interaction (dismissed modal,
+ * denied request) versus a genuine failure. StellarWalletsKit does not expose a
+ * typed cancellation signal, so we match on common phrasing.
+ */
+function isUserCancellation(error: unknown): boolean {
+  const message = (
+    error instanceof Error ? error.message : String(error)
+  ).toLowerCase();
+  return (
+    message.includes("cancel") ||
+    message.includes("closed") ||
+    message.includes("dismiss") ||
+    message.includes("denied") ||
+    message.includes("rejected") ||
+    message.includes("user did not")
+  );
+}
 
 // Import types from StellarWalletsKit (peer dependency)
 // These are type-only imports so they don't require the package at runtime
@@ -115,9 +135,11 @@ export class StellarWalletsKitAdapter implements ExternalWalletAdapter {
       this.StellarWalletsKit = StellarWalletsKit;
       this.initialized = true;
     } catch (error) {
-      throw new Error(
+      throw new SmartAccountError(
         `Failed to initialize StellarWalletsKitAdapter. ` +
-        `Make sure @creit-tech/stellar-wallets-kit is installed: pnpm add @creit-tech/stellar-wallets-kit`
+        `Make sure @creit-tech/stellar-wallets-kit is installed: pnpm add @creit-tech/stellar-wallets-kit`,
+        SmartAccountErrorCode.MISSING_CONFIG,
+        { cause: error instanceof Error ? error : undefined }
       );
     }
   }
@@ -149,7 +171,10 @@ export class StellarWalletsKitAdapter implements ExternalWalletAdapter {
    * Shows a modal allowing the user to select and connect their preferred wallet.
    * The connected wallet is tracked internally for signing operations.
    *
-   * @returns Connected wallet info, or null if user cancelled
+   * @returns Connected wallet info, or `null` if the user cancelled/dismissed
+   *   the wallet modal
+   * @throws {SmartAccountError} If connection fails for any reason other than
+   *   user cancellation
    */
   async connect(): Promise<ConnectedWallet | null> {
     const kit = this.ensureInitialized();
@@ -175,10 +200,17 @@ export class StellarWalletsKitAdapter implements ExternalWalletAdapter {
       }
 
       return null;
-    } catch {
-      // Connection failed - return null to indicate failure
-      // Callers can handle this gracefully
-      return null;
+    } catch (error) {
+      // User dismissed the modal: not an error, return null.
+      if (isUserCancellation(error)) {
+        return null;
+      }
+      // Genuine failure: surface it instead of masquerading as a cancellation.
+      throw new SmartAccountError(
+        `Wallet connection failed: ${error instanceof Error ? error.message : String(error)}`,
+        SmartAccountErrorCode.WALLET_NOT_CONNECTED,
+        { cause: error instanceof Error ? error : undefined }
+      );
     }
   }
 
@@ -192,7 +224,12 @@ export class StellarWalletsKitAdapter implements ExternalWalletAdapter {
    * succeed silently. Otherwise, it may prompt the user for authorization.
    *
    * @param walletId - The wallet ID to reconnect to (e.g., 'freighter', 'lobstr')
-   * @returns Connected wallet info, or null if reconnection failed
+   * @returns Connected wallet info, or `null` if the wallet is not installed,
+   *   not authorized, or the user declined
+   *
+   * @remarks
+   * Reconnection is a best-effort silent restore, so a missing/unauthorized
+   * wallet resolves to `null` rather than throwing.
    */
   async reconnect(walletId: string): Promise<ConnectedWallet | null> {
     const kit = this.ensureInitialized();
@@ -223,7 +260,8 @@ export class StellarWalletsKitAdapter implements ExternalWalletAdapter {
 
       return null;
     } catch {
-      // Reconnection failed - wallet may not be installed or not authorized
+      // Reconnection is best-effort: the wallet may not be installed or not
+      // authorized. Callers treat null as "no restored session".
       return null;
     }
   }

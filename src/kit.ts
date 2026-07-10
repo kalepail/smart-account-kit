@@ -44,6 +44,15 @@ import {
 // Constants
 import { DEFAULT_SESSION_EXPIRY_MS, LEDGERS_PER_HOUR } from "./constants";
 
+// Error classes
+import {
+  SmartAccountErrorCode,
+  ValidationError,
+  WalletNotConnectedError,
+  wrapError,
+} from "./errors";
+import { failedTransaction } from "./contract-errors";
+
 // Utility functions
 import { deriveContractAddress } from "./utils";
 
@@ -346,10 +355,19 @@ export class SmartAccountKit {
 
   constructor(config: SmartAccountConfig) {
     // Validate required config
-    if (!config.rpcUrl) throw new Error("rpcUrl is required");
-    if (!config.networkPassphrase) throw new Error("networkPassphrase is required");
-    if (!config.accountWasmHash) throw new Error("accountWasmHash is required");
-    if (!config.webauthnVerifierAddress) throw new Error("webauthnVerifierAddress is required");
+    const requireConfig = (value: unknown, field: string): void => {
+      if (!value) {
+        throw new ValidationError(
+          `${field} is required`,
+          SmartAccountErrorCode.MISSING_CONFIG,
+          { field }
+        );
+      }
+    };
+    requireConfig(config.rpcUrl, "rpcUrl");
+    requireConfig(config.networkPassphrase, "networkPassphrase");
+    requireConfig(config.accountWasmHash, "accountWasmHash");
+    requireConfig(config.webauthnVerifierAddress, "webauthnVerifierAddress");
 
     // Network
     this.rpcUrl = config.rpcUrl;
@@ -603,7 +621,7 @@ export class SmartAccountKit {
    */
   private requireWallet(): { wallet: SmartAccountClient; contractId: string } {
     if (!this._contractId || !this.wallet) {
-      throw new Error("Not connected to a wallet");
+      throw new WalletNotConnectedError();
     }
     return { wallet: this.wallet, contractId: this._contractId };
   }
@@ -1106,7 +1124,7 @@ export class SmartAccountKit {
   ): Promise<TransactionResult> {
     const contractId = this._contractId;
     if (!contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet" };
+      return failedTransaction(new WalletNotConnectedError("transfer"));
     }
 
     try {
@@ -1114,19 +1132,11 @@ export class SmartAccountKit {
       validateAddress(recipient, "recipient");
       validateAmount(amount, "amount");
     } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Validation failed",
-      };
+      return failedTransaction(wrapError(err, SmartAccountErrorCode.INVALID_INPUT));
     }
 
     if (recipient === contractId) {
-      return {
-        success: false,
-        hash: "",
-        error: "Cannot transfer to self",
-      };
+      return failedTransaction(new ValidationError("Cannot transfer to self"));
     }
 
     try {
@@ -1142,11 +1152,7 @@ export class SmartAccountKit {
         forceMethod: options?.forceMethod,
       });
     } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SUBMISSION_FAILED));
     }
   }
 
@@ -1271,7 +1277,7 @@ export class SmartAccountKit {
   ): Promise<number[]> {
     const credentialId = credentialIdOverride ?? this._credentialId;
     if (!credentialId) {
-      throw new Error("No connected credential available to resolve context rule IDs");
+      throw new WalletNotConnectedError("resolve context rule IDs");
     }
 
     const { wallet, contractId } = this.requireWallet();

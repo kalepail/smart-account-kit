@@ -68,20 +68,39 @@ export type EventListener<T> = (data: T) => void;
  * emitter.emit('walletConnected', { contractId: 'C...', credentialId: '...' });
  * ```
  */
+/**
+ * Default handler for errors thrown by event listeners: logs to the console so
+ * a misbehaving listener is visible rather than silently swallowed.
+ */
+function defaultListenerErrorHandler(
+  event: SmartAccountEvent,
+  error: unknown
+): void {
+  console.error(`[SmartAccountKit] Listener for "${event}" threw an error:`, error);
+}
+
 export class SmartAccountEventEmitter {
   private listeners: Map<
     SmartAccountEvent,
     Set<EventListener<SmartAccountEventMap[SmartAccountEvent]>>
   > = new Map();
 
-  /** Optional error handler for listener errors */
-  private errorHandler?: (event: SmartAccountEvent, error: unknown) => void;
+  /**
+   * Handler invoked when a listener throws. Defaults to
+   * {@link defaultListenerErrorHandler} (console.error); pass `undefined` to
+   * {@link setErrorHandler} to silence listener errors entirely.
+   */
+  private errorHandler: ((event: SmartAccountEvent, error: unknown) => void) | undefined =
+    defaultListenerErrorHandler;
 
   /**
    * Set an error handler for listener errors.
-   * By default, listener errors are silently caught.
    *
-   * @param handler - Error handler function, or undefined to disable
+   * A failing listener never interrupts other listeners; its error is routed to
+   * this handler. By default errors are logged via `console.error`. Pass
+   * `undefined` to silence them.
+   *
+   * @param handler - Error handler function, or `undefined` to disable logging
    */
   setErrorHandler(handler: ((event: SmartAccountEvent, error: unknown) => void) | undefined): void {
     this.errorHandler = handler;
@@ -147,8 +166,9 @@ export class SmartAccountEventEmitter {
   /**
    * Emit an event to all subscribers.
    *
-   * Listener errors are caught to prevent one failing listener from
-   * affecting others. If you need error handling, wrap your listener.
+   * A listener that throws never affects the others: its error is routed to the
+   * configured error handler (by default `console.error`; see
+   * {@link setErrorHandler}).
    *
    * @param event - The event to emit
    * @param data - The event data
@@ -163,11 +183,9 @@ export class SmartAccountEventEmitter {
         try {
           listener(data);
         } catch (err) {
-          // Call error handler if provided, otherwise silently catch
-          // to prevent one failing listener from affecting others
-          if (this.errorHandler) {
-            this.errorHandler(event, err);
-          }
+          // Isolate listeners: one failure must not prevent the rest from
+          // running. Route the error to the handler (console.error by default).
+          this.errorHandler?.(event, err);
         }
       }
     }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { submitDeploymentTx } from "./deploy-ops";
+import { SmartAccountError, SmartAccountErrorCode } from "../errors";
 
 function makeDeps() {
   return {
@@ -96,10 +97,15 @@ describe("submitDeploymentTx", () => {
       deploymentStatus: "failed",
       deploymentError: "Transaction fee must be equal to the resource fee",
     });
-    expect(result).toEqual({
-      success: false,
-      hash: "",
-      error: "Transaction fee must be equal to the resource fee",
-    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(SmartAccountError);
+      expect(result.error.message).toBe(
+        "Transaction fee must be equal to the resource fee"
+      );
+      expect(result.code).toBe(
+        SmartAccountErrorCode.CREDENTIAL_DEPLOYMENT_FAILED
+      );
+    }
   });
 });

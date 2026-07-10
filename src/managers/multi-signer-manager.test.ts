@@ -41,6 +41,11 @@ import {
   makeExternalSigner,
 } from "./test-utils";
 import { signersEqual } from "../signer-utils";
+import {
+  SignerNotFoundError,
+  ValidationError,
+  SmartAccountErrorCode,
+} from "../errors";
 
 function makeDeps() {
   const externalSigners = {
@@ -259,11 +264,15 @@ describe("MultiSignerManager", () => {
       {}
     );
 
-    expect(result).toEqual({
-      success: false,
-      hash: "",
-      error: `Unsupported auth entry for ${unsupportedAddress}. Add an external signer for that address or remove it from the transaction.`,
-    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(SignerNotFoundError);
+      expect(result.code).toBe(SmartAccountErrorCode.SIGNER_NOT_FOUND);
+      expect(result.error.message).toContain(unsupportedAddress);
+      expect(result.error.message).toContain(
+        "Add an external signer for that address"
+      );
+    }
   });
 
   it("signs separate delegated auth entries before submission", async () => {
@@ -347,11 +356,13 @@ describe("MultiSignerManager", () => {
       {}
     );
 
-    expect(result).toEqual({
-      success: false,
-      hash: "",
-      error: `Wallet signer ${walletAddress} is missing contract signer metadata. Use buildSelectedSigners() or provide the signer field explicitly.`,
-    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(ValidationError);
+      expect(result.error.message).toBe(
+        `Wallet signer ${walletAddress} is missing contract signer metadata. Use buildSelectedSigners() or provide the signer field explicitly.`
+      );
+    }
   });
 
   it("resolves context rule ids before signing passkey auth entries by default", async () => {

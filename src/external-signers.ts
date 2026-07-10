@@ -13,6 +13,7 @@
 
 import { Keypair, hash, xdr, Address } from "@stellar/stellar-sdk";
 import type { ConnectedWallet, ExternalWalletAdapter } from "./types";
+import { SignerNotFoundError, ValidationError } from "./errors";
 
 /** Storage key for persisted wallet connections */
 const WALLET_STORAGE_KEY = "external_wallets";
@@ -134,7 +135,9 @@ export class ExternalSignerManager {
     try {
       keypair = Keypair.fromSecret(secretKey);
     } catch {
-      throw new Error("Invalid secret key. Must be a valid Stellar secret key (S...)");
+      throw new ValidationError(
+        "Invalid secret key. Must be a valid Stellar secret key (S...)"
+      );
     }
 
     const address = keypair.publicKey();
@@ -434,7 +437,7 @@ export class ExternalSignerManager {
       };
     }
 
-    throw new Error(`No signer available for address: ${address}`);
+    throw new SignerNotFoundError(address);
   }
 
 }

@@ -53,6 +53,12 @@ export enum SmartAccountErrorCode {
   // Session errors (9xxx)
   SESSION_EXPIRED = 9001,
   SESSION_INVALID = 9002,
+
+  // Contract-level failures decoded from on-chain diagnostics (10xxx).
+  // The raw contract code (e.g. 3010) is carried separately on ContractError;
+  // this sentinel keeps the SDK-level code space from colliding with the
+  // overlapping 3xxx contract range.
+  CONTRACT_ERROR = 10000,
 }
 
 /**
@@ -137,9 +143,11 @@ export class CredentialNotFoundError extends SmartAccountError {
  * Error thrown when a signer cannot be found.
  */
 export class SignerNotFoundError extends SmartAccountError {
-  constructor(identifier: string) {
+  constructor(identifier: string, hint?: string) {
     super(
-      `No signer found for: ${identifier}`,
+      hint
+        ? `No signer found for: ${identifier}. ${hint}`
+        : `No signer found for: ${identifier}`,
       SmartAccountErrorCode.SIGNER_NOT_FOUND,
       { context: { identifier } }
     );
@@ -180,7 +188,9 @@ export class ValidationError extends SmartAccountError {
     code:
       | SmartAccountErrorCode.INVALID_ADDRESS
       | SmartAccountErrorCode.INVALID_AMOUNT
-      | SmartAccountErrorCode.INVALID_INPUT = SmartAccountErrorCode.INVALID_INPUT,
+      | SmartAccountErrorCode.INVALID_INPUT
+      | SmartAccountErrorCode.INVALID_CONFIG
+      | SmartAccountErrorCode.MISSING_CONFIG = SmartAccountErrorCode.INVALID_INPUT,
     context?: Record<string, unknown>
   ) {
     super(message, code, { context });
@@ -203,6 +213,52 @@ export class WebAuthnError extends SmartAccountError {
   ) {
     super(message, code, { cause });
     this.name = "WebAuthnError";
+  }
+}
+
+/**
+ * Error decoded from an on-chain contract failure code.
+ *
+ * Produced by {@link decodeContractError} when a simulation or submission
+ * diagnostic reports an `Error(Contract, #NNNN)`. Carries both the raw contract
+ * code and its enum variant name so callers can branch on the exact failure.
+ *
+ * @example
+ * ```typescript
+ * const result = await kit.transfer(...);
+ * if (!result.success && result.error instanceof ContractError) {
+ *   if (result.error.contractErrorName === "TooManySigners") { ... }
+ * }
+ * ```
+ */
+export class ContractError extends SmartAccountError {
+  /** Raw contract error code (e.g. 3010). */
+  readonly contractCode: number;
+
+  /** Enum variant name from the contract (e.g. "TooManySigners"). */
+  readonly contractErrorName: string;
+
+  /** The contract family the code belongs to (e.g. "SmartAccount"). */
+  readonly family: string;
+
+  constructor(
+    contractCode: number,
+    contractErrorName: string,
+    family: string,
+    message: string,
+    options?: {
+      context?: Record<string, unknown>;
+      cause?: Error;
+    }
+  ) {
+    super(message, SmartAccountErrorCode.CONTRACT_ERROR, {
+      context: { contractCode, contractErrorName, family, ...options?.context },
+      cause: options?.cause,
+    });
+    this.name = "ContractError";
+    this.contractCode = contractCode;
+    this.contractErrorName = contractErrorName;
+    this.family = family;
   }
 }
 

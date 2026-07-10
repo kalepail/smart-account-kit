@@ -49,6 +49,18 @@ import {
 import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
 import { buildTokenTransferTargetArgs } from "../kit/tx-ops";
 import { validateAddress, validateAmount, xlmToStroops } from "../utils";
+import {
+  SmartAccountErrorCode,
+  SignerNotFoundError,
+  SubmissionError,
+  ValidationError,
+  WalletNotConnectedError,
+  wrapError,
+} from "../errors";
+import {
+  failedTransaction,
+  simulationFailure,
+} from "../contract-errors";
 
 export interface MultiSignerOptions {
   onLog?: (message: string, type?: "info" | "success" | "error") => void;
@@ -188,7 +200,7 @@ export class MultiSignerManager {
     const contractId = this.deps.getContractId();
 
     if (!contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet" };
+      return failedTransaction(new WalletNotConnectedError("submit a transaction"));
     }
 
     const passkeySigners = selectedSigners.filter((signer) => signer.type === "passkey");
@@ -199,12 +211,12 @@ export class MultiSignerManager {
     for (const walletSigner of walletSigners) {
       if (!walletSigner.walletAddress) continue;
       if (!this.deps.externalSigners.canSignFor(walletSigner.walletAddress)) {
-        return {
-          success: false,
-          hash: "",
-          error: `No signer available for address: ${walletSigner.walletAddress}. ` +
-            `Use kit.externalSigners.addFromSecret() or kit.externalSigners.addFromWallet() to add a signer.`,
-        };
+        return failedTransaction(
+          new SignerNotFoundError(
+            walletSigner.walletAddress,
+            "Use kit.externalSigners.addFromSecret() or kit.externalSigners.addFromWallet() to add a signer."
+          )
+        );
       }
     }
 
@@ -220,11 +232,11 @@ export class MultiSignerManager {
         const credentialType = credentials.switch().name as string;
 
         if (credentialType === "sorobanCredentialsAddressWithDelegates") {
-          return {
-            success: false,
-            hash: "",
-            error: "ADDRESS_WITH_DELEGATES auth entries are not supported by multi-signer signing yet",
-          };
+          return failedTransaction(
+            new SubmissionError(
+              "ADDRESS_WITH_DELEGATES auth entries are not supported by multi-signer signing yet"
+            )
+          );
         }
 
         if (
@@ -240,11 +252,12 @@ export class MultiSignerManager {
         if (authAddress !== contractId) {
           const walletSigner = walletSigners.find((signer) => signer.walletAddress === authAddress);
           if (!walletSigner || !this.deps.externalSigners.canSignFor(authAddress)) {
-            return {
-              success: false,
-              hash: "",
-              error: `Unsupported auth entry for ${authAddress}. Add an external signer for that address or remove it from the transaction.`,
-            };
+            return failedTransaction(
+              new SignerNotFoundError(
+                authAddress,
+                "Add an external signer for that address or remove it from the transaction."
+              )
+            );
           }
 
           onLog(`Signing separate auth entry for ${authAddress.slice(0, 8)}...`);
@@ -290,11 +303,11 @@ export class MultiSignerManager {
         for (const walletSigner of walletSigners) {
           if (!walletSigner.walletAddress) continue;
           if (!walletSigner.signer) {
-            return {
-              success: false,
-              hash: "",
-              error: `Wallet signer ${walletSigner.walletAddress} is missing contract signer metadata. Use buildSelectedSigners() or provide the signer field explicitly.`,
-            };
+            return failedTransaction(
+              new ValidationError(
+                `Wallet signer ${walletSigner.walletAddress} is missing contract signer metadata. Use buildSelectedSigners() or provide the signer field explicitly.`
+              )
+            );
           }
         }
 
@@ -390,7 +403,7 @@ export class MultiSignerManager {
 
       const resimResult = await this.deps.rpc.simulateTransaction(resimTx);
       if ("error" in resimResult) {
-        return { success: false, hash: "", error: `Re-simulation failed: ${resimResult.error}` };
+        return simulationFailure(resimResult.error);
       }
 
       const normalizedTx = TransactionBuilder.fromXDR(
@@ -408,11 +421,7 @@ export class MultiSignerManager {
       onLog("Submitting transaction...");
       return this.deps.sendAndPoll(preparedTx, submissionOptions);
     } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SIGNING_FAILED));
     }
   }
 
@@ -426,12 +435,12 @@ export class MultiSignerManager {
     try {
       const builtTx = assembledTx.built;
       if (!builtTx) {
-        return { success: false, hash: "", error: "Transaction not built" };
+        return failedTransaction(new SubmissionError("Transaction not built"));
       }
 
       const operations = builtTx.operations;
       if (!operations || operations.length === 0) {
-        return { success: false, hash: "", error: "No operations in transaction" };
+        return failedTransaction(new SubmissionError("No operations in transaction"));
       }
 
       const invokeOp = operations[0] as Operation.InvokeHostFunction;
@@ -457,11 +466,7 @@ export class MultiSignerManager {
         options
       );
     } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SUBMISSION_FAILED));
     }
   }
 
@@ -474,7 +479,7 @@ export class MultiSignerManager {
   ): Promise<TransactionResult> {
     const contractId = this.deps.getContractId();
     if (!contractId) {
-      return { success: false, hash: "", error: "Not connected to a wallet" };
+      return failedTransaction(new WalletNotConnectedError("transfer"));
     }
 
     try {
@@ -482,19 +487,11 @@ export class MultiSignerManager {
       validateAddress(recipient, "recipient");
       validateAmount(amount, "amount");
     } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Validation failed",
-      };
+      return failedTransaction(wrapError(err, SmartAccountErrorCode.INVALID_INPUT));
     }
 
     if (recipient === contractId) {
-      return {
-        success: false,
-        hash: "",
-        error: "Cannot transfer to self",
-      };
+      return failedTransaction(new ValidationError("Cannot transfer to self"));
     }
 
     const amountInStroops = xlmToStroops(amount);
@@ -512,11 +509,7 @@ export class MultiSignerManager {
         options
       );
     } catch (err) {
-      return {
-        success: false,
-        hash: "",
-        error: err instanceof Error ? err.message : "Unknown error",
-      };
+      return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SUBMISSION_FAILED));
     }
   }
 }

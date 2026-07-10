@@ -26,6 +26,7 @@ import {
   sign,
   signAndSubmit,
 } from "./tx-ops";
+import { SubmissionError } from "../errors";
 
 function makeAccount(seedByte: number): Keypair {
   return Keypair.fromRawEd25519Seed(Buffer.alloc(32, seedByte));
@@ -199,11 +200,12 @@ describe("tx-ops", () => {
 
     expect(sendTransaction).toHaveBeenCalledTimes(1);
     expect(pollTransaction).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      success: false,
-      hash: "rpc-hash",
-      error: "error-xdr",
-    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.hash).toBe("rpc-hash");
+      expect(result.error).toBeInstanceOf(SubmissionError);
+      expect(result.error.message).toBe("error-xdr");
+    }
   });
 
   it("signs auth entries with the resolved context rule ids", async () => {
@@ -307,7 +309,10 @@ describe("tx-ops", () => {
     );
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe("No simulation data or auth entries");
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(SubmissionError);
+      expect(result.error.message).toBe("No simulation data or auth entries");
+    }
   });
 
   it("fundWallet signs and submits the funded transfer amount", async () => {

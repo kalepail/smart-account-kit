@@ -203,18 +203,51 @@ set_rule_context_call_contract() {
 }
 
 remove_modal_policy() {
-  agent-browser --session "$SESSION_NAME" find title "Remove policy" click >/dev/null
+  # The edit modal loads the rule's existing policies asynchronously (live
+  # on-chain read via the typed policy clients in ContextRuleBuilder), so the
+  # "Remove policy" control (PolicyConfigList) is not in the DOM the instant the
+  # modal opens. Wait for it to render, then click.
+  for _ in $(seq 1 30); do
+    if agent-browser --session "$SESSION_NAME" find title "Remove policy" click >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for the edit modal's 'Remove policy' control" >&2
+  return 1
 }
 
 enable_modal_expiration_days() {
   local days="$1"
-  agent-browser --session "$SESSION_NAME" find role checkbox check --name "Set Expiration" >/dev/null
+  # Check "Set Expiration" with a native click (fires React's onChange), scoping
+  # by label text and retrying: the accessible-name find raced the modal
+  # re-render that fires when the policy is removed just before this, and
+  # reported the checkbox as "not found".
+  local result=""
+  for _ in $(seq 1 20); do
+    result="$(agent-browser --session "$SESSION_NAME" eval "(() => {
+      const label = Array.from(document.querySelectorAll('.modal-content label')).find((item) => item.textContent?.includes('Set Expiration'));
+      const box = label ? label.querySelector('input[type=\"checkbox\"]') : null;
+      if (!box) return 'EXP_MISSING';
+      if (!box.checked) box.click();
+      return 'EXP_OK';
+    })()" 2>/dev/null || true)"
+    if printf '%s' "$result" | rg -q 'EXP_OK'; then break; fi
+    sleep 1
+  done
+  if ! printf '%s' "$result" | rg -q 'EXP_OK'; then
+    echo "Timed out enabling the 'Set Expiration' checkbox" >&2
+    return 1
+  fi
   sleep 1
+  # Scope to the number field inside the 'Expires in:' label; set via the native
+  # value setter so React's controlled-input tracker registers the change.
   agent-browser --session "$SESSION_NAME" eval "(() => {
-    const input = Array.from(document.querySelectorAll('input[type=\"number\"]')).find((item) => item.value === '1' || item.value === '30' || item.value === '7');
+    const label = Array.from(document.querySelectorAll('label')).find((item) => item.textContent?.includes('Expires in:'));
+    const input = label ? label.querySelector('input[type=\"number\"]') : null;
     if (!input) throw new Error('Missing expiration input');
-    input.focus();
-    input.value = ${days@Q};
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, \"${days}\");
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
     return input.value;
@@ -326,7 +359,20 @@ wait_for_new_log "$CALL_RULE_TRANSFER_LOG_COUNT" "Transfer successful" "Transfer
 echo "Editing the created rule"
 open_rule_for_action "$RULE_NAME" "Edit Rule"
 wait_for_body_pattern "Edit Context Rule" "Failed to update rule" 15 >/dev/null
-agent-browser --session "$SESSION_NAME" find placeholder "e.g., Primary Signers, Trading Bot, Daily Spending" fill "$UPDATED_RULE_NAME"
+# The edit modal pre-fills its fields a beat after the heading renders, so the
+# rename can race the (already-populated) name input. Retry the fill until ready.
+rename_filled=""
+for _ in $(seq 1 20); do
+  if agent-browser --session "$SESSION_NAME" find placeholder "e.g., Primary Signers, Trading Bot, Daily Spending" fill "$UPDATED_RULE_NAME" >/dev/null 2>&1; then
+    rename_filled=1
+    break
+  fi
+  sleep 1
+done
+if [[ -z "$rename_filled" ]]; then
+  echo "Timed out filling the edit modal rule name" >&2
+  exit 1
+fi
 remove_modal_policy
 enable_modal_expiration_days 2
 UPDATE_RULE_LOG_COUNT="$(log_line_count)"
@@ -358,7 +404,12 @@ if [[ -z "$LOGIN_REF" ]]; then
   exit 1
 fi
 agent-browser --session "$SESSION_NAME" click "@$LOGIN_REF"
-wait_for_body_pattern "$CONTRACT_ID" "Authentication failed|Lookup failed|Indexer lookup failed|No contracts found" 120 >/dev/null
+# The demo shows a static "No contracts found yet" empty-state until the passkey
+# login resolves, so the generic phrase would false-match on the first poll.
+# The success status renders the contract id truncated (first 8 + "..." + last
+# 8), so assert THIS wallet by the truncated form rather than the full id (which
+# never appears in body text) or the generic phrase.
+wait_for_body_pattern "Viewing details for ${CONTRACT_ID:0:8}" "Authentication failed|Lookup failed|Indexer lookup failed|No contracts found for" 120 >/dev/null
 
 FINAL_BODY="$(body_text)"
 

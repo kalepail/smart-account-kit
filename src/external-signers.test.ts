@@ -93,3 +93,49 @@ describe("ExternalSignerManager — Ed25519 signers", () => {
     expect(mgr.hasSigners).toBe(false);
   });
 });
+
+describe("ExternalSignerManager — keypair (Delegated) signers", () => {
+  it("adds a keypair from a secret and reports it can sign", () => {
+    const mgr = new ExternalSignerManager(NETWORK);
+    const kp = keypair(20);
+    const { address } = mgr.addFromSecret(kp.secret());
+    expect(address).toBe(kp.publicKey());
+    expect(mgr.canSignFor(kp.publicKey())).toBe(true);
+    expect(mgr.hasSigners).toBe(true);
+  });
+
+  it("rejects an invalid secret", () => {
+    const mgr = new ExternalSignerManager(NETWORK);
+    expect(() => mgr.addFromSecret("not-a-secret")).toThrow(ValidationError);
+  });
+
+  it("lists keypair signers and removes them", () => {
+    const mgr = new ExternalSignerManager(NETWORK);
+    const kp = keypair(21);
+    mgr.addFromSecret(kp.secret());
+    expect(mgr.getAll().find((s) => s.type === "keypair")?.address).toBe(kp.publicKey());
+    mgr.remove(kp.publicKey());
+    expect(mgr.canSignFor(kp.publicKey())).toBe(false);
+  });
+
+  it("keeps keypair and ed25519 signers independent", () => {
+    const mgr = new ExternalSignerManager(NETWORK, undefined, undefined, VERIFIER);
+    const kp = keypair(22);
+    mgr.addFromSecret(kp.secret());
+    mgr.addEd25519FromSecret(keypair(23).secret());
+    expect(mgr.getAll().filter((s) => s.type === "keypair")).toHaveLength(1);
+    expect(mgr.getAll().filter((s) => s.type === "ed25519")).toHaveLength(1);
+  });
+
+  it("throws from addFromWallet with no adapter configured", async () => {
+    const mgr = new ExternalSignerManager(NETWORK);
+    await expect(mgr.addFromWallet()).rejects.toThrow();
+  });
+
+  it("signAuthEntry throws SignerNotFoundError for an unknown address", async () => {
+    const mgr = new ExternalSignerManager(NETWORK);
+    await expect(
+      mgr.signAuthEntry("AAAA", keypair(24).publicKey())
+    ).rejects.toThrow();
+  });
+});

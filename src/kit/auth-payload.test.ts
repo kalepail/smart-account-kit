@@ -13,12 +13,26 @@ import {
   buildAddressSignatureScVal,
   buildSignaturePreimage,
   buildSignaturePayload,
+  buildWebAuthnSignatureBytes,
   createAddressCredentials,
   getAddressCredentials,
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
 } from "./auth-payload";
+
+describe("buildWebAuthnSignatureBytes", () => {
+  it("encodes WebAuthnSigData to the pinned ScVal XDR (sorted authenticator_data/client_data/signature)", () => {
+    const bytes = buildWebAuthnSignatureBytes({
+      authenticator_data: Buffer.alloc(4, 1),
+      client_data: Buffer.alloc(4, 2),
+      signature: Buffer.alloc(64, 3),
+    });
+    expect(bytes.toString("hex")).toBe(
+      "0000001100000001000000030000000f0000001261757468656e74696361746f725f6461746100000000000d00000004010101010000000f0000000b636c69656e745f64617461000000000d00000004020202020000000f000000097369676e61747572650000000000000d0000004003030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303"
+    );
+  });
+});
 
 function makeDelegatedSigner(address: string): Signer {
   return {

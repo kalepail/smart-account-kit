@@ -26,6 +26,7 @@ vi.mock("../kit/context-rules", async (importOriginal) => {
 });
 
 import { Account, Address, Keypair, Operation, TransactionBuilder, xdr } from "@stellar/stellar-sdk";
+import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import { MultiSignerManager } from "./multi-signer-manager";
 import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
 import {
@@ -51,6 +52,8 @@ function makeDeps() {
   const externalSigners = {
     canSignFor: vi.fn(),
     signAuthEntry: vi.fn(),
+    canSignEd25519: vi.fn().mockReturnValue(false),
+    signEd25519Digest: vi.fn(),
   };
 
   const deps = {
@@ -153,6 +156,50 @@ describe("MultiSignerManager", () => {
         walletAddress: makeAccount(7),
       },
     ]);
+  });
+
+  it("selects ed25519 external signers when a matching local key is held", () => {
+    const deps = makeDeps();
+    const manager = new MultiSignerManager(deps);
+    const keyData = Buffer.alloc(32, 9);
+    const ed25519Signer: ContractSigner = {
+      tag: "External",
+      values: [makeContract(5), keyData],
+    };
+    deps.externalSigners.canSignEd25519.mockImplementation((k: Buffer) =>
+      Buffer.from(k).equals(keyData)
+    );
+
+    const selected = manager.buildSelectedSigners([ed25519Signer], null);
+
+    expect(selected).toEqual([
+      {
+        signer: ed25519Signer,
+        type: "ed25519",
+        ed25519PublicKey: keyData.toString("hex"),
+      },
+    ]);
+  });
+
+  it("ignores ed25519-shaped signers with no matching local key", () => {
+    const deps = makeDeps();
+    const manager = new MultiSignerManager(deps);
+    const ed25519Signer: ContractSigner = {
+      tag: "External",
+      values: [makeContract(5), Buffer.alloc(32, 9)],
+    };
+    // canSignEd25519 defaults to false in the fake.
+    expect(manager.buildSelectedSigners([ed25519Signer], null)).toEqual([]);
+  });
+
+  it("treats ed25519 signers as needing the multi-signer flow", () => {
+    const deps = makeDeps();
+    const manager = new MultiSignerManager(deps);
+    const ed25519Signer: ContractSigner = {
+      tag: "External",
+      values: [makeContract(5), Buffer.alloc(32, 9)],
+    };
+    expect(manager.needsMultiSigner([ed25519Signer])).toBe(true);
   });
 
   it("detects when multi-signer flows are needed", () => {

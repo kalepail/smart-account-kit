@@ -184,6 +184,8 @@ export class SmartAccountKit {
   // Contract configuration
   private readonly accountWasmHash: string;
   private readonly webauthnVerifierAddress: string;
+  /** Deployed Ed25519 verifier contract address, if configured. */
+  public readonly ed25519VerifierAddress?: string;
   private readonly timeoutInSeconds: number;
   private readonly signatureExpirationLedgers: number;
   private readonly probeRuleIds?: {
@@ -377,6 +379,7 @@ export class SmartAccountKit {
     // Contracts
     this.accountWasmHash = config.accountWasmHash;
     this.webauthnVerifierAddress = config.webauthnVerifierAddress;
+    this.ed25519VerifierAddress = config.ed25519VerifierAddress;
     this.timeoutInSeconds = config.timeoutInSeconds ?? 30;
     this.signatureExpirationLedgers = config.signatureExpirationLedgers ?? LEDGERS_PER_HOUR; // ~1 hour
 
@@ -440,7 +443,8 @@ export class SmartAccountKit {
     this.externalSigners = new ExternalSignerManager(
       this.networkPassphrase,
       this.externalWalletAdapter,
-      walletStorage
+      walletStorage,
+      this.ed25519VerifierAddress
     );
 
     // Initialize sub-managers with dependencies

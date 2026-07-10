@@ -1,5 +1,6 @@
 import { contract, rpc } from "@stellar/stellar-sdk";
 import {
+  Account,
   Address,
   Keypair,
   Operation,
@@ -29,12 +30,14 @@ import {
 } from "./auth-payload";
 import { validateAddress, validateAmount, xlmToStroops, stroopsToXlm } from "../utils";
 import {
+  SimulationError,
   SmartAccountErrorCode,
   SubmissionError,
   WalletNotConnectedError,
   wrapError,
 } from "../errors";
 import {
+  decodeContractError,
   failedTransaction,
   simulationFailure,
   submissionFailure,
@@ -174,6 +177,23 @@ export function hasSourceAccountAuth(transaction: Transaction): boolean {
   return false;
 }
 
+const U64_MASK = BigInt("0xFFFFFFFFFFFFFFFF");
+
+/**
+ * Build an `scvI128` ScVal from a bigint stroop amount.
+ *
+ * Single source of truth for the i128 lo/hi split used by both the raw
+ * host-function transfer builder and the spec-fallback target-args builder.
+ */
+export function buildI128ScVal(amount: bigint): xdr.ScVal {
+  return xdr.ScVal.scvI128(
+    new xdr.Int128Parts({
+      lo: xdr.Uint64.fromString((amount & U64_MASK).toString()),
+      hi: xdr.Int64.fromString((amount >> BigInt(64)).toString()),
+    })
+  );
+}
+
 export function buildTokenTransferHostFunction(
   tokenContract: string,
   fromAddress: string,
@@ -187,12 +207,7 @@ export function buildTokenTransferHostFunction(
       args: [
         xdr.ScVal.scvAddress(Address.fromString(fromAddress).toScAddress()),
         xdr.ScVal.scvAddress(Address.fromString(toAddress).toScAddress()),
-        xdr.ScVal.scvI128(
-          new xdr.Int128Parts({
-            lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
-            hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-          })
-        ),
+        buildI128ScVal(amountInStroops),
       ],
     })
   );
@@ -216,13 +231,76 @@ export function buildTokenTransferTargetArgs(
   return [
     xdr.ScVal.scvAddress(Address.fromString(fromAddress).toScAddress()),
     xdr.ScVal.scvAddress(Address.fromString(toAddress).toScAddress()),
-    xdr.ScVal.scvI128(
-      new xdr.Int128Parts({
-        lo: xdr.Uint64.fromString((amountInStroops & BigInt("0xFFFFFFFFFFFFFFFF")).toString()),
-        hi: xdr.Int64.fromString((amountInStroops >> BigInt(64)).toString()),
-      })
-    ),
+    buildI128ScVal(amountInStroops),
   ];
+}
+
+/**
+ * Sign a prepared transaction with the fee-paying source keypair when required.
+ *
+ * Single source of truth for the fee-sponsor guard: when the transaction is not
+ * fee-sponsored via the relayer, or it still carries source-account auth, the
+ * local keypair must sign as the fee payer. Consolidates the guard that was
+ * duplicated across signAndSubmit, fundWallet, and the multi-signer paths.
+ */
+export function signFeePayer(
+  transaction: Transaction,
+  keypair: Keypair,
+  deps: {
+    shouldUseFeeSponsoring: (options?: SubmissionOptions) => boolean;
+    hasSourceAccountAuth: (transaction: Transaction) => boolean;
+  },
+  options?: SubmissionOptions
+): void {
+  if (!deps.shouldUseFeeSponsoring(options) || deps.hasSourceAccountAuth(transaction)) {
+    transaction.sign(keypair);
+  }
+}
+
+/**
+ * Re-simulate an invokeHostFunction transaction with signed auth entries, then
+ * assemble the final prepared transaction.
+ *
+ * Single source of truth for the re-simulate -> assemble step that was
+ * duplicated across signResimulateAndPrepare, fundWallet, and the multi-signer
+ * submission path. Throws a decoded {@link ContractError} (or
+ * {@link SimulationError}) when re-simulation fails, so callers can surface the
+ * on-chain reason.
+ */
+export async function resimulateAndAssemble(
+  deps: {
+    rpc: rpc.Server;
+    networkPassphrase: string;
+    timeoutInSeconds: number;
+  },
+  sourceAccount: Account,
+  hostFunc: xdr.HostFunction,
+  signedAuthEntries: xdr.SorobanAuthorizationEntry[]
+): Promise<Transaction> {
+  const resimTx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: deps.networkPassphrase,
+  })
+    .addOperation(
+      Operation.invokeHostFunction({
+        func: hostFunc,
+        auth: signedAuthEntries,
+      })
+    )
+    .setTimeout(deps.timeoutInSeconds)
+    .build();
+
+  const resimResult = await deps.rpc.simulateTransaction(resimTx);
+
+  if ("error" in resimResult) {
+    throw (
+      decodeContractError(resimResult.error) ??
+      new SimulationError(`Re-simulation failed: ${resimResult.error}`)
+    );
+  }
+
+  const normalizedTx = TransactionBuilder.fromXDR(resimTx.toXDR(), deps.networkPassphrase);
+  return rpc.assembleTransaction(normalizedTx as Transaction, resimResult).build() as Transaction;
 }
 
 export async function signResimulateAndPrepare(
@@ -264,36 +342,13 @@ export async function signResimulateAndPrepare(
   try {
     sourceAccount = await deps.rpc.getAccount(deps.deployerKeypair.publicKey());
   } catch (error) {
-    throw new Error(
+    throw new SubmissionError(
       `Re-simulation requires the deployer account to exist on-chain. ` +
       `Fund ${deps.deployerKeypair.publicKey()} before re-simulating transactions.`
     );
   }
 
-  const resimTx = new TransactionBuilder(sourceAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: deps.networkPassphrase,
-  })
-    .addOperation(
-      Operation.invokeHostFunction({
-        func: hostFunc,
-        auth: signedAuthEntries,
-      })
-    )
-    .setTimeout(deps.timeoutInSeconds)
-    .build();
-
-  const resimResult = await deps.rpc.simulateTransaction(resimTx);
-
-  if ("error" in resimResult) {
-    throw new Error(`Re-simulation failed: ${resimResult.error}`);
-  }
-
-  const resimTxXdr = resimTx.toXDR();
-  const normalizedTx = TransactionBuilder.fromXDR(resimTxXdr, deps.networkPassphrase);
-
-  const assembled = rpc.assembleTransaction(normalizedTx as Transaction, resimResult);
-  return assembled.build() as Transaction;
+  return resimulateAndAssemble(deps, sourceAccount, hostFunc, signedAuthEntries);
 }
 
 export async function sign(
@@ -407,9 +462,7 @@ export async function signAndSubmit(
       );
 
     const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-    if (!deps.shouldUseFeeSponsoring(submissionOpts) || deps.hasSourceAccountAuth(preparedTx)) {
-      preparedTx.sign(deps.deployerKeypair);
-    }
+    signFeePayer(preparedTx, deps.deployerKeypair, deps, submissionOpts);
 
     return deps.sendAndPoll(preparedTx, submissionOpts);
   } catch (err) {
@@ -593,34 +646,15 @@ export async function fundWallet(
 
     const invokeHostFn = simulationTx.operations[0] as Operation.InvokeHostFunction;
 
-    const txWithAuth = new TransactionBuilder(sourceAccount, {
-      fee: BASE_FEE,
-      networkPassphrase: deps.networkPassphrase,
-    })
-      .addOperation(
-        Operation.invokeHostFunction({
-          func: invokeHostFn.func,
-          auth: signedAuthEntries,
-        })
-      )
-      .setTimeout(30)
-      .build();
-
-    const resimResult = await deps.rpc.simulateTransaction(txWithAuth);
-
-    if ("error" in resimResult) {
-      return simulationFailure(resimResult.error);
-    }
-
-    const txWithAuthXdr = txWithAuth.toXDR();
-    const normalizedTxWithAuth = TransactionBuilder.fromXDR(txWithAuthXdr, deps.networkPassphrase);
-
-    const preparedTx = rpc.assembleTransaction(normalizedTxWithAuth as Transaction, resimResult).build();
+    const preparedTx = await resimulateAndAssemble(
+      deps,
+      sourceAccount,
+      invokeHostFn.func,
+      signedAuthEntries
+    );
 
     const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
-    if (!deps.shouldUseFeeSponsoring(submissionOpts) || deps.hasSourceAccountAuth(preparedTx)) {
-      preparedTx.sign(tempKeypair);
-    }
+    signFeePayer(preparedTx, tempKeypair, deps, submissionOpts);
 
     const txResult = await deps.sendAndPoll(preparedTx, submissionOpts);
 

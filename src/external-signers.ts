@@ -14,6 +14,7 @@
 import { Keypair, hash, xdr, Address } from "@stellar/stellar-sdk";
 import type { ConnectedWallet, ExternalWalletAdapter } from "./types";
 import { SignerNotFoundError, ValidationError } from "./errors";
+import { Ed25519Signer } from "./signers";
 
 /** Storage key for persisted wallet connections */
 const WALLET_STORAGE_KEY = "external_wallets";
@@ -43,17 +44,27 @@ export interface WalletStorage {
 }
 
 /**
- * Represents an external signer (G-address)
+ * Represents an external signer.
+ *
+ * - `keypair`/`wallet`: Delegated (G-address) signers that produce a nested
+ *   `require_auth` over the auth preimage.
+ * - `ed25519`: an External Ed25519 signer that signs the auth digest directly;
+ *   `verifierAddress` is the on-chain ed25519 verifier and `publicKey` is the
+ *   32-byte key data.
  */
 export interface ExternalSigner {
-  /** Stellar G-address */
+  /** Stellar G-address (also the ed25519 public key in G-form) */
   address: string;
   /** How this signer was added */
-  type: "keypair" | "wallet";
+  type: "keypair" | "wallet" | "ed25519";
   /** Wallet name (for wallet-based signers) */
   walletName?: string;
   /** Wallet ID (for wallet-based signers) */
   walletId?: string;
+  /** Verifier contract address (for ed25519 signers) */
+  verifierAddress?: string;
+  /** Hex-encoded 32-byte public key (for ed25519 signers) */
+  publicKey?: string;
 }
 
 /**
@@ -91,6 +102,12 @@ export class ExternalSignerManager {
   /** Keypair-based signers (memory-only, never persisted) */
   private keypairSigners: Map<string, KeypairSigner> = new Map();
 
+  /**
+   * Ed25519 external signers, keyed by hex-encoded 32-byte public key
+   * (memory-only, never persisted).
+   */
+  private ed25519Signers: Map<string, Ed25519Signer> = new Map();
+
   /** External wallet adapter (optional, for SWK integration) */
   private walletAdapter: ExternalWalletAdapter | null = null;
 
@@ -103,14 +120,19 @@ export class ExternalSignerManager {
   /** Whether connections have been restored */
   private restored = false;
 
+  /** Default Ed25519 verifier contract address (from SDK config), if any. */
+  private ed25519VerifierAddress: string | null = null;
+
   constructor(
     networkPassphrase: string,
     walletAdapter?: ExternalWalletAdapter,
-    storage?: WalletStorage
+    storage?: WalletStorage,
+    ed25519VerifierAddress?: string
   ) {
     this.networkPassphrase = networkPassphrase;
     this.walletAdapter = walletAdapter ?? null;
     this.storage = storage ?? null;
+    this.ed25519VerifierAddress = ed25519VerifierAddress ?? null;
   }
 
   /**
@@ -146,6 +168,85 @@ export class ExternalSignerManager {
     this.keypairSigners.set(address, { keypair, address });
 
     return { address };
+  }
+
+  /**
+   * Add an Ed25519 External signer from a raw secret key.
+   *
+   * Unlike {@link addFromSecret} (which registers a Delegated G-address signer),
+   * this registers an `External(verifierAddress, publicKey)` signer that signs
+   * the smart-account auth digest directly with Ed25519. The keypair is stored
+   * in memory only and is never persisted.
+   *
+   * @param secretKey - Stellar secret key (S...)
+   * @param ed25519VerifierAddress - Deployed Ed25519 verifier contract address.
+   *   Defaults to the address configured on the SDK (`ed25519VerifierAddress`).
+   * @returns The G-address and hex-encoded 32-byte public key
+   * @throws {ValidationError} If the secret key is invalid or no verifier address
+   *   is available
+   *
+   * @example
+   * ```typescript
+   * // Uses the SDK-configured ed25519VerifierAddress
+   * const { address } = kit.externalSigners.addEd25519FromSecret("S...");
+   * ```
+   */
+  addEd25519FromSecret(
+    secretKey: string,
+    ed25519VerifierAddress?: string
+  ): { address: string; publicKey: string } {
+    const verifierAddress = ed25519VerifierAddress ?? this.ed25519VerifierAddress;
+    if (!verifierAddress) {
+      throw new ValidationError(
+        "An Ed25519 verifier address is required. Configure ed25519VerifierAddress " +
+          "on the SDK or pass it explicitly to addEd25519FromSecret()."
+      );
+    }
+    const signer = Ed25519Signer.fromSecret(secretKey, verifierAddress);
+    const publicKeyHex = signer.publicKey.toString("hex");
+    this.ed25519Signers.set(publicKeyHex, signer);
+    return { address: signer.address, publicKey: publicKeyHex };
+  }
+
+  /**
+   * Look up a registered Ed25519 signer by its 32-byte key data.
+   *
+   * @param keyData - The 32-byte Ed25519 public key (External signer key data)
+   * @returns The matching {@link Ed25519Signer}, or `undefined`
+   * @internal
+   */
+  getEd25519Signer(keyData: Uint8Array | Buffer): Ed25519Signer | undefined {
+    return this.ed25519Signers.get(Buffer.from(keyData).toString("hex"));
+  }
+
+  /**
+   * Whether a registered Ed25519 signer can sign for the given key data.
+   *
+   * @param keyData - The 32-byte Ed25519 public key
+   * @internal
+   */
+  canSignEd25519(keyData: Uint8Array | Buffer): boolean {
+    return this.ed25519Signers.has(Buffer.from(keyData).toString("hex"));
+  }
+
+  /**
+   * Sign an auth digest with a registered Ed25519 signer.
+   *
+   * @param keyData - The 32-byte Ed25519 public key identifying the signer
+   * @param authDigest - The 32-byte smart-account auth digest
+   * @returns The 64-byte Ed25519 signature
+   * @throws {SignerNotFoundError} If no Ed25519 signer matches the key data
+   * @internal
+   */
+  signEd25519Digest(keyData: Uint8Array | Buffer, authDigest: Buffer): Buffer {
+    const signer = this.getEd25519Signer(keyData);
+    if (!signer) {
+      throw new SignerNotFoundError(
+        `ed25519:${Buffer.from(keyData).toString("hex").slice(0, 16)}…`,
+        "Use kit.externalSigners.addEd25519FromSecret() to add the signer."
+      );
+    }
+    return signer.signAuthDigest(authDigest);
   }
 
   /**
@@ -244,6 +345,13 @@ export class ExternalSignerManager {
     // Remove from keypair signers
     this.keypairSigners.delete(address);
 
+    // Remove any ed25519 signer whose G-address matches
+    for (const [publicKey, signer] of this.ed25519Signers) {
+      if (signer.address === address) {
+        this.ed25519Signers.delete(publicKey);
+      }
+    }
+
     // Remove from wallet adapter if it has the method
     const adapter = this.walletAdapter as ExternalWalletAdapter & {
       disconnectByAddress?: (address: string) => void;
@@ -320,6 +428,7 @@ export class ExternalSignerManager {
    */
   async removeAll(): Promise<void> {
     this.keypairSigners.clear();
+    this.ed25519Signers.clear();
 
     if (this.walletAdapter) {
       await this.walletAdapter.disconnect();
@@ -344,6 +453,16 @@ export class ExternalSignerManager {
       signers.push({
         address,
         type: "keypair",
+      });
+    }
+
+    // Add ed25519 external signers
+    for (const [publicKey, signer] of this.ed25519Signers) {
+      signers.push({
+        address: signer.address,
+        type: "ed25519",
+        verifierAddress: signer.verifier,
+        publicKey,
       });
     }
 
@@ -391,6 +510,7 @@ export class ExternalSignerManager {
    */
   get hasSigners(): boolean {
     return this.keypairSigners.size > 0 ||
+      this.ed25519Signers.size > 0 ||
       (this.walletAdapter?.getConnectedWallets().length ?? 0) > 0;
   }
 

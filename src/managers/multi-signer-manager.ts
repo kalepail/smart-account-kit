@@ -11,10 +11,7 @@ import {
   Operation,
   TransactionBuilder,
   xdr,
-  rpc as rpcModule,
 } from "@stellar/stellar-sdk";
-
-const { assembleTransaction } = rpcModule;
 import type { Keypair, Transaction, rpc } from "@stellar/stellar-sdk";
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type {
@@ -25,19 +22,14 @@ import type {
 import type { ContractDetailsResponse } from "../indexer";
 import type { ExternalSignerManager } from "../external-signers";
 import type { SelectedSigner, SubmissionOptions, TransactionResult } from "../types";
-import {
-  BASE_FEE,
-  AUTH_ENTRY_EXPIRATION_BUFFER,
-} from "../constants";
+import { AUTH_ENTRY_EXPIRATION_BUFFER } from "../constants";
 import {
   getCredentialIdFromSigner,
   collectUniqueSigners,
 } from "../signer-utils";
 import {
-  buildAuthDigest,
   buildAddressSignatureScVal,
   buildSignaturePreimage,
-  buildSignaturePayload,
   createAddressCredentials,
   getAddressCredentials,
   getAuthEntryAddress,
@@ -47,7 +39,12 @@ import {
   writeAuthPayload,
 } from "../kit/auth-payload";
 import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
-import { buildTokenTransferTargetArgs } from "../kit/tx-ops";
+import {
+  buildTokenTransferTargetArgs,
+  resimulateAndAssemble,
+  signFeePayer,
+} from "../kit/tx-ops";
+import { computeEntryAuthDigest } from "../signers";
 import { validateAddress, validateAmount, xlmToStroops } from "../utils";
 import {
   SmartAccountErrorCode,
@@ -57,10 +54,7 @@ import {
   WalletNotConnectedError,
   wrapError,
 } from "../errors";
-import {
-  failedTransaction,
-  simulationFailure,
-} from "../contract-errors";
+import { failedTransaction } from "../contract-errors";
 
 export interface MultiSignerOptions {
   onLog?: (message: string, type?: "info" | "success" | "error") => void;
@@ -118,7 +112,13 @@ export class MultiSignerManager {
   }
 
   needsMultiSigner(signers: ContractSigner[]): boolean {
-    return signers.some((signer) => signer.tag === "Delegated") || signers.length > 1;
+    // The single-signer convenience path only handles WebAuthn passkeys. Any
+    // Delegated or non-passkey External (e.g. Ed25519) signer, or more than one
+    // signer, must go through the multi-signer path.
+    const hasNonPasskey = signers.some(
+      (signer) => signer.tag === "Delegated" || !getCredentialIdFromSigner(signer)
+    );
+    return hasNonPasskey || signers.length > 1;
   }
 
   buildSelectedSigners(
@@ -141,11 +141,25 @@ export class MultiSignerManager {
       }
 
       const credentialId = getCredentialIdFromSigner(signer);
-      if (credentialId && (!activeCredentialId || credentialId === activeCredentialId)) {
+      if (credentialId) {
+        if (!activeCredentialId || credentialId === activeCredentialId) {
+          selected.push({
+            signer,
+            type: "passkey",
+            credentialId,
+          });
+        }
+        continue;
+      }
+
+      // External signer without a credential ID: an Ed25519 signer if we hold a
+      // matching local keypair (key data is the 32-byte public key).
+      const keyData = signer.values[1] as Buffer;
+      if (keyData && this.deps.externalSigners.canSignEd25519(keyData)) {
         selected.push({
           signer,
-          type: "passkey",
-          credentialId,
+          type: "ed25519",
+          ed25519PublicKey: Buffer.from(keyData).toString("hex"),
         });
       }
     }
@@ -205,8 +219,12 @@ export class MultiSignerManager {
 
     const passkeySigners = selectedSigners.filter((signer) => signer.type === "passkey");
     const walletSigners = selectedSigners.filter((signer) => signer.type === "wallet");
+    const ed25519Signers = selectedSigners.filter((signer) => signer.type === "ed25519");
 
-    onLog(`Signing with ${passkeySigners.length} passkey(s) and ${walletSigners.length} wallet(s)`);
+    onLog(
+      `Signing with ${passkeySigners.length} passkey(s), ${walletSigners.length} wallet(s), ` +
+        `and ${ed25519Signers.length} ed25519 key(s)`
+    );
 
     for (const walletSigner of walletSigners) {
       if (!walletSigner.walletAddress) continue;
@@ -215,6 +233,18 @@ export class MultiSignerManager {
           new SignerNotFoundError(
             walletSigner.walletAddress,
             "Use kit.externalSigners.addFromSecret() or kit.externalSigners.addFromWallet() to add a signer."
+          )
+        );
+      }
+    }
+
+    for (const ed25519Signer of ed25519Signers) {
+      if (!ed25519Signer.ed25519PublicKey) continue;
+      if (!this.deps.externalSigners.canSignEd25519(Buffer.from(ed25519Signer.ed25519PublicKey, "hex"))) {
+        return failedTransaction(
+          new SignerNotFoundError(
+            `ed25519:${ed25519Signer.ed25519PublicKey.slice(0, 16)}…`,
+            "Use kit.externalSigners.addEd25519FromSecret() to add the signer."
           )
         );
       }
@@ -316,6 +346,32 @@ export class MultiSignerManager {
           authPayload.context_rule_ids = resolvedContextRuleIds;
         }
 
+        // The auth digest is shared by every signer on this entry (passkeys sign
+        // it inside signAuthEntry; ed25519 keys and delegated signers sign it
+        // here). It is independent of the AuthPayload signature content.
+        const { authDigest } = computeEntryAuthDigest(
+          this.deps.networkPassphrase,
+          signedEntry,
+          expiration,
+          authPayload.context_rule_ids
+        );
+
+        // Ed25519 external signers contribute their raw 64-byte signature bytes.
+        for (const ed25519Signer of ed25519Signers) {
+          if (!ed25519Signer.ed25519PublicKey || !ed25519Signer.signer) continue;
+          const signatureBytes = this.deps.externalSigners.signEd25519Digest(
+            Buffer.from(ed25519Signer.ed25519PublicKey, "hex"),
+            authDigest
+          );
+          upsertAuthPayloadSigner(
+            authPayload,
+            ed25519Signer.signer as ContractSigner,
+            signatureBytes
+          );
+        }
+
+        // Delegated (wallet) signers contribute empty bytes here; their auth is
+        // a separate nested require_auth entry created below.
         for (const walletSigner of walletSigners) {
           if (!walletSigner.walletAddress) continue;
           upsertAuthPayloadSigner(authPayload, walletSigner.signer as ContractSigner, Buffer.alloc(0));
@@ -328,13 +384,6 @@ export class MultiSignerManager {
         }
 
         onLog(`Creating auth entries for ${walletSigners.length} delegated signer(s)...`);
-
-        const signaturePayload = buildSignaturePayload(
-          this.deps.networkPassphrase,
-          signedEntry,
-          expiration
-        );
-        const authDigest = buildAuthDigest(signaturePayload, authPayload.context_rule_ids);
 
         for (const walletSigner of walletSigners) {
           if (!walletSigner.walletAddress) continue;
@@ -388,35 +437,15 @@ export class MultiSignerManager {
 
       onLog("Re-simulating with signatures...");
       const sourceAccount = await this.deps.rpc.getAccount(this.deps.deployerPublicKey);
-      const resimTx = new TransactionBuilder(sourceAccount, {
-        fee: BASE_FEE,
-        networkPassphrase: this.deps.networkPassphrase,
-      })
-        .addOperation(
-          Operation.invokeHostFunction({
-            func: hostFunc,
-            auth: signedAuthEntries,
-          })
-        )
-        .setTimeout(this.deps.timeoutInSeconds)
-        .build();
-
-      const resimResult = await this.deps.rpc.simulateTransaction(resimTx);
-      if ("error" in resimResult) {
-        return simulationFailure(resimResult.error);
-      }
-
-      const normalizedTx = TransactionBuilder.fromXDR(
-        resimTx.toXDR(),
-        this.deps.networkPassphrase
+      const preparedTx = await resimulateAndAssemble(
+        this.deps,
+        sourceAccount,
+        hostFunc,
+        signedAuthEntries
       );
-      const assembled = assembleTransaction(normalizedTx as Transaction, resimResult);
-      const preparedTx = assembled.build() as Transaction;
       const submissionOptions: SubmissionOptions = { forceMethod: options?.forceMethod };
 
-      if (!this.deps.shouldUseFeeSponsoring(submissionOptions) || this.deps.hasSourceAccountAuth(preparedTx)) {
-        preparedTx.sign(this.deps.deployerKeypair);
-      }
+      signFeePayer(preparedTx, this.deps.deployerKeypair, this.deps, submissionOptions);
 
       onLog("Submitting transaction...");
       return this.deps.sendAndPoll(preparedTx, submissionOptions);
@@ -453,9 +482,7 @@ export class MultiSignerManager {
           builtTx.toXDR(),
           this.deps.networkPassphrase
         ) as Transaction;
-        if (!this.deps.shouldUseFeeSponsoring(submissionOptions) || this.deps.hasSourceAccountAuth(preparedTx)) {
-          preparedTx.sign(this.deps.deployerKeypair);
-        }
+        signFeePayer(preparedTx, this.deps.deployerKeypair, this.deps, submissionOptions);
         return this.deps.sendAndPoll(preparedTx, submissionOptions);
       }
 

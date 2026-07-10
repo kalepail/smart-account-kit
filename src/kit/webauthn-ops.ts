@@ -19,8 +19,6 @@ import {
   generateChallenge,
 } from "../utils";
 import {
-  buildAuthDigest,
-  buildSignaturePayload,
   buildWebAuthnSignatureBytes,
   getAddressCredentials,
   normalizeSignatureExpirationLedger,
@@ -28,6 +26,7 @@ import {
   upsertAuthPayloadSigner,
   writeAuthPayload,
 } from "./auth-payload";
+import { computeEntryAuthDigest } from "../signers";
 import {
   findWebAuthnSignerInRules,
 } from "./context-rules";
@@ -168,12 +167,12 @@ export async function signAuthEntry(
       timeoutInSeconds: deps.timeoutInSeconds,
     }
   );
-  const signaturePayload = buildSignaturePayload(
+  const { authDigest } = computeEntryAuthDigest(
     deps.networkPassphrase,
     normalizedEntry,
-    credentials.signatureExpirationLedger()
+    credentials.signatureExpirationLedger(),
+    contextRuleIds
   );
-  const authDigest = buildAuthDigest(signaturePayload, contextRuleIds);
 
   const authResponse = await deps.webAuthn.startAuthentication({
     optionsJSON: {

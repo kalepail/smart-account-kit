@@ -158,6 +158,10 @@ export {
   collectUniqueSigners,
 } from "./signer-utils";
 
+// Signer abstraction (Ed25519 + shared auth-digest core)
+export { Ed25519Signer, computeEntryAuthDigest } from "./signers";
+export type { AuthDigestSigner } from "./signers";
+
 // Event emitter
 export { SmartAccountEventEmitter } from "./events";
 export type {

@@ -14,10 +14,11 @@ vi.mock("@stellar/stellar-sdk", async (importOriginal) => {
   };
 });
 
-import { Account, Address, Keypair, StrKey, hash, rpc, xdr } from "@stellar/stellar-sdk";
+import { Account, Address, Keypair, StrKey, hash, rpc, scValToNative, xdr } from "@stellar/stellar-sdk";
 import type { Transaction } from "@stellar/stellar-sdk";
 import { FRIENDBOT_RESERVE_XLM } from "../constants";
 import {
+  buildI128ScVal,
   fundWallet,
   getSubmissionMethod,
   hasSourceAccountAuth,
@@ -25,6 +26,7 @@ import {
   shouldUseFeeSponsoring,
   sign,
   signAndSubmit,
+  signFeePayer,
 } from "./tx-ops";
 import { SubmissionError } from "../errors";
 
@@ -367,5 +369,56 @@ describe("tx-ops", () => {
       hash: "fund-hash",
       amount: 10_000 - FRIENDBOT_RESERVE_XLM,
     });
+  });
+});
+
+describe("buildI128ScVal", () => {
+  it("round-trips a positive bigint amount", () => {
+    const scv = buildI128ScVal(1_234_567_890n);
+    expect(scValToNative(scv)).toBe(1_234_567_890n);
+  });
+
+  it("round-trips an amount larger than u64", () => {
+    const big = (1n << 70n) + 123n;
+    expect(scValToNative(buildI128ScVal(big))).toBe(big);
+  });
+
+  it("round-trips zero", () => {
+    expect(scValToNative(buildI128ScVal(0n))).toBe(0n);
+  });
+});
+
+describe("signFeePayer", () => {
+  const keypair = Keypair.fromRawEd25519Seed(Buffer.alloc(32, 21));
+
+  function fakeTx() {
+    return { sign: vi.fn() } as unknown as Transaction;
+  }
+
+  it("signs when the transaction is not fee-sponsored", () => {
+    const tx = fakeTx();
+    signFeePayer(tx, keypair, {
+      shouldUseFeeSponsoring: () => false,
+      hasSourceAccountAuth: () => false,
+    });
+    expect(tx.sign).toHaveBeenCalledWith(keypair);
+  });
+
+  it("signs when fee-sponsored but source-account auth remains", () => {
+    const tx = fakeTx();
+    signFeePayer(tx, keypair, {
+      shouldUseFeeSponsoring: () => true,
+      hasSourceAccountAuth: () => true,
+    });
+    expect(tx.sign).toHaveBeenCalledWith(keypair);
+  });
+
+  it("does not sign when fully fee-sponsored", () => {
+    const tx = fakeTx();
+    signFeePayer(tx, keypair, {
+      shouldUseFeeSponsoring: () => true,
+      hasSourceAccountAuth: () => false,
+    });
+    expect(tx.sign).not.toHaveBeenCalled();
   });
 });

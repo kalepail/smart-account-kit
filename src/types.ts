@@ -115,6 +115,15 @@ export interface SmartAccountConfig {
   /** Deployed WebAuthn verifier contract address */
   webauthnVerifierAddress: string;
 
+  /**
+   * Deployed Ed25519 verifier contract address (optional).
+   *
+   * Required only when using Ed25519 external signers
+   * ({@link kit.externalSigners.addEd25519FromSecret}); passkey-only
+   * deployments can omit it.
+   */
+  ed25519VerifierAddress?: string;
+
   /** Default policy contract addresses (optional) */
   defaultPolicies?: PolicyConfig[];
 
@@ -499,12 +508,17 @@ export interface ExternalWalletAdapter {
  * Represents a signer selected for a multi-signature operation
  */
 export interface SelectedSigner {
-  /** Signer type: 'passkey' for WebAuthn, 'wallet' for external wallet */
-  type: "passkey" | "wallet";
+  /**
+   * Signer type: 'passkey' for WebAuthn, 'wallet' for a Delegated external
+   * wallet, 'ed25519' for a local Ed25519 External signer.
+   */
+  type: "passkey" | "wallet" | "ed25519";
   /** Credential ID for passkey signers (base64url encoded) */
   credentialId?: string;
   /** G-address for wallet signers */
   walletAddress?: string;
+  /** Hex-encoded 32-byte key data for ed25519 signers */
+  ed25519PublicKey?: string;
   /** Human-readable label for display (optional) */
   label?: string;
   /** The original contract Signer object (optional, for advanced use cases) */

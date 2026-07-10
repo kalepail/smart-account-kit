@@ -34,6 +34,12 @@ export const SECP256R1_PUBLIC_KEY_SIZE = 65;
 /** First byte of an uncompressed secp256r1 public key (0x04) */
 export const UNCOMPRESSED_PUBKEY_PREFIX = 0x04;
 
+/** Size of an Ed25519 public key in bytes (= External signer key data). */
+export const ED25519_PUBLIC_KEY_SIZE = 32;
+
+/** Size of an Ed25519 signature in bytes. */
+export const ED25519_SIGNATURE_SIZE = 64;
+
 // ============================================================================
 // Storage Configuration
 // ============================================================================

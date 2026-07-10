@@ -5,7 +5,7 @@ The repository publishes two packages. Release them in this order so the SDK can
 1. `smart-account-kit-bindings`
 2. `smart-account-kit`
 
-For the current Protocol 27 release, the checked-in target versions are `smart-account-kit-bindings@0.2.0` and `smart-account-kit@0.3.0`. At release preparation on 2026-07-09, the versions published on npm were `0.1.2` and `0.2.10`, respectively; the preflight commands below are the source of truth when you publish.
+The current release target is `smart-account-kit@0.4.0` (the OpenZeppelin-parity overhaul). The two packages are versioned independently: read the exact checked-in target versions from `packages/smart-account-kit-bindings/package.json` and `package.json` — the version bump lands during release preparation, and `npm view` (below) is the source of truth for what is already published. The examples below use `0.4.0` for the SDK and `<bindings-version>` as a placeholder for the checked-in bindings version.
 
 ## Prerequisites
 
@@ -40,19 +40,28 @@ CONTRACTS=../stellar-contracts
 )
 
 ACCOUNT_WASM="$CONTRACTS/target/wasm32v1-none/release/multisig_account_example.wasm" \
-BINDINGS_VERSION=0.2.0 \
+BINDINGS_VERSION=<bindings-version> \
 pnpm build:bindings
 ```
 
-Stellar CLI 27 writes the optimized output to the standard `.wasm` path shown above; the build summary confirms the optimized and original sizes.
+Stellar CLI 27 writes the optimized output to the standard `.wasm` path shown above; the build summary confirms the optimized and original sizes. `build:bindings` prefers explicit env/args (`ACCOUNT_WASM` here), falls back to `demo/.env.example`, and prints the source and hash it binds against.
 
 Review and commit regenerated sources before publishing. The generation script preserves the requested binding version and installs the repository's maintained package README after the Stellar CLI generator runs.
+
+Confirm the regenerated bindings match the canonical deployed WASM before committing:
+
+```bash
+pnpm verify:bindings
+```
+
+`verify:bindings` regenerates from the canonical testnet WASM hash recorded in [`deployments-protocol-27-2026-07-09.md`](deployments-protocol-27-2026-07-09.md), diffs against the checked-in `packages/smart-account-kit-bindings/src/index.ts`, and exits nonzero on drift. Never hand-edit the generated bindings to resolve drift — fix it on the contract side and regenerate.
 
 ## Validate
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm test --run
+pnpm verify:bindings
 pnpm build
 pnpm --filter smart-account-kit-demo build
 pnpm --filter indexer-demo build
@@ -67,8 +76,8 @@ Commit any intended changes before continuing. Uncommitted tracked changes cause
 The dry-run mode verifies npm authentication, reads the live registry versions, and shows the intended publish versions. It does not build or upload a package.
 
 ```bash
-pnpm release:bindings --version 0.2.0 --dry-run
-pnpm release --version 0.3.0 --bindings-version 0.2.0 --dry-run
+pnpm release:bindings --version <bindings-version> --dry-run
+pnpm release --version 0.4.0 --bindings-version <bindings-version> --dry-run
 ```
 
 Do not insert an extra `--` after the pnpm script name; pnpm forwards it to these shell scripts as an argument.
@@ -76,12 +85,12 @@ Do not insert an extra `--` after the pnpm script name; pnpm forwards it to thes
 ## Publish and verify
 
 ```bash
-pnpm release:bindings --version 0.2.0
-npm view smart-account-kit-bindings@0.2.0 version
+pnpm release:bindings --version <bindings-version>
+npm view smart-account-kit-bindings@<bindings-version> version
 
-pnpm release --version 0.3.0 --bindings-version 0.2.0
-npm view smart-account-kit@0.3.0 version
-npm view smart-account-kit@0.3.0 dependencies
+pnpm release --version 0.4.0 --bindings-version <bindings-version>
+npm view smart-account-kit@0.4.0 version
+npm view smart-account-kit@0.4.0 dependencies
 ```
 
 If npm requires a one-time password, append `--otp <fresh-code>` to each `pnpm release...` command. Use a fresh code for the second publish if the first one expires.

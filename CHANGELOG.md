@@ -42,6 +42,37 @@ migration guide.
   with every runtime module covered, including auth-digest and WebAuthn
   signature vectors.
 
+### Audit follow-up fixes
+
+A verified code-review pass over the release branch. See
+[`docs/migration-v0.4.0.md`](docs/migration-v0.4.0.md#audit-follow-up-fixes) for
+details and upgrade notes.
+
+- **Host-order `ScMap` sort.** Signer maps (weighted-threshold params and the
+  auth-payload signer map) sort by the Soroban host's key order (element-wise
+  byte comparison), not the length-major XDR encoding — fixing occasional
+  `InvalidInput` rejections for two same-verifier signers with different-length
+  key data.
+- **`kit.credentials.deploy()` honors policies** (`options.policies ??
+  config.defaultPolicies`), matching `createWallet`; previously it silently
+  deployed with no constructor policies.
+- **Constructor policies validate before the passkey ceremony** in
+  `createWallet`, so bad configs no longer orphan a created passkey.
+- **`TransactionFailure.code` removed** — branch on `result.error.code`.
+- **Policy params accept numeric strings** for u32/i128 fields, matching the
+  spec; out-of-range/non-numeric strings throw.
+- **Custom policy conversion hard-fails** instead of shipping a `Void` ScVal.
+- **Wallet cancellation heuristic narrowed** to specific user-action phrases, so
+  extension crashes / allowlist rejections surface as errors instead of being
+  swallowed as a silent `null`.
+- **`fundWallet()`** guards on the exact testnet passphrase (Futurenet no longer
+  slips through) and reads the temp account's real native balance instead of a
+  fabricated 10,000 XLM default.
+- **Update-path validation** (`updateName`/`updateExpiration`), an optional
+  `existingSignerCount` pre-check on `addBatch`, cryptographically random
+  delegated auth nonces, a loud warning when an unsignable Ed25519 signer is
+  dropped, and reduced redundant context-rule enumeration on signing/connect.
+
 ### Bindings (`smart-account-kit-bindings@0.3.0`)
 
 - Regenerated from the canonical deployed testnet WASM

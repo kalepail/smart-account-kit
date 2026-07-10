@@ -96,10 +96,17 @@ wait_for_indexed_contract() {
   local attempts="${2:-60}"
 
   for _ in $(seq 1 "$attempts"); do
-    local response
-    response="$(curl -sS "$INDEXER_API_URL/api/contract/$contract_id" || true)"
-    if [[ -n "$response" ]] && ! printf '%s\n' "$response" | rg -q '"error":"Contract not found"'; then
-      printf '%s\n' "$response"
+    local response http_code body
+    # Capture the HTTP status so a non-2xx (e.g. an indexer 500) is treated as
+    # "not yet indexed" and retried, rather than mistaken for a real payload:
+    # a 500 body is non-empty and isn't "Contract not found", so the old check
+    # would have accepted it as indexed.
+    response="$(curl -sS -w $'\n%{http_code}' "$INDEXER_API_URL/api/contract/$contract_id" || true)"
+    http_code="${response##*$'\n'}"
+    body="${response%$'\n'*}"
+    if [[ "$http_code" =~ ^2[0-9][0-9]$ ]] && [[ -n "$body" ]] \
+        && ! printf '%s\n' "$body" | rg -q '"error":"Contract not found"'; then
+      printf '%s\n' "$body"
       return 0
     fi
     sleep 2

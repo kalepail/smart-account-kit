@@ -37,8 +37,8 @@ if (result.success) {
   // TransactionSuccess: { success: true; hash: string; ledger? }
   console.log(result.hash, result.ledger);
 } else {
-  // TransactionFailure: { success: false; error: SmartAccountError; code; hash? }
-  console.error(`[${result.code}] ${result.error.message}`);
+  // TransactionFailure: { success: false; error: SmartAccountError; hash? }
+  console.error(`[${result.error.code}] ${result.error.message}`);
 }
 ```
 
@@ -46,7 +46,7 @@ Key differences:
 
 - `error` is now a **typed `SmartAccountError`** (a `ContractError` when an on-chain code was decoded), not a string.
 - Success results have **no** `error` field.
-- Failures gain a `code` field (mirrors `error.code`) for quick branching.
+- Branch on **`result.error.code`** (there is no top-level `result.code` mirror).
 - `hash` is now **optional on failure** (present only when one was assigned before the failure).
 - New type exports: `TransactionSuccess`, `TransactionFailure`.
 
@@ -179,6 +179,30 @@ The following were removed in this release (they were dead or never meant to be 
 
 1. **`get_context_rule` id hydration.** The deployed contract's `get_context_rule` omits the aligned `signer_ids`/`policy_ids` fields, so the generated bindings spec cannot decode them directly. The SDK injects empty id vectors and hydrates the real ids via `get_signer_id`/`get_policy_id`. Reading a rule with populated ids therefore depends on those getters being reachable; a read-only client without them yields empty `signer_ids`/`policy_ids`.
 2. **Do not hand-edit bindings.** They are regenerated from the canonical WASM. If richer descriptions are wanted, fix them on the contract side (redeploy) and regenerate — hand-editing re-introduces drift that `pnpm verify:bindings` will flag.
+
+---
+
+## Audit follow-up fixes
+
+A verified code-review pass over the 0.4.0 branch applied the following behavior changes. They are folded into the 0.4.0 release (no compatibility layer).
+
+**Correctness / behavior changes you may notice:**
+
+- **`TransactionFailure.code` removed.** The convenience mirror is gone; branch on `result.error.code`. (See [Results & error handling](#results--error-handling).)
+- **Policy params accept numeric strings.** `threshold`, `period_ledgers` (u32) and `spending_limit` (i128) now accept decimal numeric strings (e.g. `spending_limit: "1000000"`) in addition to `number`/`bigint`, matching the generated spec. Out-of-range or non-numeric strings throw a `ValidationError`.
+- **`kit.credentials.deploy()` honors policies.** It now installs `options.policies ?? config.defaultPolicies` as constructor policies — the same behavior as `createWallet`. Previously `deploy()` silently deployed with no constructor policies even when `defaultPolicies` was configured. (The contract address is unchanged; constructor args are not part of the address preimage.)
+- **Constructor policies validate before the passkey ceremony.** `createWallet` now converts/validates constructor policies up front, so an invalid policy config throws before a WebAuthn passkey is created (no orphaned pending credential).
+- **Wallet-cancellation detection narrowed.** `StellarWalletsKitAdapter.connect()` only treats specific user-action phrases (`"user rejected"`, `"user denied"`, `"user cancel"`, `"modal closed"`, `"user closed"`, `"dismiss"`, `"user did not"`) as a cancellation (→ returns `null`). Infrastructure failures that merely contained `"closed"`/`"rejected"` (e.g. `"message port closed"`, allowlist rejections) now correctly **throw** instead of being swallowed as a silent cancellation. If you relied on `connect()` returning `null` for such errors, wrap the call in `try/catch`.
+- **`fundWallet()` is testnet-only by exact passphrase.** The guard is now `networkPassphrase === Networks.TESTNET` (Futurenet's passphrase also contains `"Test"` and previously slipped through). It also reads the temp account's **real** native balance (via the account ledger entry) instead of falling back to a fabricated 10,000 XLM default.
+- **Weighted-threshold / auth signer maps sort in host order.** The signer-map key sort now matches the Soroban host's `ScMap` ordering (element-wise byte comparison), fixing occasional `InvalidInput` rejections for wallets with two same-verifier signers whose key data differs in length. No API change.
+- **Custom policy conversion never ships `Void`.** `buildPoliciesScVal` throws a `ValidationError` when a custom policy's params can't be converted, instead of silently sending an empty ScVal.
+
+**Additive (non-breaking):**
+
+- **`kit.signers.addBatch(ruleId, signers, { existingSignerCount })`.** Optional `existingSignerCount` pre-checks the batch against the rule-level `MAX_SIGNERS` limit (existing + new). Omitted → only the new batch size is checked (the contract still enforces the total at simulation).
+- **`updateName` / `updateExpiration` validate inputs.** `kit.rules.updateName` now runs `validateContextRuleName` and `kit.rules.updateExpiration` runs `validateValidUntil`, matching `add`.
+- **Delegated auth-entry nonces are cryptographically random** (`i64`) instead of `Date.now()`, avoiding nonce collisions between delegated entries built in the same millisecond.
+- **Under-signable Ed25519 signers are surfaced.** `multiSigners.buildSelectedSigners` logs a warning when it drops an Ed25519 External signer with no matching local key (memory-only keys are gone after reload). Re-import via `kit.externalSigners.addEd25519FromSecret()`.
 
 ---
 

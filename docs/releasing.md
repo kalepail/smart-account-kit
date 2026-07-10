@@ -5,7 +5,7 @@ The repository publishes two packages. Release them in this order so the SDK can
 1. `smart-account-kit-bindings`
 2. `smart-account-kit`
 
-The current release target is `smart-account-kit@0.4.0` (the OpenZeppelin-parity overhaul). The two packages are versioned independently: read the exact checked-in target versions from `packages/smart-account-kit-bindings/package.json` and `package.json` — the version bump lands during release preparation, and `npm view` (below) is the source of truth for what is already published. The examples below use `0.4.0` for the SDK and `<bindings-version>` as a placeholder for the checked-in bindings version.
+The current release target is `smart-account-kit@0.4.0` with `smart-account-kit-bindings@0.3.0` (the OpenZeppelin-parity overhaul). The two packages are versioned independently: the versions checked into `package.json` and `packages/smart-account-kit-bindings/package.json` are authoritative, and `npm view` (below) is the source of truth for what is already published. Confirm both against the checked-in `package.json` files before publishing.
 
 ## Prerequisites
 
@@ -40,7 +40,7 @@ CONTRACTS=../stellar-contracts
 )
 
 ACCOUNT_WASM="$CONTRACTS/target/wasm32v1-none/release/multisig_account_example.wasm" \
-BINDINGS_VERSION=<bindings-version> \
+BINDINGS_VERSION=0.3.0 \
 pnpm build:bindings
 ```
 
@@ -76,8 +76,8 @@ Commit any intended changes before continuing. Uncommitted tracked changes cause
 The dry-run mode verifies npm authentication, reads the live registry versions, and shows the intended publish versions. It does not build or upload a package.
 
 ```bash
-pnpm release:bindings --version <bindings-version> --dry-run
-pnpm release --version 0.4.0 --bindings-version <bindings-version> --dry-run
+pnpm release:bindings --version 0.3.0 --dry-run
+pnpm release --version 0.4.0 --bindings-version 0.3.0 --dry-run
 ```
 
 Do not insert an extra `--` after the pnpm script name; pnpm forwards it to these shell scripts as an argument.
@@ -85,10 +85,10 @@ Do not insert an extra `--` after the pnpm script name; pnpm forwards it to thes
 ## Publish and verify
 
 ```bash
-pnpm release:bindings --version <bindings-version>
-npm view smart-account-kit-bindings@<bindings-version> version
+pnpm release:bindings --version 0.3.0
+npm view smart-account-kit-bindings@0.3.0 version
 
-pnpm release --version 0.4.0 --bindings-version <bindings-version>
+pnpm release --version 0.4.0 --bindings-version 0.3.0
 npm view smart-account-kit@0.4.0 version
 npm view smart-account-kit@0.4.0 dependencies
 ```

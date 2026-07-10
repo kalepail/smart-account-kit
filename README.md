@@ -1058,6 +1058,7 @@ Publish `smart-account-kit-bindings` before `smart-account-kit`, because the SDK
 
 ## Documentation
 
+- [Changelog](CHANGELOG.md) — release history
 - [v0.4.0 migration guide](docs/migration-v0.4.0.md) — breaking changes from 0.3.0
 - [Protocol 27 deployments](docs/deployments-protocol-27-2026-07-09.md) — testnet/mainnet contract IDs and WASM hashes
 - [Releasing](docs/releasing.md) — npm publish flow

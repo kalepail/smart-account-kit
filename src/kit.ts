@@ -36,6 +36,9 @@ import type {
   SubmissionMethod,
   ExternalWalletAdapter,
   PolicyConfig,
+  SignOptions,
+  SubmitOptions,
+  SignAndSubmitOptions,
 } from "./types";
 import { MemoryStorage } from "./storage/memory";
 import {
@@ -43,7 +46,11 @@ import {
 } from "smart-account-kit-bindings";
 
 // Constants
-import { DEFAULT_SESSION_EXPIRY_MS, LEDGERS_PER_HOUR } from "./constants";
+import {
+  DEFAULT_DEPLOYER_SEED,
+  DEFAULT_SESSION_EXPIRY_MS,
+  LEDGERS_PER_HOUR,
+} from "./constants";
 
 // Error classes
 import {
@@ -124,13 +131,13 @@ import {
 import {
   sign,
   signAndSubmit,
-  fundWallet,
   buildTokenTransferTargetArgs,
   hasSourceAccountAuth,
   signResimulateAndPrepare,
   shouldUseFeeSponsoring,
   sendAndPoll,
 } from "./kit/tx-ops";
+import { fundWallet } from "./kit/fund-ops";
 import { convertPolicyParams, buildPoliciesScVal } from "./kit/policies-ops";
 import {
   findWebAuthnSignerForCredential,
@@ -434,11 +441,11 @@ export class SmartAccountKit {
       ? new RelayerClient(config.relayerUrl)
       : null;
 
-    // Deployer keypair - deterministically derived from a fixed seed.
-    // This ensures the same deployer is used across all clients.
-    this.deployerKeypair = Keypair.fromRawEd25519Seed(
-      hash(Buffer.from("openzeppelin-smart-account-kit"))
-    );
+    // Deployer keypair - a custom fee payer (config.deployerSecret) or the
+    // deterministic default derived from a fixed seed (see DEFAULT_DEPLOYER_SEED).
+    this.deployerKeypair = config.deployerSecret
+      ? Keypair.fromSecret(config.deployerSecret)
+      : Keypair.fromRawEd25519Seed(hash(Buffer.from(DEFAULT_DEPLOYER_SEED)));
 
     // Event emitter (initialized first as other managers may use it)
     this.events = new SmartAccountEventEmitter();
@@ -449,9 +456,12 @@ export class SmartAccountKit {
           maxConsecutiveMisses: config.contextRuleProbe?.maxConsecutiveMisses,
         };
 
-    // External signer manager - unified interface for G-address signers
-    // Use localStorage for wallet persistence if available (browser environment)
-    const walletStorage = typeof localStorage !== "undefined" ? localStorage : undefined;
+    // External signer manager - unified interface for G-address signers.
+    // Persistence uses the configured external-signer storage, defaulting to
+    // browser localStorage when available, rather than a hardcoded global.
+    const walletStorage =
+      config.externalSignerStorage ??
+      (typeof localStorage !== "undefined" ? localStorage : undefined);
 
     this.externalSigners = new ExternalSignerManager(
       this.networkPassphrase,
@@ -963,14 +973,7 @@ export class SmartAccountKit {
    */
   async sign<T>(
     transaction: contract.AssembledTransaction<T>,
-    options?: {
-      credentialId?: string;
-      expiration?: number;
-      resolveContextRuleIds?: (
-        entry: xdr.SorobanAuthorizationEntry,
-        index: number
-      ) => number[] | Promise<number[]>;
-    }
+    options?: SignOptions
   ): Promise<contract.AssembledTransaction<T>> {
     const resolvedOptions = {
       ...options,
@@ -1008,16 +1011,7 @@ export class SmartAccountKit {
    */
   async signAndSubmit<T>(
     transaction: contract.AssembledTransaction<T>,
-    options?: {
-      credentialId?: string;
-      expiration?: number;
-      resolveContextRuleIds?: (
-        entry: xdr.SorobanAuthorizationEntry,
-        index: number
-      ) => number[] | Promise<number[]>;
-      /** Force a specific submission method (relayer or rpc) */
-      forceMethod?: SubmissionMethod;
-    }
+    options?: SignAndSubmitOptions
   ): Promise<TransactionResult> {
     const resolvedOptions = {
       ...options,
@@ -1098,10 +1092,7 @@ export class SmartAccountKit {
    */
   async fundWallet(
     nativeTokenContract: string,
-    options?: {
-      /** Force a specific submission method (relayer or rpc) */
-      forceMethod?: SubmissionMethod;
-    }
+    options?: SubmitOptions
   ): Promise<TransactionResult & { amount?: number }> {
     return fundWallet(
       {
@@ -1138,12 +1129,7 @@ export class SmartAccountKit {
     tokenContract: string,
     recipient: string,
     amount: number,
-    options?: {
-      /** Credential ID to use for signing (defaults to connected credential) */
-      credentialId?: string;
-      /** Force a specific submission method (relayer or rpc) */
-      forceMethod?: SubmissionMethod;
-    }
+    options?: Pick<SignAndSubmitOptions, "credentialId" | "forceMethod">
   ): Promise<TransactionResult> {
     const contractId = this._contractId;
     if (!contractId) {
@@ -1294,15 +1280,7 @@ export class SmartAccountKit {
     target: string,
     targetFn: string,
     targetArgs: Array<unknown>,
-    options?: {
-      credentialId?: string;
-      expiration?: number;
-      resolveContextRuleIds?: (
-        entry: xdr.SorobanAuthorizationEntry,
-        index: number
-      ) => number[] | Promise<number[]>;
-      forceMethod?: SubmissionMethod;
-    }
+    options?: SignAndSubmitOptions
   ): Promise<TransactionResult> {
     const transaction = await this.execute(target, targetFn, targetArgs);
     return this.signAndSubmit(transaction, options);
@@ -1341,14 +1319,7 @@ export class SmartAccountKit {
   private async signResimulateAndPrepare(
     hostFunc: xdr.HostFunction,
     authEntries: xdr.SorobanAuthorizationEntry[],
-    options?: {
-      credentialId?: string;
-      expiration?: number;
-      resolveContextRuleIds?: (
-        entry: xdr.SorobanAuthorizationEntry,
-        index: number
-      ) => number[] | Promise<number[]>;
-    }
+    options?: SignOptions
   ): Promise<Transaction> {
     return signResimulateAndPrepare(
       {

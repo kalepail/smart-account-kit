@@ -61,6 +61,34 @@ export const MAX_NAME_SIZE = 20;
 export const MAX_EXTERNAL_KEY_SIZE = 256;
 
 // ============================================================================
+// Context-rule discovery probe defaults (single source of truth)
+// ============================================================================
+
+/** Highest context-rule id probed directly on-chain when the indexer is behind. */
+export const DEFAULT_MAX_PROBED_RULE_ID = 8;
+
+/** Stop probing after this many consecutive misses. */
+export const DEFAULT_MAX_CONSECUTIVE_PROBE_MISSES = 3;
+
+/** Default timeout (seconds) for read-only getter simulations. */
+export const DEFAULT_READ_TIMEOUT_SECONDS = 30;
+
+// ============================================================================
+// Deployer
+// ============================================================================
+
+/**
+ * Seed for the default (deterministic) deployer keypair.
+ *
+ * Deriving the deployer from a fixed, well-known seed makes contract addresses
+ * reproducible across clients from a credential ID alone (no per-user deployer
+ * state). The deployer only pays fees and salts the deploy; it never controls
+ * the smart account. Override via `config.deployerSecret` if you want a
+ * dedicated fee payer.
+ */
+export const DEFAULT_DEPLOYER_SEED = "openzeppelin-smart-account-kit";
+
+// ============================================================================
 // Storage Configuration
 // ============================================================================
 

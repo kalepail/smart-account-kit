@@ -21,7 +21,12 @@ import {
   signersEqual,
 } from "../signer-utils";
 import type { ContractDetailsResponse } from "../indexer";
-import { BASE_FEE } from "../constants";
+import {
+  BASE_FEE,
+  DEFAULT_MAX_CONSECUTIVE_PROBE_MISSES,
+  DEFAULT_MAX_PROBED_RULE_ID,
+  DEFAULT_READ_TIMEOUT_SECONDS,
+} from "../constants";
 
 type ContextRuleQueryClient = {
   get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule>>;
@@ -46,9 +51,6 @@ type ContextRuleDiscoveryDeps = {
   };
 } & ContextRuleReadDeps;
 
-const DEFAULT_MAX_PROBED_RULE_ID = 8;
-const DEFAULT_MAX_CONSECUTIVE_PROBE_MISSES = 3;
-const DEFAULT_READ_TIMEOUT_SECONDS = 30;
 const READ_ONLY_SIM_ACCOUNT = new Account(
   Keypair.fromRawEd25519Seed(hash(Buffer.from("smart-account-kit-context-rule-read")))
     .publicKey(),

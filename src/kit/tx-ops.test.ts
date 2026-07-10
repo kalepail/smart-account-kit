@@ -19,7 +19,6 @@ import type { Transaction } from "@stellar/stellar-sdk";
 import { FRIENDBOT_RESERVE_XLM } from "../constants";
 import {
   buildI128ScVal,
-  fundWallet,
   getSubmissionMethod,
   hasSourceAccountAuth,
   sendAndPoll,
@@ -28,6 +27,7 @@ import {
   signAndSubmit,
   signFeePayer,
 } from "./tx-ops";
+import { fundWallet } from "./fund-ops";
 import { SubmissionError } from "../errors";
 
 function makeAccount(seedByte: number): Keypair {

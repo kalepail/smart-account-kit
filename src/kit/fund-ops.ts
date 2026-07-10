@@ -1,0 +1,247 @@
+/**
+ * Testnet wallet-funding pipeline.
+ *
+ * Friendbot cannot fund contract addresses directly, so this creates a temporary
+ * classic account, funds it via Friendbot, and transfers XLM from it to the
+ * smart account. Split out of tx-ops so the core submission helpers stay small.
+ *
+ * @packageDocumentation
+ */
+
+import {
+  Address,
+  Keypair,
+  Operation,
+  Transaction,
+  TransactionBuilder,
+  hash,
+  rpc,
+  xdr,
+} from "@stellar/stellar-sdk";
+import type {
+  SubmissionMethod,
+  SubmissionOptions,
+  TransactionResult,
+} from "../types";
+import {
+  BASE_FEE,
+  FRIENDBOT_RESERVE_XLM,
+  FRIENDBOT_URL,
+  LEDGERS_PER_HOUR,
+} from "../constants";
+import {
+  buildAddressSignatureScVal,
+  buildSignaturePreimage,
+  createAddressCredentials,
+  getAddressCredentials,
+} from "./auth-payload";
+import {
+  buildTokenTransferHostFunction,
+  resimulateAndAssemble,
+  signFeePayer,
+} from "./tx-ops";
+import { xlmToStroops, stroopsToXlm } from "../utils";
+import {
+  SmartAccountErrorCode,
+  SubmissionError,
+  WalletNotConnectedError,
+  wrapError,
+} from "../errors";
+import { failedTransaction, simulationFailure } from "../contract-errors";
+
+export async function fundWallet(
+  deps: {
+    getContractId: () => string | undefined;
+    rpc: rpc.Server;
+    networkPassphrase: string;
+    timeoutInSeconds: number;
+    shouldUseFeeSponsoring: (options?: SubmissionOptions) => boolean;
+    hasSourceAccountAuth: (transaction: Transaction) => boolean;
+    sendAndPoll: (transaction: Transaction, options?: SubmissionOptions) => Promise<TransactionResult>;
+  },
+  nativeTokenContract: string,
+  options?: { forceMethod?: SubmissionMethod }
+): Promise<TransactionResult & { amount?: number }> {
+  const contractId = deps.getContractId();
+  if (!contractId) {
+    return failedTransaction(new WalletNotConnectedError("fund a wallet"));
+  }
+
+  if (!deps.networkPassphrase.includes("Test")) {
+    return failedTransaction(new SubmissionError("fundWallet() only works on testnet"));
+  }
+
+  try {
+    const tempKeypair = Keypair.random();
+
+    const friendbotResponse = await fetch(
+      `${FRIENDBOT_URL}?addr=${tempKeypair.publicKey()}`
+    );
+
+    if (!friendbotResponse.ok) {
+      const text = await friendbotResponse.text();
+      return failedTransaction(new SubmissionError(`Friendbot error: ${text}`));
+    }
+
+    const RESERVE_XLM = FRIENDBOT_RESERVE_XLM;
+    let sourceAccount = await deps.rpc.getAccount(tempKeypair.publicKey());
+
+    const fromAddress = Address.fromString(tempKeypair.publicKey());
+
+    const balanceKey = xdr.ScVal.scvVec([
+      xdr.ScVal.scvSymbol("Balance"),
+      xdr.ScVal.scvAddress(fromAddress.toScAddress()),
+    ]);
+
+    let balanceXlm: number;
+    try {
+      const balanceData = await deps.rpc.getContractData(
+        nativeTokenContract,
+        balanceKey
+      );
+      const val = balanceData.val.contractData().val();
+      if (val.switch().name === "scvI128") {
+        const i128 = val.i128();
+        const lo = BigInt(i128.lo().toString());
+        const hi = BigInt(i128.hi().toString());
+        const balanceStroops = (hi << BigInt(64)) | lo;
+        balanceXlm = stroopsToXlm(balanceStroops);
+      } else {
+        balanceXlm = 10_000;
+      }
+    } catch (error) {
+      console.warn("[SmartAccountKit] Failed to fetch temp account balance, using default:", error);
+      balanceXlm = 10_000;
+    }
+
+    const transferAmount = balanceXlm - RESERVE_XLM;
+
+    if (transferAmount <= 0) {
+      return failedTransaction(new SubmissionError("Insufficient balance after reserve"));
+    }
+
+    const amountInStroops = xlmToStroops(transferAmount);
+
+    const transferOp = Operation.invokeHostFunction({
+      func: buildTokenTransferHostFunction(
+        nativeTokenContract,
+        fromAddress.toString(),
+        contractId,
+        amountInStroops
+      ),
+      auth: [],
+    });
+
+    const simulationTx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: deps.networkPassphrase,
+    })
+      .addOperation(transferOp)
+      .setTimeout(30)
+      .build();
+
+    const simResult = await deps.rpc.simulateTransaction(simulationTx);
+
+    if ("error" in simResult) {
+      return simulationFailure(simResult.error);
+    }
+
+    const authEntries = simResult.result?.auth || [];
+    const signedAuthEntries: xdr.SorobanAuthorizationEntry[] = [];
+
+    const currentLedger = simResult.latestLedger;
+    const expirationLedger = currentLedger + LEDGERS_PER_HOUR; // ~1 hour
+
+    for (const entry of authEntries) {
+      const credType = entry.credentials().switch().name as string;
+
+      // For source_account credentials, convert to Address credentials
+      // so the Relayer can use its own channel accounts
+      if (credType === "sorobanCredentialsSourceAccount") {
+        // Generate a nonce for the new Address credential
+        const nonce = xdr.Int64.fromString(Date.now().toString());
+
+        // Create new Address credentials entry to replace source_account
+        const addressEntry = new xdr.SorobanAuthorizationEntry({
+          credentials: createAddressCredentials(
+            new xdr.SorobanAddressCredentials({
+              address: Address.fromString(tempKeypair.publicKey()).toScAddress(),
+              nonce,
+              signatureExpirationLedger: expirationLedger,
+              signature: xdr.ScVal.scvVoid(),
+            })
+          ),
+          rootInvocation: entry.rootInvocation(),
+        });
+        const preimage = buildSignaturePreimage(
+          deps.networkPassphrase,
+          addressEntry,
+          expirationLedger
+        );
+        const payload = hash(preimage.toXDR());
+        const signature = tempKeypair.sign(payload);
+        getAddressCredentials(addressEntry.credentials()).signature(
+          buildAddressSignatureScVal(
+            tempKeypair.rawPublicKey(),
+            signature
+          )
+        );
+
+        signedAuthEntries.push(addressEntry);
+        continue;
+      }
+
+      if (credType === "sorobanCredentialsAddressWithDelegates") {
+        return failedTransaction(
+          new SubmissionError(
+            "ADDRESS_WITH_DELEGATES auth entries are not supported by fundWallet() yet"
+          )
+        );
+      }
+
+      // For Address credentials, sign them
+      if (
+        credType === "sorobanCredentialsAddress" ||
+        credType === "sorobanCredentialsAddressV2"
+      ) {
+        const credentials = getAddressCredentials(entry.credentials());
+        credentials.signatureExpirationLedger(expirationLedger);
+
+        const preimage = buildSignaturePreimage(deps.networkPassphrase, entry, expirationLedger);
+        const payload = hash(preimage.toXDR());
+        const signature = tempKeypair.sign(payload);
+
+        credentials.signature(buildAddressSignatureScVal(tempKeypair.rawPublicKey(), signature));
+
+        signedAuthEntries.push(entry);
+        continue;
+      }
+
+      // Unknown credential type - push as-is (shouldn't happen)
+      signedAuthEntries.push(entry);
+    }
+
+    sourceAccount = await deps.rpc.getAccount(tempKeypair.publicKey());
+
+    const invokeHostFn = simulationTx.operations[0] as Operation.InvokeHostFunction;
+
+    const preparedTx = await resimulateAndAssemble(
+      deps,
+      sourceAccount,
+      invokeHostFn.func,
+      signedAuthEntries
+    );
+
+    const submissionOpts: SubmissionOptions = { forceMethod: options?.forceMethod };
+    signFeePayer(preparedTx, tempKeypair, deps, submissionOpts);
+
+    const txResult = await deps.sendAndPoll(preparedTx, submissionOpts);
+
+    return {
+      ...txResult,
+      amount: txResult.success ? transferAmount : undefined,
+    };
+  } catch (err) {
+    return failedTransaction(wrapError(err, SmartAccountErrorCode.TRANSACTION_SUBMISSION_FAILED));
+  }
+}

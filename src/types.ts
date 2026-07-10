@@ -12,7 +12,9 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
+import type { xdr } from "@stellar/stellar-sdk";
 import type { SmartAccountError, SmartAccountErrorCode } from "./errors";
+import type { WalletStorage } from "./external-signers";
 
 // ============================================================================
 // Credential Storage Types
@@ -135,6 +137,25 @@ export interface SmartAccountConfig {
 
   /** Custom storage adapter for credential persistence */
   storage?: StorageAdapter;
+
+  /**
+   * Optional secret key (S...) for the fee-paying deployer account.
+   *
+   * Defaults to a deterministic keypair derived from a fixed, well-known seed
+   * (`DEFAULT_DEPLOYER_SEED`), which makes smart-account addresses reproducible
+   * across clients from a credential ID alone. The deployer only pays fees and
+   * salts the deploy — it never controls the smart account — but it IS a shared,
+   * publicly-known keypair. Provide your own `deployerSecret` for a dedicated
+   * fee payer (note: this changes the derived contract addresses).
+   */
+  deployerSecret?: string;
+
+  /**
+   * Optional key-value storage for external (wallet) signer connection
+   * persistence. Defaults to browser `localStorage` when available. This is
+   * separate from the credential {@link StorageAdapter}.
+   */
+  externalSignerStorage?: WalletStorage;
 
   /** WebAuthn Relying Party ID (domain) - defaults to current domain */
   rpId?: string;
@@ -396,6 +417,46 @@ export type TransactionResult = TransactionSuccess | TransactionFailure;
  * Submission method for transactions
  */
 export type SubmissionMethod = "relayer" | "rpc";
+
+/**
+ * Resolves the context rule ids that bind an auth entry's digest.
+ *
+ * Given an auth entry and its index within the transaction, returns the context
+ * rule ids to bind into the P27 auth digest.
+ */
+export type ResolveContextRuleIds = (
+  entry: xdr.SorobanAuthorizationEntry,
+  index: number
+) => number[] | Promise<number[]>;
+
+/**
+ * Options controlling how smart-account auth entries are signed.
+ */
+export interface SignOptions {
+  /** Credential ID to sign with (defaults to the connected credential). */
+  credentialId?: string;
+  /** Signature expiration ledger (defaults to the configured window). */
+  expiration?: number;
+  /** Override how context rule ids are resolved for each auth entry. */
+  resolveContextRuleIds?: ResolveContextRuleIds;
+}
+
+/**
+ * Options controlling transaction submission.
+ */
+export interface SubmitOptions {
+  /**
+   * Force a specific submission method, bypassing the default.
+   * "relayer" uses the Relayer proxy (fails if not configured); "rpc" submits
+   * directly. Defaults to relayer when configured, else rpc.
+   */
+  forceMethod?: SubmissionMethod;
+}
+
+/**
+ * Combined signing + submission options.
+ */
+export interface SignAndSubmitOptions extends SignOptions, SubmitOptions {}
 
 /**
  * Options for transaction submission.

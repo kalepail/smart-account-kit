@@ -27,6 +27,7 @@
     "build": "pnpm --filter smart-account-kit-bindings build && tsc",
     "build:all": "./scripts/build.sh",
     "build:bindings": "./scripts/bindings/build.sh",
+    "verify:bindings": "bash scripts/bindings/verify.sh",
     "build:demo": "pnpm build && pnpm --filter smart-account-kit-demo build",
     "build:watch": "tsc --watch",
     "clean": "rm -rf dist packages/smart-account-kit-bindings/dist",

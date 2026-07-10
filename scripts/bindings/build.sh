@@ -6,10 +6,16 @@
 #
 # Prerequisites:
 # - Stellar CLI installed (`stellar --version`)
-# - Configuration in demo/.env (VITE_* variables), or ACCOUNT_WASM pointing
-#   to a local optimized smart-account WASM
-# - Use VITE_ACCOUNT_WASM_HASH for a deployed WASM; VITE_ACCOUNT_CONTRACT_ID
-#   is optional when targeting a specific deployed smart-account instance
+#
+# Configuration resolution order (never sources the local demo/.env, which may be
+# stale or hold secrets):
+#   1. Explicit environment variables / args (STELLAR_*, ACCOUNT_WASM*,
+#      ACCOUNT_CONTRACT_ID, or their VITE_* equivalents) — these always win.
+#   2. demo/.env.example (the committed, canonical example) for anything unset.
+#   3. Otherwise: error.
+#
+# Use VITE_ACCOUNT_WASM_HASH for a deployed WASM; VITE_ACCOUNT_CONTRACT_ID targets
+# a specific deployed instance; ACCOUNT_WASM points to a local optimized WASM.
 
 set -e
 
@@ -17,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BINDINGS_DIR="$KIT_DIR/packages/smart-account-kit-bindings"
 BINDINGS_README_TEMPLATE="$SCRIPT_DIR/README.template.md"
-DEMO_ENV="$KIT_DIR/demo/.env"
+DEMO_ENV_EXAMPLE="$KIT_DIR/demo/.env.example"
 EXISTING_BINDINGS_VERSION=$(node -p "require('$BINDINGS_DIR/package.json').version" 2>/dev/null || true)
 CURRENT_VERSION="${BINDINGS_VERSION:-$EXISTING_BINDINGS_VERSION}"
 
@@ -36,18 +42,24 @@ NC='\033[0m'
 echo -e "${BLUE}Building smart-account-kit-bindings${NC}"
 echo ""
 
-# Load demo/.env
-if [ -f "$DEMO_ENV" ]; then
+# Resolution: explicit env vars win; fill any gaps from demo/.env.example (the
+# committed example). The local demo/.env is intentionally NOT read.
+CONFIG_SOURCE="explicit environment"
+if [ -f "$DEMO_ENV_EXAMPLE" ]; then
+    filled_from_example=false
     while IFS= read -r line || [ -n "$line" ]; do
         [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
         if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
-            export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+            key="${BASH_REMATCH[1]}"
+            # Only set variables that were not already provided explicitly.
+            if [ -z "${!key:-}" ]; then
+                export "$key=${BASH_REMATCH[2]}"
+                filled_from_example=true
+            fi
         fi
-    done < "$DEMO_ENV"
-else
-    if [ -z "${ACCOUNT_WASM:-}" ] && [ -z "${VITE_ACCOUNT_WASM:-}" ]; then
-        echo -e "${RED}Error: demo/.env not found and no local ACCOUNT_WASM was provided${NC}"
-        exit 1
+    done < "$DEMO_ENV_EXAMPLE"
+    if [ "$filled_from_example" = true ]; then
+        CONFIG_SOURCE="demo/.env.example (with explicit env overrides)"
     fi
 fi
 
@@ -77,7 +89,7 @@ if ! command -v stellar &> /dev/null; then
 fi
 
 if [ -z "$ACCOUNT_WASM" ] && { [ -z "$STELLAR_RPC_URL" ] || [ -z "$STELLAR_NETWORK_PASSPHRASE" ]; }; then
-    echo -e "${RED}Error: RPC URL or network passphrase not set in demo/.env${NC}"
+    echo -e "${RED}Error: RPC URL or network passphrase not set (via env or demo/.env.example)${NC}"
     exit 1
 fi
 
@@ -90,6 +102,21 @@ if [ -n "$ACCOUNT_WASM" ] && [ ! -f "$ACCOUNT_WASM" ]; then
     echo -e "${RED}Error: local WASM not found: $ACCOUNT_WASM${NC}"
     exit 1
 fi
+
+# Always announce exactly what we are binding against before generating.
+echo -e "${BLUE}Binding against:${NC}"
+if [ -n "$ACCOUNT_WASM" ]; then
+    echo -e "  source:      local WASM ${GREEN}$ACCOUNT_WASM${NC}"
+else
+    echo -e "  network:     ${GREEN}${STELLAR_NETWORK:-$STELLAR_NETWORK_PASSPHRASE}${NC}"
+    if [ -n "$ACCOUNT_WASM_HASH" ]; then
+        echo -e "  wasm-hash:   ${GREEN}$ACCOUNT_WASM_HASH${NC}"
+    else
+        echo -e "  contract-id: ${GREEN}$ACCOUNT_CONTRACT_ID${NC}"
+    fi
+fi
+echo -e "  config from: ${GREEN}$CONFIG_SOURCE${NC}"
+echo ""
 
 # Step 1: Generate bindings
 echo -e "${YELLOW}Generating TypeScript bindings...${NC}"

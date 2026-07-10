@@ -68,7 +68,7 @@ echo -e "Logged in as: ${GREEN}$NPM_USER${NC}"
 
 # Get current npm versions
 SDK_NPM_VERSION=$(npm view smart-account-kit version 2>/dev/null || echo "0.0.0")
-BINDINGS_NPM_VERSION=$(npm view smart-account-kit-bindings version 2>/dev/null || echo "0.1.0")
+BINDINGS_NPM_VERSION=$(npm view smart-account-kit-bindings version 2>/dev/null || echo "0.0.0")
 
 echo -e "Current npm SDK version: ${YELLOW}$SDK_NPM_VERSION${NC}"
 echo -e "Current npm bindings version: ${YELLOW}$BINDINGS_NPM_VERSION${NC}"

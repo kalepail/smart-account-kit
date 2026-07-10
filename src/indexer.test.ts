@@ -8,13 +8,13 @@ afterEach(() => {
 });
 
 describe("IndexerClient network defaults", () => {
-  it("includes default URLs for Stellar testnet and mainnet", () => {
+  it("includes Mercury default URLs for Stellar testnet and mainnet", () => {
     expect(DEFAULT_INDEXER_URLS["Test SDF Network ; September 2015"]).toBe(
-      "https://smart-account-indexer.sdf-ecosystem.workers.dev"
+      "https://testnet.mercurydata.app/rest/smart-account-indexer"
     );
     expect(
       DEFAULT_INDEXER_URLS["Public Global Stellar Network ; September 2015"]
-    ).toBe("https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev");
+    ).toBe("https://mainnet.mercurydata.app/rest/smart-account-indexer");
   });
 
   it("creates clients for both known Stellar networks", () => {

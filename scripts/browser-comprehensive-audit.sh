@@ -5,7 +5,7 @@ set -euo pipefail
 SESSION_NAME="${SESSION_NAME:?SESSION_NAME is required}"
 DEMO_URL="${DEMO_URL:-http://localhost:5173}"
 INDEXER_DEMO_URL="${INDEXER_DEMO_URL:-http://localhost:5174}"
-INDEXER_API_URL="${INDEXER_API_URL:-https://smart-account-indexer.sdf-ecosystem.workers.dev}"
+INDEXER_API_URL="${INDEXER_API_URL:-https://testnet.mercurydata.app/rest/smart-account-indexer}"
 RECIPIENT_ADDRESS="${RECIPIENT_ADDRESS:-CBSHV66WG7UV6FQVUTB67P3DZUEJ2KJ5X6JKQH5MFRAAFNFJUAJVXJYV}"
 SKIP_INDEXER="${SKIP_INDEXER:-false}"
 

@@ -141,20 +141,27 @@ export interface IndexerConfig {
   /**
    * Optional API key or JWT sent as an Authorization bearer token.
    *
-   * Browser applications should only use tokens that are safe to expose to
-   * end users. Keep privileged/admin tokens in a server-side integration.
+   * The default provider (Mercury) serves its read endpoints publicly, so this
+   * is optional — it is only needed for gated/admin operations or a private
+   * provider tier. Browser applications should only use tokens that are safe to
+   * expose to end users; keep privileged/admin tokens in a server-side integration.
    */
   authToken?: string;
 }
 
 /**
- * Default indexer URLs for known networks
+ * Default indexer URLs for known networks.
+ *
+ * As of v0.4.0 the default provider is Mercury (https://mercurydata.app), a
+ * hosted managed indexer. Its read endpoints are public, so no token is required
+ * for the lookups the SDK performs. Override via `indexerUrl` to use any
+ * wire-compatible provider.
  */
 export const DEFAULT_INDEXER_URLS: Record<string, string> = {
   "Test SDF Network ; September 2015":
-    "https://smart-account-indexer.sdf-ecosystem.workers.dev",
+    "https://testnet.mercurydata.app/rest/smart-account-indexer",
   "Public Global Stellar Network ; September 2015":
-    "https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev",
+    "https://mainnet.mercurydata.app/rest/smart-account-indexer",
 };
 
 /**
@@ -166,7 +173,7 @@ export const DEFAULT_INDEXER_URLS: Record<string, string> = {
  * @example
  * ```typescript
  * const indexer = new IndexerClient({
- *   baseUrl: 'https://smart-account-indexer.sdf-ecosystem.workers.dev'
+ *   baseUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer'
  * });
  *
  * // Find contracts by credential ID (from passkey)

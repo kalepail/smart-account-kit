@@ -82,11 +82,23 @@ details and upgrade notes.
 
 ### Indexer & relayer proxy
 
-- Optional bearer-token gate on the reference indexer handler
-  (`INDEXER_AUTH_TOKEN`); `/api/credentials` is restricted; handler tests
-  6 → 19. Docs now match the actual Goldsky `start_at` configuration.
-- Relayer proxy gained its first test suite (22 tests), submit-path dedup, and
-  documentation for `/fee-usage` and `/status`.
+- **Mercury is now the default indexer.** `DEFAULT_INDEXER_URLS` (and
+  `IndexerClient.forNetwork`) resolve to Mercury's hosted `smart-account-indexer`
+  REST service — testnet `https://testnet.mercurydata.app/rest/smart-account-indexer`,
+  mainnet `https://mainnet.mercurydata.app/rest/smart-account-indexer`. Mercury's
+  read endpoints are public and cover live + historical activity for every
+  smart-account-kit contract (global backfill, no per-contract catch-up), so
+  discovery works **zero-config with no token**. `indexerAuthToken` is now
+  optional (gated/admin operations or a provider that requires it).
+- **Self-hosted indexer stack removed.** The bespoke Goldsky Turbo pipeline
+  (`indexer/goldsky/`) and the reference Cloudflare Worker (`indexer/handler/`,
+  including its optional bearer-token gate) are gone — too expensive to operate,
+  and Mercury indexes the same events as a managed service. The prior stack
+  remains in git history. `indexer/demo/` stays and now targets Mercury.
+- **Relayer proxy moved to the repo top level** (`relayer-proxy/`, was
+  `indexer/relayer-proxy/`), reflecting that transaction submission is a distinct
+  concern from indexing. It keeps its first test suite (22 tests), submit-path
+  dedup, and docs for `/fee-usage` and `/status`, plus a new standalone README.
 
 ### Demo
 

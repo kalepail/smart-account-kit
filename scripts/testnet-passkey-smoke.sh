@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 DEMO_URL="${DEMO_URL:-http://localhost:5173}"
 INDEXER_DEMO_URL="${INDEXER_DEMO_URL:-http://localhost:5174}"
-INDEXER_API_URL="${INDEXER_API_URL:-https://smart-account-indexer.sdf-ecosystem.workers.dev}"
+INDEXER_API_URL="${INDEXER_API_URL:-https://testnet.mercurydata.app/rest/smart-account-indexer}"
 RECIPIENT_ADDRESS="${RECIPIENT_ADDRESS:-GAAH4OT36RRCCAGKARGPN2HLHT2NOBVFHO4GUHA6CF7UKQ4MMV24WQ4N}"
 SESSION_NAME="${SESSION_NAME:-testnet-passkey-smoke-$(date +%s)}"
 SKIP_INDEXER="${SKIP_INDEXER:-false}"

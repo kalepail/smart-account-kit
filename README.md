@@ -915,12 +915,12 @@ if (result.success) {
 
 ### Indexer Client
 
-The SDK includes an indexer client for reverse lookups from signer credentials to smart account contracts. The built-in testnet and mainnet defaults use the SDF ecosystem Cloudflare Workers; Mercury exposes the same REST surface and can be selected via `indexerUrl`.
+The SDK includes an indexer client for reverse lookups from signer credentials to smart account contracts. As of v0.4.0 the built-in default provider is **[Mercury](https://mercurydata.app)**, a hosted managed indexer. Its read endpoints are public and cover both live and historical activity for every smart-account-kit contract (a global backfill means there is no per-contract catch-up step), so discovery works **zero-config with no token**. Point `indexerUrl` at any wire-compatible provider to override.
 
-| Network | Built-in default | Mercury-compatible endpoint |
-|---------|------------------|-----------------------------|
-| Testnet | `https://smart-account-indexer.sdf-ecosystem.workers.dev` | `https://testnet.mercurydata.app/rest/smart-account-indexer` |
-| Mainnet | `https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev` | `https://mainnet.mercurydata.app/rest/smart-account-indexer` |
+| Network | Built-in default (Mercury) |
+|---------|----------------------------|
+| Testnet | `https://testnet.mercurydata.app/rest/smart-account-indexer` |
+| Mainnet | `https://mainnet.mercurydata.app/rest/smart-account-indexer` |
 
 ```typescript
 import { IndexerClient, IndexerError, DEFAULT_INDEXER_URLS } from 'smart-account-kit';
@@ -942,8 +942,9 @@ import type {
 ```typescript
 const kit = new SmartAccountKit({
   /* required config */
-  indexerUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
-  indexerAuthToken: 'your-indexer-token',
+  // indexerUrl defaults to Mercury for known networks — override for a custom provider:
+  // indexerUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
+  // indexerAuthToken: 'optional-token', // not needed for Mercury's public reads
 });
 
 const credentialContracts = await kit.discoverContractsByCredential(credentialId);
@@ -956,7 +957,7 @@ if (kit.indexer) {
 }
 ```
 
-`indexerAuthToken` (and `authToken` on a directly-constructed client) is sent on every request as `Authorization: Bearer <token>`. Browser bundles expose their environment variables to users, so only embed public or tightly scoped tokens there; keep privileged and catch-up/admin credentials server-side.
+`indexerAuthToken` is optional (Mercury's read endpoints are public); supply one only for gated/admin operations or a provider that requires it. When set, it (and `authToken` on a directly-constructed client) is sent on every request as `Authorization: Bearer <token>`. Browser bundles expose their environment variables to users, so only embed public or tightly scoped tokens there; keep privileged and catch-up/admin credentials server-side.
 
 #### Directly
 

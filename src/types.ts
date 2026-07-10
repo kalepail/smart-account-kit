@@ -206,8 +206,10 @@ export interface SmartAccountConfig {
    * Optional indexer URL for contract discovery.
    * The indexer enables reverse lookups from signer credentials to contracts.
    *
-   * If not provided, a default URL will be used for known networks (testnet/mainnet).
-   * Set to `false` to disable indexer integration entirely.
+   * If not provided, the default Mercury endpoint is used for known networks
+   * (testnet/mainnet). Mercury's read endpoints are public, so discovery works
+   * with no token configured. Override this to point at any wire-compatible
+   * provider, or set to `false` to disable indexer integration entirely.
    *
    * @example
    * ```typescript
@@ -227,6 +229,8 @@ export interface SmartAccountConfig {
    * Optional API key or JWT sent to the configured indexer as
    * `Authorization: Bearer <token>`.
    *
+   * Optional for the default Mercury provider (its read endpoints are public);
+   * supply one only for gated/admin operations or a provider that requires it.
    * Browser applications should only use tokens that are safe to expose to
    * end users. Keep privileged/admin tokens in a server-side integration.
    */

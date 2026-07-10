@@ -15,6 +15,7 @@ The deployed contract surface is unchanged from `0.3.0` (the bindings were regen
 - [Kit methods](#kit-methods)
 - [Removed exports](#removed-exports)
 - [Bindings & build pipeline](#bindings--build-pipeline)
+- [Indexer (Mercury)](#indexer-mercury)
 
 ---
 
@@ -179,6 +180,24 @@ The following were removed in this release (they were dead or never meant to be 
 
 1. **`get_context_rule` id hydration.** The deployed contract's `get_context_rule` omits the aligned `signer_ids`/`policy_ids` fields, so the generated bindings spec cannot decode them directly. The SDK injects empty id vectors and hydrates the real ids via `get_signer_id`/`get_policy_id`. Reading a rule with populated ids therefore depends on those getters being reachable; a read-only client without them yields empty `signer_ids`/`policy_ids`.
 2. **Do not hand-edit bindings.** They are regenerated from the canonical WASM. If richer descriptions are wanted, fix them on the contract side (redeploy) and regenerate — hand-editing re-introduces drift that `pnpm verify:bindings` will flag.
+
+---
+
+## Indexer (Mercury)
+
+The default indexer provider changed to **[Mercury](https://mercurydata.app)**, a hosted managed service. This is a config-default change, not an API change — `IndexerClient`, `kit.indexer`, and the discovery methods are unchanged.
+
+- **New default endpoints** (`DEFAULT_INDEXER_URLS` / `IndexerClient.forNetwork`):
+
+  | Network | Default URL |
+  |---|---|
+  | Testnet | `https://testnet.mercurydata.app/rest/smart-account-indexer` |
+  | Mainnet | `https://mainnet.mercurydata.app/rest/smart-account-indexer` |
+
+- **Zero-config, no token.** Mercury's read endpoints are public and cover both live and historical activity for every smart-account-kit contract (a global backfill means there is no per-contract catch-up step). If you were relying on the built-in defaults, discovery keeps working with no changes. `indexerAuthToken` is now **optional** — supply one only for gated/admin operations or a provider that requires it.
+- **Action required only if you pinned the old default.** The previous defaults pointed at the SDF-ecosystem reference Cloudflare Workers (`https://smart-account-indexer[-mainnet].sdf-ecosystem.workers.dev`). Those are **decommissioned**. If you hard-coded either URL in `indexerUrl`, drop it (to use the Mercury default) or point it at your own wire-compatible provider.
+- **Self-hosted reference stack removed.** The bespoke Goldsky Turbo pipeline (`indexer/goldsky/`) and the reference Cloudflare Worker (`indexer/handler/`, including its optional `INDEXER_AUTH_TOKEN` bearer gate) were removed — too expensive to operate, and Mercury indexes the same events as a managed service. The prior stack lives in git history if you want to self-host. The lookup demo (`indexer/demo/`) stays and now defaults to Mercury.
+- **Relayer proxy moved to the repo top level.** `indexer/relayer-proxy/` → `relayer-proxy/`, reflecting that fee-sponsored transaction submission is a distinct concern from indexing. Its Worker code, `relayerUrl` wiring, and REST surface are unchanged; only the source path moved.
 
 ---
 

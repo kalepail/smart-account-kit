@@ -126,8 +126,7 @@ demo/
 │       ├── ActiveSignerDisplay.tsx # Shows currently active signer
 │       ├── ContextRulesPanel.tsx   # Displays on-chain context rules
 │       ├── ContextRuleBuilder.tsx  # Modal for creating/editing rules
-│       ├── SignerPicker.tsx        # Multi-signer selection modal
-│       └── KnownSignersPanel.tsx   # Displays known signers
+│       └── SignerPicker.tsx        # Multi-signer selection modal
 ├── index.html            # HTML template
 ├── vite.config.ts        # Vite configuration
 └── package.json          # Dependencies

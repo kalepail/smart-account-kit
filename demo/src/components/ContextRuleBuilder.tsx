@@ -20,6 +20,7 @@ import type { ContextRule, Signer, ContextRuleType } from "smart-account-kit-bin
 import type { ConnectedWallet } from "smart-account-kit";
 import { SignerPicker, type SelectedSigner } from "./SignerPicker";
 import { formatSignerForDisplay } from "../utils/sdk";
+import { toSimpleResult } from "../utils/tx";
 import {
   absoluteValidUntilToLedgerDelta,
   DEFAULT_EXPIRATION_LEDGER_DELTA,
@@ -284,19 +285,14 @@ export function ContextRuleBuilder({
     async (tx: AssembledTransaction<unknown>, selectedSigners?: SelectedSigner[]): Promise<{ success: boolean; error?: string }> => {
       // If no signers provided and not multi-signer, use simple flow
       if (!selectedSigners && !needsMultiSigner()) {
-        return kit.signAndSubmit(tx);
+        return toSimpleResult(await kit.signAndSubmit(tx));
       }
 
       // Multi-signer flow - use SDK's built-in multi-signer operation
       const signers = selectedSigners || buildSelectedSigners();
-      const result = await kit.multiSigners.operation(tx, signers, {
-        onLog,
-      });
-
-      return {
-        success: result.success,
-        error: result.error,
-      };
+      return toSimpleResult(
+        await kit.multiSigners.operation(tx, signers, { onLog })
+      );
     },
     [kit, onLog, needsMultiSigner, buildSelectedSigners]
   );

@@ -10,6 +10,7 @@ import {
   formatSignerForDisplay,
   formatContextType,
 } from "../utils/sdk";
+import { toSimpleResult } from "../utils/tx";
 
 interface ContextRulesPanelProps {
   kit: SmartAccountKit;
@@ -113,15 +114,14 @@ export function ContextRulesPanel({
   const signAndSubmitWithMultiSigner = useCallback(
     async (tx: AssembledTransaction<unknown>, ruleSigners: Signer[]): Promise<{ success: boolean; error?: string }> => {
       if (!needsMultiSigner(ruleSigners)) {
-        return kit.signAndSubmit(tx);
+        return toSimpleResult(await kit.signAndSubmit(tx));
       }
 
       const selectedSigners = buildSelectedSigners(ruleSigners);
       // Use SDK's built-in multi-signer operation
-      const result = await kit.multiSigners.operation(tx, selectedSigners, {
-        onLog,
-      });
-      return { success: result.success, error: result.error };
+      return toSimpleResult(
+        await kit.multiSigners.operation(tx, selectedSigners, { onLog })
+      );
     },
     [kit, onLog, needsMultiSigner, buildSelectedSigners]
   );

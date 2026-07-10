@@ -575,7 +575,7 @@ function App() {
         log(`Transaction: ${result.hash.slice(0, 20)}...`, "success");
         fetchBalance(contractId);
       } else {
-        throw new Error(result.error || "Transfer failed");
+        throw new Error(result.error.message || "Transfer failed");
       }
     } catch (error) {
       log(`Transfer failed: ${error}`, "error");
@@ -612,7 +612,7 @@ function App() {
         log(`Transaction: ${result.hash.slice(0, 20)}...`, "success");
         fetchBalance(contractId);
       } else {
-        throw new Error(result.error || "Transfer failed");
+        throw new Error(result.error.message || "Transfer failed");
       }
     } catch (error) {
       log(`Multi-signer transfer failed: ${error}`, "error");
@@ -639,7 +639,7 @@ function App() {
         }
         fetchBalance(contractId);
       } else {
-        throw new Error(result.error || "Funding failed");
+        throw new Error(result.error.message || "Funding failed");
       }
     } catch (error) {
       log(`Funding failed: ${error}`, "error");

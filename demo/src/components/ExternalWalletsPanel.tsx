@@ -63,9 +63,15 @@ export function ExternalWalletsPanel({
           className="secondary"
           onClick={async () => {
             log("Opening wallet connection modal...");
-            const result = await connectWallet();
-            if (result) {
-              log(`Connected to ${result.walletName}: ${result.address.slice(0, 10)}...`, "success");
+            try {
+              const result = await connectWallet();
+              if (result) {
+                log(`Connected to ${result.walletName}: ${result.address.slice(0, 10)}...`, "success");
+              }
+            } catch (error) {
+              // connect() throws on genuine failures (user cancellation returns
+              // null). Surface it instead of an unhandled promise rejection.
+              log(`Wallet connection failed: ${error instanceof Error ? error.message : String(error)}`, "error");
             }
           }}
         >

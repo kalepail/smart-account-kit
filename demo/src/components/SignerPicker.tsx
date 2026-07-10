@@ -82,6 +82,7 @@ export function SignerPicker({
   }, [connectedWallets]);
   const [selectedSignerIds, setSelectedSignerIds] = useState<Set<number>>(new Set());
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
   // Secret key input state (delegated G-address signers)
   const [secretKeyInputAddress, setSecretKeyInputAddress] = useState<string | null>(null);
@@ -160,8 +161,13 @@ export function SignerPicker({
 
   const handleConnectWallet = async () => {
     setIsConnecting(true);
+    setConnectError(null);
     try {
       await connectWallet();
+    } catch (error) {
+      // connect() throws on genuine failures (user cancellation returns null).
+      // Show it instead of letting the promise rejection go unhandled.
+      setConnectError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsConnecting(false);
     }
@@ -631,6 +637,9 @@ export function SignerPicker({
                   "Connect Wallet"
                 )}
               </button>
+              {connectError && (
+                <div className="secret-key-error">{connectError}</div>
+              )}
             </div>
           )}
 

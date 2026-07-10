@@ -156,12 +156,19 @@ export function ContextRulesPanel({
     const hasDelegatedSigners = rule.signers.some((s) => s.tag === "Delegated");
     if (hasDelegatedSigners && connectedWallets.length === 0) {
       onLog("Connecting external wallet for G-address signature...");
-      const result = await connectWallet();
-      if (!result?.address) {
-        onLog("External wallet connection required for multi-signer operations", "error");
+      try {
+        const result = await connectWallet();
+        if (!result?.address) {
+          onLog("External wallet connection required for multi-signer operations", "error");
+          return;
+        }
+        onLog(`Connected wallet: ${result.address.slice(0, 8)}...`, "success");
+      } catch (error) {
+        // connect() throws on genuine failures (this await is outside the
+        // submit try/catch below, so it would otherwise reject unhandled).
+        onLog(`External wallet connection failed: ${error instanceof Error ? error.message : String(error)}`, "error");
         return;
       }
-      onLog(`Connected wallet: ${result.address.slice(0, 8)}...`, "success");
     }
 
     onLog(`Removing context rule ${ruleId}...`);

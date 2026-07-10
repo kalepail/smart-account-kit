@@ -8,7 +8,7 @@ import {
   type SelectedSigner,
   type IndexedContractSummary,
 } from "smart-account-kit";
-import type { Signer } from "smart-account-kit-bindings";
+import type { ContextRule, Signer } from "smart-account-kit-bindings";
 import { CONFIG } from "../config";
 import { STROOPS_PER_XLM } from "../constants";
 import type { LogFn } from "../types";
@@ -64,12 +64,12 @@ export function useWalletSession({
       kitInstance: SmartAccountKit,
       restoredContractId: string,
       activeCredentialId?: string | null
-    ) => {
+    ): Promise<ContextRule[] | undefined> => {
       const details = await kitInstance.getContractDetailsFromIndexer(
         restoredContractId
       );
       if (!details || !kitInstance.wallet) {
-        return;
+        return undefined;
       }
 
       const rules = await kitInstance.rules.list();
@@ -80,8 +80,10 @@ export function useWalletSession({
         );
       }
 
+      // Return the enumerated rules so callers can reuse this snapshot for
+      // fetchAllSigners instead of re-enumerating (rules.list is uncached).
       if (!activeCredentialId) {
-        return;
+        return rules;
       }
 
       const active = rules
@@ -106,6 +108,8 @@ export function useWalletSession({
           `This wallet uses an older WebAuthn verifier (${verifierAddress}) instead of the current demo verifier (${webauthnVerifier})`
         );
       }
+
+      return rules;
     },
     [webauthnVerifier]
   );
@@ -133,9 +137,15 @@ export function useWalletSession({
   }, []);
 
   const fetchAllSigners = useCallback(
-    async (kitInstance: SmartAccountKit, activeCredId: string | null) => {
+    async (
+      kitInstance: SmartAccountKit,
+      activeCredId: string | null,
+      prefetchedRules?: ContextRule[]
+    ) => {
       try {
-        const rules = await kitInstance.rules.list();
+        // Reuse a snapshot enumerated by the caller (ensureCurrentWalletShape)
+        // instead of a second uncached rules.list() enumeration.
+        const rules = prefetchedRules ?? (await kitInstance.rules.list());
         const uniqueSigners = collectUniqueSigners(
           rules.flatMap((rule) => rule.signers)
         );
@@ -167,13 +177,17 @@ export function useWalletSession({
 
   // Apply a successful connection: update state + kick off balance/signer loads.
   const applyConnection = useCallback(
-    (nextContractId: string, nextCredentialId: string) => {
+    (
+      nextContractId: string,
+      nextCredentialId: string,
+      prefetchedRules?: ContextRule[]
+    ) => {
       setContractId(nextContractId);
       setCredentialId(nextCredentialId);
       setIsConnected(true);
       fetchBalance(nextContractId);
       if (kit) {
-        void fetchAllSigners(kit, nextCredentialId);
+        void fetchAllSigners(kit, nextCredentialId, prefetchedRules);
       }
     },
     [kit, fetchBalance, fetchAllSigners]
@@ -202,9 +216,9 @@ export function useWalletSession({
       if (!result) return;
 
       try {
-        await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
+        const shapeRules = await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
         log(`Session restored: ${result.contractId.slice(0, 10)}...`, "success");
-        applyConnection(result.contractId, result.credentialId);
+        applyConnection(result.contractId, result.credentialId, shapeRules);
       } catch (error) {
         await kit.disconnect();
         log(
@@ -269,8 +283,19 @@ export function useWalletSession({
       const { credentialId: authCredentialId } = await kit.authenticatePasskey();
       log(`Authenticated with credential: ${authCredentialId.slice(0, 20)}...`, "success");
 
-      // Step 2: Discover contracts via indexer
-      const contracts = await kit.discoverContractsByCredential(authCredentialId);
+      // Step 2: Discover contracts via indexer. Best-effort: a failing or
+      // unreachable indexer (e.g. a 500) must NOT hard-fail the connect — fall
+      // through to the derived-contract-ID path with a visible warning instead.
+      let contracts: IndexedContractSummary[] | null = null;
+      try {
+        contracts = await kit.discoverContractsByCredential(authCredentialId);
+      } catch (discoveryError) {
+        const message =
+          discoveryError instanceof Error ? discoveryError.message : String(discoveryError);
+        console.warn("Indexer discovery failed, falling back to derived contract ID:", discoveryError);
+        log(`⚠️ Indexer discovery failed (${message}); falling back to derived contract ID`, "info");
+        contracts = null;
+      }
 
       if (contracts && contracts.length > 1) {
         log(`Found ${contracts.length} smart accounts for this passkey`, "info");
@@ -288,20 +313,21 @@ export function useWalletSession({
           credentialId: authCredentialId,
         });
         if (result) {
-          await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
+          const shapeRules = await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
           log(`Contract ID: ${result.contractId}`, "success");
-          applyConnection(result.contractId, result.credentialId);
+          applyConnection(result.contractId, result.credentialId, shapeRules);
         }
         return;
       }
 
-      // Step 3: No indexed contracts - fall back to derived contract ID
+      // Step 3: No indexed contracts (or indexer unavailable) - fall back to the
+      // derived contract ID.
       log(`No indexed contracts found, trying derived contract ID...`, "info");
       const result = await kit.connectWallet({ credentialId: authCredentialId });
       if (result) {
-        await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
+        const shapeRules = await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
         log(`Contract ID: ${result.contractId}`, "success");
-        applyConnection(result.contractId, result.credentialId);
+        applyConnection(result.contractId, result.credentialId, shapeRules);
       }
     } catch (error) {
       await kit.disconnect().catch(() => undefined);
@@ -331,9 +357,9 @@ export function useWalletSession({
           credentialId: pendingCredentialForPicker,
         });
         if (result) {
-          await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
+          const shapeRules = await ensureCurrentWalletShape(kit, result.contractId, result.credentialId);
           log(`Connected to: ${result.contractId}`, "success");
-          applyConnection(result.contractId, result.credentialId);
+          applyConnection(result.contractId, result.credentialId, shapeRules);
         }
       } catch (error) {
         await kit.disconnect().catch(() => undefined);

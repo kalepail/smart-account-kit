@@ -71,5 +71,3 @@ export interface SignerEntryInfo {
   isActive: boolean;
   isPending: boolean;
 }
-
-export const MAX_CONTEXT_RULE_NAME_LENGTH = 20;

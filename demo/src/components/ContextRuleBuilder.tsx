@@ -11,6 +11,8 @@ import {
   createCreateContractContext,
   getCredentialIdFromSigner,
   signersEqual,
+  validateContextRuleName,
+  MAX_NAME_SIZE,
 } from "smart-account-kit";
 import { rpc } from "@stellar/stellar-sdk";
 import type { ContextRule, Signer, ContextRuleType } from "smart-account-kit-bindings";
@@ -25,7 +27,6 @@ import {
 } from "../utils/expiration";
 import { useMultiSignerSubmit } from "../hooks/useMultiSignerSubmit";
 import {
-  MAX_CONTEXT_RULE_NAME_LENGTH,
   type SignerEntry,
   type SignerEntryInfo,
   type SignerAddMode,
@@ -697,8 +698,13 @@ export function ContextRuleBuilder({
       setError("Rule name is required.");
       return;
     }
-    if (name.trim().length > MAX_CONTEXT_RULE_NAME_LENGTH) {
-      setError(`Rule name must be ${MAX_CONTEXT_RULE_NAME_LENGTH} characters or fewer.`);
+    // Use the SDK's byte-accurate validation (the contract's MAX_NAME_SIZE is a
+    // UTF-8 byte limit, not a character count — multi-byte names can pass a
+    // char-count check yet fail on-chain).
+    try {
+      validateContextRuleName(name.trim());
+    } catch {
+      setError(`Rule name must be at most ${MAX_NAME_SIZE} bytes (UTF-8).`);
       return;
     }
     if (contextType === "call_contract") {
@@ -1026,7 +1032,16 @@ export function ContextRuleBuilder({
                     )}
                     <button
                       className="small secondary connect-more-btn"
-                      onClick={() => connectWallet()}
+                      onClick={() => {
+                        // connect() throws on genuine failures; don't leave the
+                        // promise rejection unhandled.
+                        connectWallet().catch((error) => {
+                          onLog(
+                            `Wallet connection failed: ${error instanceof Error ? error.message : String(error)}`,
+                            "error"
+                          );
+                        });
+                      }}
                       style={{ marginTop: connectedWallets.length > 0 ? "12px" : "0" }}
                     >
                       {connectedWallets.length > 0 ? "+ Connect Another Wallet" : "Connect Wallet"}

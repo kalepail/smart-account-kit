@@ -1,11 +1,16 @@
 import { useState, useCallback } from "react";
 import type { SmartAccountKit } from "smart-account-kit";
-import { LEDGERS_PER_DAY } from "smart-account-kit";
 import type { ContextRule, Signer } from "smart-account-kit-bindings";
 import { STROOPS_PER_XLM } from "../constants";
 import type { KnownPolicy } from "../config";
 import type { LogFn } from "../types";
 import { formatSignerForDisplay, truncateAddress } from "../utils/sdk";
+import {
+  readSpendingLimitParams,
+  readThresholdValue,
+  readWeightedSignerWeights,
+  readWeightedThresholdValue,
+} from "../utils/policyLiveParams";
 import { useMultiSignerSubmit } from "../hooks/useMultiSignerSubmit";
 
 interface PolicyInspectorProps {
@@ -66,38 +71,28 @@ export function PolicyInspector({
     setLoading(true);
     try {
       if (knownPolicy.type === "threshold") {
-        const threshold = await kit.policyClients
-          .threshold(policyAddress)
-          .getThreshold(rule.id);
+        const threshold = await readThresholdValue(kit, policyAddress, rule.id);
         setParams({ threshold });
         setThresholdInput(String(threshold));
       } else if (knownPolicy.type === "weighted_threshold") {
-        const client = kit.policyClients.weighted(policyAddress);
-        const threshold = await client.getThreshold(rule.id);
-        const weightMap = await client.getSignerWeights(rule);
-        const weights: WeightRow[] = [...weightMap.entries()].map(
-          ([signer, weight]) => ({
-            signer,
-            label: formatSignerForDisplay(signer).display,
-            weight,
-          })
-        );
+        const threshold = await readWeightedThresholdValue(kit, policyAddress, rule.id);
+        const weights: WeightRow[] = (
+          await readWeightedSignerWeights(kit, policyAddress, rule)
+        ).map(({ signer, weight }) => ({
+          signer,
+          label: formatSignerForDisplay(signer).display,
+          weight,
+        }));
         setParams({ threshold, weights });
         setThresholdInput(String(threshold));
       } else if (knownPolicy.type === "spending_limit") {
-        const data = await kit.policyClients
-          .spendingLimit(policyAddress)
-          .getSpendingLimitData(rule.id);
-        const limitXlm = (Number(data.spending_limit) / STROOPS_PER_XLM).toString();
-        const totalXlm = (
-          Number(data.cached_total_spent) / STROOPS_PER_XLM
-        ).toString();
-        const periodDays =
-          Math.round(Number(data.period_ledgers) / LEDGERS_PER_DAY) || 1;
+        const { spendingLimitXlm, periodDays, totalSpentXlm } =
+          await readSpendingLimitParams(kit, policyAddress, rule.id);
+        const limitXlm = spendingLimitXlm.toString();
         setParams({
           spendingLimitXlm: limitXlm,
           periodDays,
-          totalSpentXlm: totalXlm,
+          totalSpentXlm: totalSpentXlm.toString(),
         });
         setLimitInput(limitXlm);
       }

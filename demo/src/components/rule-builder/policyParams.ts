@@ -21,6 +21,11 @@ import {
 import type { ContextRule, Signer } from "smart-account-kit-bindings";
 import { STROOPS_PER_XLM } from "../../constants";
 import type { KnownPolicy } from "../../config";
+import {
+  readSpendingLimitParams,
+  readThresholdValue,
+  readWeightedThresholdValue,
+} from "../../utils/policyLiveParams";
 import type { SelectedPolicy, SignerEntry } from "./types";
 
 /**
@@ -166,9 +171,7 @@ export async function readRulePolicyParams(
 
     try {
       if (known.type === "threshold") {
-        const threshold = await kit.policyClients
-          .threshold(policyAddress)
-          .getThreshold(rule.id);
+        const threshold = await readThresholdValue(kit, policyAddress, rule.id);
         loaded.push({
           ...DEFAULT_POLICY_FORM,
           policy: known,
@@ -176,13 +179,11 @@ export async function readRulePolicyParams(
           modified: false,
         });
       } else if (known.type === "spending_limit") {
-        const data = await kit.policyClients
-          .spendingLimit(policyAddress)
-          .getSpendingLimitData(rule.id);
-        const spendingLimitXlm =
-          Number(data.spending_limit) / STROOPS_PER_XLM;
-        const periodDays =
-          Math.round(Number(data.period_ledgers) / LEDGERS_PER_DAY) || 1;
+        const { spendingLimitXlm, periodDays } = await readSpendingLimitParams(
+          kit,
+          policyAddress,
+          rule.id
+        );
         loaded.push({
           ...DEFAULT_POLICY_FORM,
           policy: known,
@@ -191,9 +192,7 @@ export async function readRulePolicyParams(
           modified: false,
         });
       } else if (known.type === "weighted_threshold") {
-        const threshold = await kit.policyClients
-          .weighted(policyAddress)
-          .getThreshold(rule.id);
+        const threshold = await readWeightedThresholdValue(kit, policyAddress, rule.id);
         loaded.push({
           ...DEFAULT_POLICY_FORM,
           policy: known,

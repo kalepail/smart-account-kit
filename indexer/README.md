@@ -249,9 +249,11 @@ curl -H "Authorization: Bearer $INDEXER_TOKEN" \
 
 The `relayer-proxy/` directory contains a Cloudflare Worker that proxies requests to the OpenZeppelin Relayer Channels service. This allows frontend applications to submit fee-sponsored transactions without exposing API keys.
 
+It wraps the official [`@openzeppelin/relayer-plugin-channels`](https://www.npmjs.com/package/@openzeppelin/relayer-plugin-channels) `ChannelsClient` (`submitSorobanTransaction` for `func`+`auth`, `submitTransaction` for a signed `xdr`) and maps the plugin's `PluginExecutionError`/`PluginTransportError` onto HTTP responses.
+
 ### Features
 
-- Automatic API key generation per IP address (one key per IP, persisted indefinitely)
+- **Per-IP API key model**: the proxy mints one Relayer API key per client IP (via the Relayer's public `/gen` endpoint) and stores it in the `API_KEYS` KV namespace under `api-key:<ip>`, persisted indefinitely. Legacy plain-text / JSON-string KV values are migrated to the current record shape lazily on read.
 - Relayer's usage limits reset every 24 hours on their side - no need to regenerate keys
 - Rate limiting via Relayer's built-in fair use policy
 - Support for both testnet and mainnet
@@ -278,7 +280,10 @@ wrangler deploy --env production
 
 The relayer proxy keeps its non-secret runtime config in `wrangler.toml` (`NETWORK`
 and `RELAYER_BASE_URL`). The checked-in `.dev.vars.example` is only for optional
-local overrides.
+local overrides. The `API_KEYS` KV namespace IDs committed in `wrangler.toml` are
+Cloudflare resource identifiers, not secrets — they are safe to keep in source
+control (the per-IP Relayer keys stored *inside* the namespace never appear in the
+repo). No `wrangler secret` values are required for this Worker.
 
 ### Relayer Proxy API Endpoints
 

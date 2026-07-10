@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "deploy:production": "wrangler deploy --env production"
+    "deploy:production": "wrangler deploy --env production",
+    "test": "vitest run"
   },
   "dependencies": {
     "@openzeppelin/relayer-plugin-channels": "^0.20.0",

@@ -68,7 +68,7 @@ app.onError((error, c) => {
 /**
  * Get client IP from request
  */
-function getClientIP(request: Request): string {
+export function getClientIP(request: Request): string {
   return (
     request.headers.get(IP_HEADERS.CF_CONNECTING_IP) ||
     request.headers.get(IP_HEADERS.X_FORWARDED_FOR)?.split(",")[0]?.trim() ||
@@ -276,7 +276,7 @@ function createClient(env: Env, apiKey: string): ChannelsClient {
 /**
  * Extract account address from "Account not found" error message
  */
-function extractMissingAccount(errorMessage: string): string | null {
+export function extractMissingAccount(errorMessage: string): string | null {
   // Pattern: "Account not found: GXXXX..."
   const match = errorMessage.match(MISSING_ACCOUNT_PATTERN);
   return match ? match[1] : null;
@@ -374,32 +374,23 @@ app.post("/", async (c) => {
     // Submit with retry logic for missing accounts (testnet only)
     while (true) {
       try {
-        if (hasXdr) {
-          // Fee-bump a signed transaction
-          const result = await client.submitTransaction({ xdr: body.xdr! });
-          return c.json({
-            success: true,
-            data: {
-              transactionId: result.transactionId,
-              hash: result.hash,
-              status: result.status,
-            },
-          });
-        } else {
-          // Build tx with channel accounts
-          const result = await client.submitSorobanTransaction({
-            func: body.func!,
-            auth: body.auth!,
-          });
-          return c.json({
-            success: true,
-            data: {
-              transactionId: result.transactionId,
-              hash: result.hash,
-              status: result.status,
-            },
-          });
-        }
+        // hasXdr: fee-bump an already-signed transaction (source-account auth).
+        // Otherwise: Relayer builds the tx with channel accounts (Address auth).
+        const result = hasXdr
+          ? await client.submitTransaction({ xdr: body.xdr! })
+          : await client.submitSorobanTransaction({
+              func: body.func!,
+              auth: body.auth!,
+            });
+
+        return c.json({
+          success: true,
+          data: {
+            transactionId: result.transactionId,
+            hash: result.hash,
+            status: result.status,
+          },
+        });
       } catch (submitError) {
         const errorMessage = submitError instanceof Error ? submitError.message : String(submitError);
 

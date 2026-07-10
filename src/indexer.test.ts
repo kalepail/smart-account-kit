@@ -97,6 +97,34 @@ describe("IndexerClient network defaults", () => {
     );
   });
 
+  it("fetches indexer statistics from the /api/stats endpoint", async () => {
+    const statsBody = {
+      stats: {
+        total_events: 42,
+        unique_contracts: 7,
+        unique_credentials: 5,
+        first_ledger: 100,
+        last_ledger: 900,
+        eventTypes: [{ event_type: "context_rule_added", count: 3 }],
+      },
+    };
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify(statsBody), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const indexer = new IndexerClient({ baseUrl: "https://indexer.example" });
+
+    await expect(indexer.getStats()).resolves.toEqual(statsBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://indexer.example/api/stats",
+      expect.anything()
+    );
+  });
+
   it("forwards SmartAccountKit indexerAuthToken configuration", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ status: "ok" }), {

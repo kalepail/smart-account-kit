@@ -79,23 +79,6 @@ export function validateAmount(amount: number, fieldName: string = "amount"): vo
   }
 }
 
-/**
- * Validate that a string is not empty.
- *
- * @param value - The value to validate
- * @param fieldName - Name of the field for error messages
- * @throws {ValidationError} If the value is empty
- */
-export function validateNotEmpty(value: string | undefined | null, fieldName: string): void {
-  if (!value || typeof value !== "string" || value.trim().length === 0) {
-    throw new ValidationError(
-      `${fieldName} is required`,
-      SmartAccountErrorCode.INVALID_INPUT,
-      { field: fieldName }
-    );
-  }
-}
-
 // ============================================================================
 // Conversion Helpers
 // ============================================================================
@@ -143,26 +126,6 @@ export function buildKeyData(
       : credentialId;
 
   return Buffer.concat([Buffer.from(publicKey), credentialIdBuffer]);
-}
-
-/**
- * Extract the public key from key_data.
- *
- * @param keyData - The full key_data (pubkey + credentialId)
- * @returns The 65-byte public key
- */
-export function extractPubkeyFromKeyData(keyData: Buffer): Buffer {
-  return keyData.slice(0, SECP256R1_PUBLIC_KEY_SIZE);
-}
-
-/**
- * Extract the credential ID from key_data.
- *
- * @param keyData - The full key_data (pubkey + credentialId)
- * @returns The credential ID portion
- */
-export function extractCredentialIdFromKeyData(keyData: Buffer): Buffer {
-  return keyData.slice(SECP256R1_PUBLIC_KEY_SIZE);
 }
 
 // ============================================================================

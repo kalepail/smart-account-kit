@@ -109,7 +109,6 @@ export {
   stroopsToXlm,
   validateAddress,
   validateAmount,
-  validateNotEmpty,
   generateChallenge,
 } from "./utils";
 
@@ -135,8 +134,6 @@ export {
   // Compatibility helpers
   truncateAddress,
   describeSignerType,
-  signerMatchesCredential,
-  signerMatchesAddress,
   formatSignerForDisplay,
   formatContextType,
 } from "./builders";

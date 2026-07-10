@@ -44,12 +44,6 @@ import {
 // Constants
 import { DEFAULT_SESSION_EXPIRY_MS, LEDGERS_PER_HOUR } from "./constants";
 
-// Error classes
-import {
-  ValidationError,
-  SmartAccountErrorCode,
-} from "./errors";
-
 // Utility functions
 import { deriveContractAddress } from "./utils";
 
@@ -62,7 +56,6 @@ import { ExternalSignerManager, type ExternalSigner } from "./external-signers";
 // Indexer client for contract discovery
 import {
   IndexerClient,
-  DEFAULT_INDEXER_URLS,
   type IndexedContractSummary,
   type ContractDetailsResponse,
 } from "./indexer";
@@ -395,14 +388,10 @@ export class SmartAccountKit {
         authToken: config.indexerAuthToken,
       });
     } else {
-      // Try to use default URL for this network
-      const defaultUrl = DEFAULT_INDEXER_URLS[this.networkPassphrase];
-      this.indexer = defaultUrl
-        ? new IndexerClient({
-            baseUrl: defaultUrl,
-            authToken: config.indexerAuthToken,
-          })
-        : null;
+      // Try to use the default indexer URL for this network (null if none known)
+      this.indexer = IndexerClient.forNetwork(this.networkPassphrase, {
+        authToken: config.indexerAuthToken,
+      });
     }
 
     // Relayer client for fee-sponsored transactions via proxy (optional)

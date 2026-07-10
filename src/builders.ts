@@ -434,14 +434,6 @@ export function truncateAddress(address: string, chars: number = 4): string {
   return `${address.slice(0, chars)}...${address.slice(-chars)}`;
 }
 
-export function signerMatchesCredential(signer: Signer, credentialId: string): boolean {
-  return getCredentialIdFromSigner(signer) === credentialId;
-}
-
-export function signerMatchesAddress(signer: Signer, address: string): boolean {
-  return signer.tag === "Delegated" && signer.values[0] === address;
-}
-
 export function describeSignerType(signer: Signer): string {
   if (signer.tag === "Delegated") {
     return "Stellar Account";

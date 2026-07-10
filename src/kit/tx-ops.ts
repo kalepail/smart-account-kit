@@ -224,49 +224,6 @@ export function buildTokenTransferTargetArgs(
   ];
 }
 
-export async function simulateHostFunction(
-  deps: {
-    rpc: rpc.Server;
-    networkPassphrase: string;
-    timeoutInSeconds: number;
-    deployerKeypair: Keypair;
-  },
-  hostFunc: xdr.HostFunction
-): Promise<{ authEntries: xdr.SorobanAuthorizationEntry[] }> {
-  let sourceAccount;
-  try {
-    sourceAccount = await deps.rpc.getAccount(deps.deployerKeypair.publicKey());
-  } catch (error) {
-    throw new Error(
-      `Simulation requires the deployer account to exist on-chain. ` +
-      `Fund ${deps.deployerKeypair.publicKey()} before simulating transactions.`
-    );
-  }
-
-  const simulationTx = new TransactionBuilder(sourceAccount, {
-    fee: BASE_FEE,
-    networkPassphrase: deps.networkPassphrase,
-  })
-    .addOperation(
-      Operation.invokeHostFunction({
-        func: hostFunc,
-        auth: [],
-      })
-    )
-    .setTimeout(deps.timeoutInSeconds)
-    .build();
-
-  const simResult = await deps.rpc.simulateTransaction(simulationTx);
-
-  if ("error" in simResult) {
-    throw new Error(`Simulation failed: ${simResult.error}`);
-  }
-
-  return {
-    authEntries: simResult.result?.auth || [],
-  };
-}
-
 export async function signResimulateAndPrepare(
   deps: {
     rpc: rpc.Server;

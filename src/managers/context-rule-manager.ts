@@ -131,7 +131,7 @@ export class ContextRuleManager {
    * Get all context rules of a specific type.
    *
    * @param contextRuleType - The type of rules to retrieve (Default, CallContract, CreateContract)
-   * @returns Assembled transaction that returns an array of matching rules
+   * @returns Promise resolving to an array of matching {@link ContextRule}s
    * @throws Error if not connected to a wallet
    */
   async getAll(contextRuleType: ContextRuleType) {

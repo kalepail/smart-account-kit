@@ -35,6 +35,7 @@ import type {
   SubmissionOptions,
   SubmissionMethod,
   ExternalWalletAdapter,
+  PolicyConfig,
 } from "./types";
 import { MemoryStorage } from "./storage/memory";
 import {
@@ -186,6 +187,8 @@ export class SmartAccountKit {
   private readonly webauthnVerifierAddress: string;
   /** Deployed Ed25519 verifier contract address, if configured. */
   public readonly ed25519VerifierAddress?: string;
+  /** Default constructor policies applied to new wallets, if configured. */
+  private readonly defaultPolicies?: PolicyConfig[];
   private readonly timeoutInSeconds: number;
   private readonly signatureExpirationLedgers: number;
   private readonly probeRuleIds?: {
@@ -380,6 +383,7 @@ export class SmartAccountKit {
     this.accountWasmHash = config.accountWasmHash;
     this.webauthnVerifierAddress = config.webauthnVerifierAddress;
     this.ed25519VerifierAddress = config.ed25519VerifierAddress;
+    this.defaultPolicies = config.defaultPolicies;
     this.timeoutInSeconds = config.timeoutInSeconds ?? 30;
     this.signatureExpirationLedgers = config.signatureExpirationLedgers ?? LEDGERS_PER_HOUR; // ~1 hour
 
@@ -743,8 +747,14 @@ export class SmartAccountKit {
       nativeTokenContract?: string;
       /** Force a specific submission method (relayer or rpc) */
       forceMethod?: SubmissionMethod;
+      /**
+       * Constructor policies to install on the new wallet's default context
+       * rule. Overrides `config.defaultPolicies` when provided.
+       */
+      policies?: PolicyConfig[];
     }
   ): Promise<CreateWalletResult & { submitResult?: TransactionResult; fundResult?: TransactionResult & { amount?: number } }> {
+    const constructorPolicies = options?.policies ?? this.defaultPolicies;
     return createWallet(
       {
         storage: this.storage,
@@ -754,7 +764,7 @@ export class SmartAccountKit {
         sessionExpiryMs: this.sessionExpiryMs,
         createPasskey: (name, user, selection) => this.createPasskey(name, user, selection),
         buildDeployTransaction: (credentialIdBuffer, publicKey) =>
-          this.buildDeployTransaction(credentialIdBuffer, publicKey),
+          this.buildDeployTransaction(credentialIdBuffer, publicKey, constructorPolicies),
         signWithDeployer: (tx) => this.signWithDeployer(tx),
         submitDeploymentTx: (tx, credentialId, submissionOptions) =>
           this.submitDeploymentTx(tx, credentialId, submissionOptions),
@@ -1188,6 +1198,35 @@ export class SmartAccountKit {
   }
 
   /**
+   * Upgrade the smart account contract's WASM (upgrade).
+   *
+   * Returns an assembled transaction that must be signed by the smart account
+   * (self-auth) and submitted. The contract's `operator` argument is ignored
+   * (stellar-contract-utils Upgradeable), so the account's own address is passed.
+   *
+   * @param newWasmHash - The new contract WASM hash (32-byte hash as hex string
+   *   or Buffer)
+   * @returns Assembled transaction that upgrades the contract when signed and sent
+   * @throws {ValidationError} If the hash is not 32 bytes
+   * @throws Error if not connected to a wallet
+   */
+  async upgrade(
+    newWasmHash: string | Buffer
+  ): Promise<Awaited<ReturnType<SmartAccountClient["upgrade"]>>> {
+    const { wallet, contractId } = this.requireWallet();
+    const wasmHash =
+      typeof newWasmHash === "string" ? Buffer.from(newWasmHash, "hex") : newWasmHash;
+    if (wasmHash.length !== 32) {
+      throw new ValidationError(
+        `newWasmHash must be a 32-byte hash (got ${wasmHash.length} bytes)`,
+        SmartAccountErrorCode.INVALID_INPUT,
+        { length: wasmHash.length }
+      );
+    }
+    return wallet.upgrade({ new_wasm_hash: wasmHash, operator: contractId });
+  }
+
+  /**
    * Build, sign, re-simulate, and submit a smart-account mediated contract call.
    *
    * This is the high-level convenience path for arbitrary smart-account
@@ -1335,7 +1374,8 @@ export class SmartAccountKit {
    */
   private async buildDeployTransaction(
     credentialId: Buffer,
-    publicKey: Uint8Array
+    publicKey: Uint8Array,
+    policies?: PolicyConfig[]
   ) {
     return buildDeployTransaction(
       {
@@ -1347,7 +1387,8 @@ export class SmartAccountKit {
         timeoutInSeconds: this.timeoutInSeconds,
       },
       credentialId,
-      publicKey
+      publicKey,
+      policies
     );
   }
 

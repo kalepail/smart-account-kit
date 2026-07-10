@@ -6,6 +6,7 @@
  */
 
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
+import { PolicyNotFoundError } from "../errors";
 
 /** Dependencies required by PolicyManager */
 export interface PolicyManagerDeps {
@@ -84,12 +85,29 @@ export class PolicyManager {
     })).result;
 
     if (policyId === undefined || policyId === null) {
-      throw new Error(`Policy ${policyAddress} not found on context rule ${contextRuleId}`);
+      throw new PolicyNotFoundError(policyAddress, contextRuleId);
     }
 
     return wallet.remove_policy({
       context_rule_id: contextRuleId,
       policy_id: policyId,
     });
+  }
+
+  /**
+   * Resolve the stable on-chain policy ID for a policy address (get_policy_id).
+   *
+   * @param policyAddress - The policy contract address to look up
+   * @returns The policy's numeric ID
+   * @throws {PolicyNotFoundError} If the policy is not registered
+   * @throws Error if not connected to a wallet
+   */
+  async idOf(policyAddress: string): Promise<number> {
+    const { wallet } = this.deps.requireWallet();
+    const policyId = (await wallet.get_policy_id({ policy: policyAddress })).result;
+    if (policyId === undefined || policyId === null) {
+      throw new PolicyNotFoundError(policyAddress);
+    }
+    return policyId;
   }
 }

@@ -13,6 +13,7 @@ function makeDeps() {
   const wallet = {
     add_context_rule: vi.fn(),
     get_context_rule: vi.fn(),
+    get_context_rules_count: vi.fn(),
     remove_context_rule: vi.fn(),
     update_context_rule_name: vi.fn(),
     update_context_rule_valid_until: vi.fn(),
@@ -57,6 +58,30 @@ describe("ContextRuleManager", () => {
       policies,
     });
     expect(result).toEqual({ result: { id: 7 } });
+  });
+
+  it("validates the rule before submitting (rejects an over-long name)", async () => {
+    const deps = makeDeps();
+    const manager = new ContextRuleManager(deps);
+
+    await expect(
+      manager.add(
+        { tag: "Default", values: undefined },
+        "a".repeat(21),
+        [makeDelegatedSigner(1)],
+        new Map()
+      )
+    ).rejects.toThrow();
+    expect(deps.wallet.add_context_rule).not.toHaveBeenCalled();
+  });
+
+  it("returns the context rule count", async () => {
+    const deps = makeDeps();
+    deps.wallet.get_context_rules_count.mockResolvedValue({ result: 3 });
+    const manager = new ContextRuleManager(deps);
+
+    await expect(manager.count()).resolves.toBe(3);
+    expect(deps.wallet.get_context_rules_count).toHaveBeenCalled();
   });
 
   it("gets a context rule by id", async () => {

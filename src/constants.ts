@@ -41,6 +41,26 @@ export const ED25519_PUBLIC_KEY_SIZE = 32;
 export const ED25519_SIGNATURE_SIZE = 64;
 
 // ============================================================================
+// Contract Limits
+// ============================================================================
+//
+// These mirror the deployed stellar-accounts contract constants (see
+// scratchpad #576 §E). Client-side validation against them produces clear
+// SDK errors instead of opaque on-chain failures.
+
+/** Maximum signers per context rule (contract: MAX_SIGNERS). */
+export const MAX_SIGNERS = 15;
+
+/** Maximum policies per context rule (contract: MAX_POLICIES). */
+export const MAX_POLICIES = 5;
+
+/** Maximum context rule name length, in UTF-8 bytes (contract: MAX_NAME_SIZE). */
+export const MAX_NAME_SIZE = 20;
+
+/** Maximum External signer key-data length, in bytes (contract: MAX_EXTERNAL_KEY_SIZE). */
+export const MAX_EXTERNAL_KEY_SIZE = 256;
+
+// ============================================================================
 // Storage Configuration
 // ============================================================================
 

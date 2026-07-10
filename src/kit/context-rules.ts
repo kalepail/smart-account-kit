@@ -27,6 +27,8 @@ type ContextRuleQueryClient = {
   get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule>>;
   get_policy_id?: (args: { policy: string }) => Promise<AssembledTransaction<number>>;
   get_signer_id?: (args: { signer: ContractSigner }) => Promise<AssembledTransaction<number>>;
+  /** Generated contract spec, used to decode raw getter results. */
+  spec?: { funcResToNative: (name: string, val: xdr.ScVal | string) => unknown };
 };
 
 type ContextRuleReadDeps = {
@@ -118,161 +120,6 @@ function hasRpcReadConfig(
   return Boolean(deps?.rpc && deps.contractId && deps.networkPassphrase);
 }
 
-function decodeRequiredMapEntries(val: xdr.ScVal): Map<string, xdr.ScVal> {
-  if (val.switch().name !== "scvMap") {
-    throw new Error(`Expected context rule result to be a map, got ${val.switch().name}`);
-  }
-
-  const entries = new Map<string, xdr.ScVal>();
-  for (const entry of val.map() ?? []) {
-    if (entry.key().switch().name !== "scvSymbol") {
-      throw new Error(`Expected context rule field key to be a symbol, got ${entry.key().switch().name}`);
-    }
-    entries.set(entry.key().sym().toString(), entry.val());
-  }
-
-  return entries;
-}
-
-function expectScVec(val: xdr.ScVal, label: string): xdr.ScVal[] {
-  if (val.switch().name !== "scvVec") {
-    throw new Error(`Expected ${label} to be a vec, got ${val.switch().name}`);
-  }
-  return val.vec() ?? [];
-}
-
-function expectScString(val: xdr.ScVal, label: string): string {
-  if (val.switch().name !== "scvString") {
-    throw new Error(`Expected ${label} to be a string, got ${val.switch().name}`);
-  }
-  return val.str().toString();
-}
-
-function expectScU32(val: xdr.ScVal, label: string): number {
-  if (val.switch().name !== "scvU32") {
-    throw new Error(`Expected ${label} to be a u32, got ${val.switch().name}`);
-  }
-  return val.u32();
-}
-
-function expectScAddress(val: xdr.ScVal, label: string): string {
-  if (val.switch().name !== "scvAddress") {
-    throw new Error(`Expected ${label} to be an address, got ${val.switch().name}`);
-  }
-  return Address.fromScAddress(val.address()).toString();
-}
-
-function decodeOptionalU32Vec(val: xdr.ScVal | undefined, label: string): number[] {
-  if (!val || val.switch().name === "scvVoid") {
-    return [];
-  }
-
-  return expectScVec(val, label).map((item, index) =>
-    expectScU32(item, `${label}[${index}]`)
-  );
-}
-
-function expectScBytes(val: xdr.ScVal, label: string): Buffer {
-  if (val.switch().name !== "scvBytes") {
-    throw new Error(`Expected ${label} to be bytes, got ${val.switch().name}`);
-  }
-  return Buffer.from(val.bytes());
-}
-
-function expectScSymbol(val: xdr.ScVal, label: string): string {
-  if (val.switch().name !== "scvSymbol") {
-    throw new Error(`Expected ${label} to be a symbol, got ${val.switch().name}`);
-  }
-  return val.sym().toString();
-}
-
-function decodeContextRuleType(val: xdr.ScVal): ContextRuleType {
-  const parts = expectScVec(val, "context_type");
-  if (parts.length === 0) {
-    throw new Error("context_type vec is empty");
-  }
-
-  const tag = expectScSymbol(parts[0], "context_type tag");
-  if (tag === "Default") {
-    return { tag: "Default", values: undefined };
-  }
-
-  if (tag === "CallContract") {
-    if (parts.length !== 2) {
-      throw new Error(`CallContract context_type expected 2 items, got ${parts.length}`);
-    }
-    return { tag: "CallContract", values: [expectScAddress(parts[1], "call contract address")] };
-  }
-
-  if (tag === "CreateContract") {
-    if (parts.length !== 2) {
-      throw new Error(`CreateContract context_type expected 2 items, got ${parts.length}`);
-    }
-    return { tag: "CreateContract", values: [expectScBytes(parts[1], "create contract wasm hash")] };
-  }
-
-  throw new Error(`Unknown context rule type tag: ${tag}`);
-}
-
-function decodeSigner(val: xdr.ScVal): ContractSigner {
-  const parts = expectScVec(val, "signer");
-  if (parts.length === 0) {
-    throw new Error("signer vec is empty");
-  }
-
-  const tag = expectScSymbol(parts[0], "signer tag");
-  if (tag === "Delegated") {
-    if (parts.length !== 2) {
-      throw new Error(`Delegated signer expected 2 items, got ${parts.length}`);
-    }
-    return { tag: "Delegated", values: [expectScAddress(parts[1], "delegated signer address")] };
-  }
-
-  if (tag === "External") {
-    if (parts.length !== 3) {
-      throw new Error(`External signer expected 3 items, got ${parts.length}`);
-    }
-    return {
-      tag: "External",
-      values: [
-        expectScAddress(parts[1], "external signer verifier"),
-        expectScBytes(parts[2], "external signer key data"),
-      ],
-    };
-  }
-
-  throw new Error(`Unknown signer tag: ${tag}`);
-}
-
-export function decodeContextRuleResultXdr(resultXdr: string): ContextRule {
-  const scVal = xdr.ScVal.fromXDR(resultXdr, "base64");
-  const entries = decodeRequiredMapEntries(scVal);
-  const policiesVal = entries.get("policies");
-  const signersVal = entries.get("signers");
-  const validUntilVal = entries.get("valid_until");
-  const policyIdsVal = entries.get("policy_ids");
-  const signerIdsVal = entries.get("signer_ids");
-
-  if (!entries.has("context_type") || !entries.has("id") || !entries.has("name") || !policiesVal || !signersVal) {
-    throw new Error("Context rule result is missing one or more required fields");
-  }
-
-  return {
-    context_type: decodeContextRuleType(entries.get("context_type") as xdr.ScVal),
-    id: expectScU32(entries.get("id") as xdr.ScVal, "context rule id"),
-    name: expectScString(entries.get("name") as xdr.ScVal, "context rule name"),
-    policies: expectScVec(policiesVal, "policies").map((policy, index) =>
-      expectScAddress(policy, `policy[${index}]`)
-    ),
-    policy_ids: decodeOptionalU32Vec(policyIdsVal, "policy_ids"),
-    signers: expectScVec(signersVal, "signers").map((signer) => decodeSigner(signer)),
-    signer_ids: decodeOptionalU32Vec(signerIdsVal, "signer_ids"),
-    valid_until: !validUntilVal || validUntilVal.switch().name === "scvVoid"
-      ? undefined
-      : expectScU32(validUntilVal, "valid_until"),
-  } as ContextRule;
-}
-
 async function hydrateContextRuleIds(
   wallet: ContextRuleQueryClient,
   rule: ContextRule
@@ -321,6 +168,7 @@ async function hydrateContextRuleIds(
 }
 
 async function readContextRuleFromRpc(
+  wallet: ContextRuleQueryClient,
   contextRuleId: number,
   deps: Required<Pick<ContextRuleReadDeps, "rpc" | "contractId" | "networkPassphrase">> &
     ContextRuleReadDeps
@@ -354,7 +202,76 @@ async function readContextRuleFromRpc(
     throw new Error(`Context rule ${contextRuleId} returned no result`);
   }
 
-  return decodeContextRuleResultXdr(retval.toXDR("base64"));
+  // Decode via the generated contract spec rather than a hand-rolled ScVal
+  // walker. The bindings spec is the source of truth for the ContextRule shape.
+  if (!wallet.spec) {
+    throw new Error(
+      "Context rule decoding requires the generated contract spec on the wallet client"
+    );
+  }
+  return decodeContextRuleWithSpec(wallet.spec, retval);
+}
+
+/**
+ * Decode a `get_context_rule` result ScVal using the generated bindings spec.
+ *
+ * The deployed contract's `get_context_rule` return currently omits the aligned
+ * `signer_ids`/`policy_ids` fields that the generated `ContextRule` struct
+ * requires, so a plain `funcResToNative` fails. We inject empty id vectors for
+ * the missing fields so the spec can decode the (complex, nested) remainder;
+ * {@link hydrateContextRuleIds} then resolves the real ids via
+ * `get_signer_id`/`get_policy_id`.
+ */
+function decodeContextRuleWithSpec(
+  spec: NonNullable<ContextRuleQueryClient["spec"]>,
+  retval: xdr.ScVal
+): ContextRule {
+  let toDecode = retval;
+
+  if (retval.switch().name === "scvMap") {
+    const entries = retval.map() ?? [];
+    const presentKeys = new Set(
+      entries
+        .filter((entry) => entry.key().switch().name === "scvSymbol")
+        .map((entry) => entry.key().sym().toString())
+    );
+
+    const injected = [...entries];
+    for (const field of ["signer_ids", "policy_ids"]) {
+      if (!presentKeys.has(field)) {
+        injected.push(
+          new xdr.ScMapEntry({
+            key: xdr.ScVal.scvSymbol(field),
+            val: xdr.ScVal.scvVec([]),
+          })
+        );
+      }
+    }
+
+    if (injected.length !== entries.length) {
+      // Struct maps are keyed by symbols in ascending (alphabetical) order,
+      // matching the generated spec's field order. The spec reads fields
+      // positionally, so the map must be sorted this way or decoding a later
+      // field's ScVal against the wrong slot fails.
+      injected.sort((a, b) =>
+        a.key().sym().toString().localeCompare(b.key().sym().toString())
+      );
+      toDecode = xdr.ScVal.scvMap(injected);
+    }
+  }
+
+  // Pass the base64 XDR (not the ScVal object) so the spec deserializes with its
+  // own js-xdr instance — XDR bytes are instance-agnostic, avoiding dual-package
+  // ScVal incompatibilities.
+  const rule = spec.funcResToNative(
+    "get_context_rule",
+    toDecode.toXDR("base64")
+  ) as ContextRule;
+  // Normalize the Option<u32> void case to undefined for a consistent shape.
+  if (rule.valid_until === null) {
+    rule.valid_until = undefined;
+  }
+  return rule;
 }
 
 export async function readContextRule(
@@ -363,7 +280,7 @@ export async function readContextRule(
   deps?: ContextRuleReadDeps
 ): Promise<ContextRule> {
   if (hasRpcReadConfig(deps)) {
-    const rule = await readContextRuleFromRpc(contextRuleId, deps);
+    const rule = await readContextRuleFromRpc(wallet, contextRuleId, deps);
     return hydrateContextRuleIds(wallet, rule);
   }
 

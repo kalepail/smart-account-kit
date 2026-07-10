@@ -1,5 +1,5 @@
 import { hash } from "@stellar/stellar-sdk";
-import type { contract, rpc } from "@stellar/stellar-sdk";
+import type { contract, rpc, xdr } from "@stellar/stellar-sdk";
 import type { SubmissionOptions, TransactionResult } from "../types";
 import type { RelayerClient } from "../relayer";
 import type { StorageAdapter } from "../types";
@@ -8,8 +8,10 @@ import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import type { Keypair } from "@stellar/stellar-sdk";
 import { getSubmissionMethod } from "./tx-ops";
+import { buildConstructorPolicies } from "./policies-ops";
 import { SmartAccountErrorCode, wrapError } from "../errors";
 import { decodeContractError, failedTransaction } from "../contract-errors";
+import type { PolicyConfig } from "../types";
 
 async function sendDeploymentTxViaRpc<T>(
   tx: contract.AssembledTransaction<T>
@@ -89,7 +91,8 @@ export async function buildDeployTransaction(
     timeoutInSeconds: number;
   },
   credentialId: Buffer,
-  publicKey: Uint8Array
+  publicKey: Uint8Array,
+  policies?: PolicyConfig[]
 ): Promise<contract.AssembledTransaction<null>> {
   const keyData = buildKeyData(publicKey, credentialId);
   const signer: ContractSigner = {
@@ -100,10 +103,16 @@ export async function buildDeployTransaction(
     ],
   };
 
+  // Constructor policies (config.defaultPolicies or per-call). Converts each
+  // PolicyConfig to the Map<Address, Val> the __constructor expects.
+  const constructorPolicies = policies?.length
+    ? buildConstructorPolicies(policies)
+    : new Map<string, xdr.ScVal>();
+
   return SmartAccountClient.deploy(
     {
       signers: [signer],
-      policies: new Map(),
+      policies: constructorPolicies,
     },
     {
       networkPassphrase: deps.networkPassphrase,

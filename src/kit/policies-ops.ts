@@ -2,6 +2,7 @@ import { Address, xdr } from "@stellar/stellar-sdk";
 import { Spec as ContractSpec } from "@stellar/stellar-sdk/contract";
 import type { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import { SmartAccountErrorCode, ValidationError } from "../errors";
+import type { PolicyConfig } from "../types";
 
 const POLICY_UDT_SPECS = {
   threshold: {
@@ -60,6 +61,38 @@ export function convertPolicyParams(
       }
     );
   }
+}
+
+/**
+ * Convert a list of {@link PolicyConfig} into the `Map<Address, Val>` the smart
+ * account `__constructor` expects.
+ *
+ * Known policy types are converted via {@link convertPolicyParams}; `"custom"`
+ * (or omitted-type) policies must supply an `xdr.ScVal` directly.
+ *
+ * @throws {ValidationError} If a custom policy's installParams is not an ScVal
+ */
+export function buildConstructorPolicies(
+  policies: PolicyConfig[]
+): Map<string, xdr.ScVal> {
+  const map = new Map<string, xdr.ScVal>();
+  for (const policy of policies) {
+    let scParams: xdr.ScVal;
+    if (policy.type && policy.type !== "custom") {
+      scParams = convertPolicyParams(undefined, policy.type, policy.installParams);
+    } else if (policy.installParams instanceof xdr.ScVal) {
+      scParams = policy.installParams;
+    } else {
+      throw new ValidationError(
+        `Policy ${policy.address}: custom policies must provide installParams as an xdr.ScVal ` +
+          `(or set a known 'type').`,
+        SmartAccountErrorCode.INVALID_INPUT,
+        { address: policy.address }
+      );
+    }
+    map.set(policy.address, scParams);
+  }
+  return map;
 }
 
 export function buildPoliciesScVal(

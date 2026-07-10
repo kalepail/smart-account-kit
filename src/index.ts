@@ -88,7 +88,25 @@ export {
   BASE_FEE,
   STROOPS_PER_XLM,
   FRIENDBOT_RESERVE_XLM,
+  // Contract limits (mirror the deployed contract)
+  MAX_SIGNERS,
+  MAX_POLICIES,
+  MAX_NAME_SIZE,
+  MAX_EXTERNAL_KEY_SIZE,
+  ED25519_PUBLIC_KEY_SIZE,
+  ED25519_SIGNATURE_SIZE,
 } from "./constants";
+
+// Client-side validation of contract limits
+export {
+  validateContextRule,
+  validateContextRuleName,
+  validateSigner,
+  validateSigners,
+  validatePolicyCount,
+  validateExternalKeySize,
+  validateValidUntil,
+} from "./validation";
 
 // Error classes
 export {
@@ -97,6 +115,7 @@ export {
   WalletNotConnectedError,
   CredentialNotFoundError,
   SignerNotFoundError,
+  PolicyNotFoundError,
   SimulationError,
   SubmissionError,
   ValidationError,

@@ -11,6 +11,7 @@ import type { SmartAccountEventEmitter } from "../events";
 import type { StorageAdapter, StoredCredential } from "../types";
 import { buildKeyData } from "../utils";
 import { SignerNotFoundError } from "../errors";
+import { validateSigner, validateSigners } from "../validation";
 
 /** Dependencies required by SignerManager */
 export interface SignerManagerDeps {
@@ -18,6 +19,7 @@ export interface SignerManagerDeps {
   requireWallet: () => {
     wallet: {
       add_signer: (args: { context_rule_id: number; signer: ContractSigner }) => Promise<AssembledTransaction<number>>;
+      batch_add_signer: (args: { context_rule_id: number; signers: ContractSigner[] }) => Promise<AssembledTransaction<null>>;
       get_signer_id: (args: { signer: ContractSigner }) => Promise<AssembledTransaction<number>>;
       remove_signer: (args: { context_rule_id: number; signer_id: number }) => Promise<AssembledTransaction<null>>;
     };
@@ -84,6 +86,7 @@ export class SignerManager {
       tag: "External",
       values: [this.deps.webauthnVerifierAddress, keyData],
     };
+    validateSigner(signer);
 
     // Build and return the add_signer transaction
     const transaction = await wallet.add_signer({
@@ -108,11 +111,48 @@ export class SignerManager {
       tag: "Delegated",
       values: [publicKey],
     };
+    validateSigner(signer);
 
     return wallet.add_signer({
       context_rule_id: contextRuleId,
       signer,
     });
+  }
+
+  /**
+   * Add multiple signers to a context rule in one transaction (batch_add_signer).
+   *
+   * @param contextRuleId - The context rule to add the signers to
+   * @param signers - The signers to add
+   * @returns Assembled transaction that adds the signers when signed and sent
+   * @throws {ValidationError} If the batch would exceed MAX_SIGNERS or a signer
+   *   is invalid
+   * @throws Error if not connected to a wallet
+   */
+  async addBatch(contextRuleId: number, signers: ContractSigner[]) {
+    const { wallet } = this.deps.requireWallet();
+    validateSigners(signers);
+    return wallet.batch_add_signer({
+      context_rule_id: contextRuleId,
+      signers,
+    });
+  }
+
+  /**
+   * Resolve the stable on-chain signer ID for a signer (get_signer_id).
+   *
+   * @param signer - The signer to look up
+   * @returns The signer's numeric ID
+   * @throws {SignerNotFoundError} If the signer is not registered
+   * @throws Error if not connected to a wallet
+   */
+  async idOf(signer: ContractSigner): Promise<number> {
+    const { wallet } = this.deps.requireWallet();
+    const signerId = (await wallet.get_signer_id({ signer })).result;
+    if (signerId === undefined || signerId === null) {
+      throw new SignerNotFoundError("signer");
+    }
+    return signerId;
   }
 
   /**

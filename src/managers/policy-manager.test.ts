@@ -58,4 +58,21 @@ describe("PolicyManager", () => {
     );
     expect(deps.wallet.remove_policy).not.toHaveBeenCalled();
   });
+
+  it("resolves a policy id via idOf", async () => {
+    const deps = makeDeps();
+    deps.wallet.get_policy_id.mockResolvedValue({ result: 8 });
+    const manager = new PolicyManager(deps);
+
+    await expect(manager.idOf("CPOLICY")).resolves.toBe(8);
+    expect(deps.wallet.get_policy_id).toHaveBeenCalledWith({ policy: "CPOLICY" });
+  });
+
+  it("throws PolicyNotFoundError from idOf when unregistered", async () => {
+    const deps = makeDeps();
+    deps.wallet.get_policy_id.mockResolvedValue({ result: null });
+    const manager = new PolicyManager(deps);
+
+    await expect(manager.idOf("CUNKNOWN")).rejects.toThrow("Policy not found: CUNKNOWN");
+  });
 });

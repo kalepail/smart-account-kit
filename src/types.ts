@@ -255,6 +255,14 @@ export interface PolicyConfig {
   /** Policy contract address */
   address: string;
 
+  /**
+   * Policy type, used to convert {@link installParams} into the correct ScVal.
+   *
+   * For the three example policies use the matching type. For `"custom"` (or
+   * when omitted), {@link installParams} must already be an `xdr.ScVal`.
+   */
+  type?: "threshold" | "spending_limit" | "weighted_threshold" | "custom";
+
   /** Installation parameters for the policy */
   installParams: unknown;
 }

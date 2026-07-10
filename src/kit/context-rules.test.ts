@@ -1,15 +1,22 @@
 import { Address, Keypair, xdr } from "@stellar/stellar-sdk";
 import { describe, expect, it } from "vitest";
 import type { ContextRule, ContextRuleType, Signer } from "smart-account-kit-bindings";
+import { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import {
   readContextRule,
   buildInvocationContextTypes,
-  decodeContextRuleResultXdr,
   findWebAuthnSignerForCredential,
   listContextRules,
   resolveContextRuleIdsForEntry,
 } from "./context-rules";
 import { buildKeyData } from "../utils";
+
+/** The generated contract spec, used by the RPC read path to decode rules. */
+const CONTRACT_SPEC = new SmartAccountClient({
+  contractId: "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y",
+  rpcUrl: "https://soroban-testnet.stellar.org",
+  networkPassphrase: "Test SDF Network ; September 2015",
+}).spec;
 
 function makeRule(
   id: number,
@@ -319,32 +326,48 @@ describe("context-rules", () => {
     expect(resolvedSigner).toEqual(signer);
   });
 
-  it("decodes current on-chain context rule XDR without the generic spec decoder", () => {
-    const rule = decodeContextRuleResultXdr(
-      "AAAAEQAAAAEAAAAGAAAADwAAAAxjb250ZXh0X3R5cGUAAAAQAAAAAQAAAAEAAAAPAAAAB0RlZmF1bHQAAAAADwAAAAJpZAAAAAAAAwAAAAAAAAAPAAAABG5hbWUAAAAOAAAACG11bHRpc2lnAAAADwAAAAhwb2xpY2llcwAAABAAAAABAAAAAAAAAA8AAAAHc2lnbmVycwAAAAAQAAAAAQAAAAEAAAAQAAAAAQAAAAMAAAAPAAAACEV4dGVybmFsAAAAEgAAAAFkevvWN+lfFhWkw++/Y80InSk9v5KoH6wsQAK0qaATWwAAAA0AAABVBGpkWd9ATmaxASDAotqYT29IUVJTQQZAHUSdBt4RcvRvfInCDIUr0yJMoNJshArXwXmy01MrFLXLzsb6BQhcTEcy3/P5n6TiIqVBkIn8/K2hsVx+oQAAAAAAAA8AAAALdmFsaWRfdW50aWwAAAAAAQ=="
+  it("decodes real on-chain context rule XDR via the bindings spec (missing id fields injected)", async () => {
+    // Golden XDR captured from the deployed contract's get_context_rule, which
+    // omits signer_ids/policy_ids. The RPC read path injects empty id vectors so
+    // the generated spec can decode the remaining (nested) fields.
+    const retval = xdr.ScVal.fromXDR(
+      "AAAAEQAAAAEAAAAGAAAADwAAAAxjb250ZXh0X3R5cGUAAAAQAAAAAQAAAAEAAAAPAAAAB0RlZmF1bHQAAAAADwAAAAJpZAAAAAAAAwAAAAAAAAAPAAAABG5hbWUAAAAOAAAACG11bHRpc2lnAAAADwAAAAhwb2xpY2llcwAAABAAAAABAAAAAAAAAA8AAAAHc2lnbmVycwAAAAAQAAAAAQAAAAEAAAAQAAAAAQAAAAMAAAAPAAAACEV4dGVybmFsAAAAEgAAAAFkevvWN+lfFhWkw++/Y80InSk9v5KoH6wsQAK0qaATWwAAAA0AAABVBGpkWd9ATmaxASDAotqYT29IUVJTQQZAHUSdBt4RcvRvfInCDIUr0yJMoNJshArXwXmy01MrFLXLzsb6BQhcTEcy3/P5n6TiIqVBkIn8/K2hsVx+oQAAAAAAAA8AAAALdmFsaWRfdW50aWwAAAAAAQ==",
+      "base64"
     );
 
-    expect(rule).toEqual({
-      context_type: { tag: "Default", values: undefined },
+    // No get_signer_id/get_policy_id -> hydration leaves the injected ids empty.
+    const wallet = {
+      spec: CONTRACT_SPEC,
+      async get_context_rule() {
+        throw new Error("rpc read path should be used");
+      },
+    };
+    const rpcClient = {
+      async simulateTransaction() {
+        return { result: { retval } };
+      },
+    };
+
+    const rule = await readContextRule(wallet as never, 0, {
+      rpc: rpcClient as never,
+      contractId: "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y",
+      networkPassphrase: "Test SDF Network ; September 2015",
+    });
+
+    expect(rule).toMatchObject({
+      context_type: { tag: "Default" },
       id: 0,
       name: "multisig",
       policies: [],
       policy_ids: [],
-      signers: [
-        {
-          tag: "External",
-          values: [
-            "CBSHV66WG7UV6FQVUTB67P3DZUEJ2KJ5X6JKQH5MFRAAFNFJUAJVXJYV",
-            Buffer.from(
-              "046a6459df404e66b10120c0a2da984f6f485152534106401d449d06de1172f46f7c89c20c852bd3224ca0d26c840ad7c179b2d3532b14b5cbcec6fa05085c4c4732dff3f99fa4e222a5419089fcfcada1b15c7ea1",
-              "hex"
-            ),
-          ],
-        },
-      ],
       signer_ids: [],
       valid_until: undefined,
     });
+    expect(rule.signers).toHaveLength(1);
+    expect(rule.signers[0].tag).toBe("External");
+    expect(rule.signers[0].values[0]).toBe(
+      "CBSHV66WG7UV6FQVUTB67P3DZUEJ2KJ5X6JKQH5MFRAAFNFJUAJVXJYV"
+    );
   });
 
   it("hydrates signer_ids and policy_ids for RPC-decoded rules when omitted from XDR", async () => {
@@ -353,6 +376,7 @@ describe("context-rules", () => {
     const policyAddress = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
     const contractId = "CDANWYENKH6PTTY6GDTMDAMYRHMU4SBRPX5NUDYDMTYVOIF32ASZFU4Y";
     const wallet = {
+      spec: CONTRACT_SPEC,
       async get_policy_id() {
         return { result: 41 };
       },

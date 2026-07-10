@@ -11,6 +11,7 @@ import type { rpc } from "@stellar/stellar-sdk";
 import type { Signer as ContractSigner, ContextRuleType, ContextRule } from "smart-account-kit-bindings";
 import type { ContractDetailsResponse } from "../indexer";
 import { getFilteredContextRules, listContextRules, readContextRule } from "../kit/context-rules";
+import { validateContextRule } from "../validation";
 
 /** Dependencies required by ContextRuleManager */
 export interface ContextRuleManagerDeps {
@@ -25,6 +26,7 @@ export interface ContextRuleManagerDeps {
         policies: Map<string, unknown>;
       }) => Promise<AssembledTransaction<ContextRule>>;
       get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule>>;
+      get_context_rules_count: () => Promise<AssembledTransaction<number>>;
       remove_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<null>>;
       update_context_rule_name: (args: { context_rule_id: number; name: string }) => Promise<AssembledTransaction<ContextRule>>;
       update_context_rule_valid_until: (args: { context_rule_id: number; valid_until: number | undefined }) => Promise<AssembledTransaction<ContextRule>>;
@@ -84,6 +86,12 @@ export class ContextRuleManager {
     policies: Map<string, unknown>,
     validUntil?: number
   ) {
+    validateContextRule({
+      name,
+      signers,
+      policyCount: policies.size,
+      validUntil,
+    });
     return this.deps.requireWallet().wallet.add_context_rule({
       context_type: contextType,
       name,
@@ -91,6 +99,19 @@ export class ContextRuleManager {
       signers,
       policies,
     });
+  }
+
+  /**
+   * Get the total number of context rules ever created on the smart account
+   * (get_context_rules_count). This is a monotonic counter, not the number of
+   * currently-active rules.
+   *
+   * @returns The context rule count
+   * @throws Error if not connected to a wallet
+   */
+  async count(): Promise<number> {
+    const { wallet } = this.deps.requireWallet();
+    return (await wallet.get_context_rules_count()).result;
   }
 
   /**

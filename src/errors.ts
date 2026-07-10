@@ -40,6 +40,7 @@ export enum SmartAccountErrorCode {
   // Signer errors (6xxx)
   SIGNER_NOT_FOUND = 6001,
   SIGNER_INVALID = 6002,
+  POLICY_NOT_FOUND = 6003,
 
   // Validation errors (7xxx)
   INVALID_ADDRESS = 7001,
@@ -152,6 +153,22 @@ export class SignerNotFoundError extends SmartAccountError {
       { context: { identifier } }
     );
     this.name = "SignerNotFoundError";
+  }
+}
+
+/**
+ * Error thrown when a policy cannot be found on a context rule.
+ */
+export class PolicyNotFoundError extends SmartAccountError {
+  constructor(policyAddress: string, contextRuleId?: number) {
+    super(
+      contextRuleId !== undefined
+        ? `Policy ${policyAddress} not found on context rule ${contextRuleId}`
+        : `Policy not found: ${policyAddress}`,
+      SmartAccountErrorCode.POLICY_NOT_FOUND,
+      { context: { policyAddress, contextRuleId } }
+    );
+    this.name = "PolicyNotFoundError";
   }
 }
 

@@ -6,6 +6,7 @@ import { makeAccount, makeDelegatedSigner } from "./test-utils";
 function makeDeps() {
   const wallet = {
     add_signer: vi.fn(),
+    batch_add_signer: vi.fn(),
     get_signer_id: vi.fn(),
     remove_signer: vi.fn(),
   };
@@ -115,4 +116,60 @@ describe("SignerManager", () => {
     expect(result).toEqual({ result: null });
   });
 
+  it("adds a batch of signers via batch_add_signer", async () => {
+    const deps = makeDeps();
+    deps.wallet.batch_add_signer.mockResolvedValue({ result: null });
+    const manager = new SignerManager({
+      ...deps,
+      createPasskey: vi.fn(),
+      webauthnVerifierAddress: "CCAAAAA",
+    });
+    const signers = [makeDelegatedSigner(1), makeDelegatedSigner(2)];
+
+    await manager.addBatch(4, signers);
+
+    expect(deps.wallet.batch_add_signer).toHaveBeenCalledWith({
+      context_rule_id: 4,
+      signers,
+    });
+  });
+
+  it("rejects a batch that would exceed MAX_SIGNERS before submitting", async () => {
+    const deps = makeDeps();
+    const manager = new SignerManager({
+      ...deps,
+      createPasskey: vi.fn(),
+      webauthnVerifierAddress: "CCAAAAA",
+    });
+    const signers = Array.from({ length: 16 }, (_, i) => makeDelegatedSigner(i));
+
+    await expect(manager.addBatch(4, signers)).rejects.toThrow();
+    expect(deps.wallet.batch_add_signer).not.toHaveBeenCalled();
+  });
+
+  it("resolves a signer id via idOf", async () => {
+    const deps = makeDeps();
+    const signer = makeDelegatedSigner(9);
+    deps.wallet.get_signer_id.mockResolvedValue({ result: 12 });
+    const manager = new SignerManager({
+      ...deps,
+      createPasskey: vi.fn(),
+      webauthnVerifierAddress: "CCAAAAA",
+    });
+
+    await expect(manager.idOf(signer)).resolves.toBe(12);
+    expect(deps.wallet.get_signer_id).toHaveBeenCalledWith({ signer });
+  });
+
+  it("throws SignerNotFoundError from idOf when unregistered", async () => {
+    const deps = makeDeps();
+    deps.wallet.get_signer_id.mockResolvedValue({ result: null });
+    const manager = new SignerManager({
+      ...deps,
+      createPasskey: vi.fn(),
+      webauthnVerifierAddress: "CCAAAAA",
+    });
+
+    await expect(manager.idOf(makeDelegatedSigner(1))).rejects.toThrow();
+  });
 });

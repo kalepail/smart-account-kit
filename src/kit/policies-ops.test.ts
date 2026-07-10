@@ -8,7 +8,7 @@ import {
   createWebAuthnSigner,
   createWeightedThresholdParams,
 } from "../builders";
-import { convertPolicyParams } from "./policies-ops";
+import { buildConstructorPolicies, convertPolicyParams } from "./policies-ops";
 import { ValidationError } from "../errors";
 
 function makeClient() {
@@ -90,5 +90,45 @@ describe("convertPolicyParams", () => {
     expect(() =>
       convertPolicyParams(client, "threshold", { not_a_threshold: "nope" })
     ).toThrow(ValidationError);
+  });
+});
+
+describe("buildConstructorPolicies", () => {
+  const POLICY_A = "CB2WQXF2XXDGUV2CTVQ23RLN3ESI3IY5KKX3KVXWBNRTTWDHZM76NVKJ";
+  const POLICY_B = "CBBZ2XP4LBDEO2EELTZKJSPQZDREFKCULL6CKIUQO53S42RZABOYQUK3";
+
+  it("converts known policy types into a Map<Address, ScVal>", () => {
+    const map = buildConstructorPolicies([
+      { address: POLICY_A, type: "threshold", installParams: createThresholdParams(1) },
+      {
+        address: POLICY_B,
+        type: "spending_limit",
+        installParams: createSpendingLimitParams(1_000_000n, 100),
+      },
+    ]);
+
+    expect(map.size).toBe(2);
+    expect(map.get(POLICY_A)).toBeInstanceOf(xdr.ScVal);
+    expect(map.get(POLICY_B)).toBeInstanceOf(xdr.ScVal);
+  });
+
+  it("passes through an xdr.ScVal for custom policies", () => {
+    const custom = xdr.ScVal.scvVoid();
+    const map = buildConstructorPolicies([
+      { address: POLICY_A, type: "custom", installParams: custom },
+    ]);
+    expect(map.get(POLICY_A)).toBe(custom);
+  });
+
+  it("throws for a custom policy whose installParams is not an ScVal", () => {
+    expect(() =>
+      buildConstructorPolicies([
+        { address: POLICY_A, type: "custom", installParams: { foo: 1 } },
+      ])
+    ).toThrow(ValidationError);
+  });
+
+  it("returns an empty map for no policies", () => {
+    expect(buildConstructorPolicies([]).size).toBe(0);
   });
 });

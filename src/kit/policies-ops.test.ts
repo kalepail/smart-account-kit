@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { xdr } from "@stellar/stellar-sdk";
+import { scValToNative, xdr } from "@stellar/stellar-sdk";
 import { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import {
   createDefaultContext,
@@ -130,5 +130,36 @@ describe("buildConstructorPolicies", () => {
 
   it("returns an empty map for no policies", () => {
     expect(buildConstructorPolicies([]).size).toBe(0);
+  });
+});
+
+describe("convertPolicyParams encoding (no embedded spec blobs)", () => {
+  it("encodes threshold params to the pinned ScVal (byte-identical to the contract spec)", () => {
+    const scv = convertPolicyParams(undefined, "threshold", createThresholdParams(3));
+    expect(scv.toXDR("base64")).toBe(
+      "AAAAEQAAAAEAAAABAAAADwAAAAl0aHJlc2hvbGQAAAAAAAADAAAAAw=="
+    );
+  });
+
+  it("encodes spending-limit params to the pinned ScVal", () => {
+    const scv = convertPolicyParams(
+      undefined,
+      "spending_limit",
+      createSpendingLimitParams(1_000_000n, 100)
+    );
+    expect(scv.toXDR("base64")).toBe(
+      "AAAAEQAAAAEAAAACAAAADwAAAA5wZXJpb2RfbGVkZ2VycwAAAAAAAwAAAGQAAAAPAAAADnNwZW5kaW5nX2xpbWl0AAAAAAAKAAAAAAAAAAAAAAAAAA9CQA=="
+    );
+  });
+
+  it("round-trips weighted params through scValToNative", () => {
+    const signer = makePasskeySigner();
+    const scv = convertPolicyParams(
+      undefined,
+      "weighted_threshold",
+      createWeightedThresholdParams(1, new Map([[signer, 1]]))
+    );
+    const native = scValToNative(scv);
+    expect(native.threshold).toBe(1);
   });
 });

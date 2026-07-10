@@ -181,6 +181,14 @@ export {
 export { Ed25519Signer, computeEntryAuthDigest } from "./signers";
 export type { AuthDigestSigner } from "./signers";
 
+// Typed policy clients
+export {
+  SimpleThresholdPolicyClient,
+  WeightedThresholdPolicyClient,
+  SpendingLimitPolicyClient,
+} from "./policy-clients";
+export type { PolicyClientDeps } from "./policy-clients";
+
 // Event emitter
 export { SmartAccountEventEmitter } from "./events";
 export type {

@@ -54,6 +54,15 @@ import {
 } from "./errors";
 import { failedTransaction } from "./contract-errors";
 
+// Typed policy clients
+import {
+  SimpleThresholdPolicyClient,
+  WeightedThresholdPolicyClient,
+  SpendingLimitPolicyClient,
+  CONTEXT_RULE_SPEC_TYPE,
+  type PolicyClientDeps,
+} from "./policy-clients";
+
 // Utility functions
 import { deriveContractAddress } from "./utils";
 
@@ -1224,6 +1233,47 @@ export class SmartAccountKit {
       );
     }
     return wallet.upgrade({ new_wasm_hash: wasmHash, operator: contractId });
+  }
+
+  private policyClientDeps(): PolicyClientDeps {
+    return {
+      rpc: this.rpc,
+      networkPassphrase: this.networkPassphrase,
+      timeoutInSeconds: this.timeoutInSeconds,
+      getSmartAccount: () => this.requireWallet().contractId,
+      encodeContextRule: (rule) =>
+        this.requireWallet().wallet.spec.nativeToScVal(rule, CONTEXT_RULE_SPEC_TYPE),
+      execute: (target, targetFn, targetArgs) =>
+        this.execute(target, targetFn, targetArgs),
+    };
+  }
+
+  /**
+   * Typed clients for the three example policies. Getters read via simulation;
+   * setters return an AssembledTransaction routed through the smart account.
+   *
+   * @example
+   * ```typescript
+   * const client = kit.policyClients.threshold(policyAddress);
+   * const current = await client.getThreshold(ruleId);
+   * const { result: rule } = await kit.rules.get(ruleId);
+   * const tx = await client.setThreshold(3, rule);
+   * await kit.signAndSubmit(tx);
+   * ```
+   */
+  get policyClients() {
+    const deps = () => this.policyClientDeps();
+    return {
+      /** Simple threshold policy client. */
+      threshold: (policyAddress: string) =>
+        new SimpleThresholdPolicyClient(policyAddress, deps()),
+      /** Weighted threshold policy client. */
+      weighted: (policyAddress: string) =>
+        new WeightedThresholdPolicyClient(policyAddress, deps()),
+      /** Spending limit policy client. */
+      spendingLimit: (policyAddress: string) =>
+        new SpendingLimitPolicyClient(policyAddress, deps()),
+    };
   }
 
   /**

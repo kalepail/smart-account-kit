@@ -1,58 +1,101 @@
 import { Address, xdr } from "@stellar/stellar-sdk";
-import { Spec as ContractSpec } from "@stellar/stellar-sdk/contract";
-import type { Client as SmartAccountClient } from "smart-account-kit-bindings";
+import type { Client as SmartAccountClient, Signer as ContractSigner } from "smart-account-kit-bindings";
 import { SmartAccountErrorCode, ValidationError } from "../errors";
 import type { PolicyConfig } from "../types";
+import type {
+  SimpleThresholdAccountParams,
+  SpendingLimitAccountParams,
+  WeightedThresholdAccountParams,
+} from "../contract-types";
+import { signerToScVal } from "./auth-payload";
+import { buildI128ScVal } from "./tx-ops";
 
-const POLICY_UDT_SPECS = {
-  threshold: {
-    udtName: "SimpleThresholdAccountParams",
-    spec: new ContractSpec([
-      "AAAAAQAAADhJbnN0YWxsYXRpb24gcGFyYW1ldGVycyBmb3IgdGhlIHNpbXBsZSB0aHJlc2hvbGQgcG9saWN5LgAAAAAAAAAcU2ltcGxlVGhyZXNob2xkQWNjb3VudFBhcmFtcwAAAAEAAAA5VGhlIG1pbmltdW0gbnVtYmVyIG9mIHNpZ25lcnMgcmVxdWlyZWQgZm9yIGF1dGhvcml6YXRpb24uAAAAAAAACXRocmVzaG9sZAAAAAAAAAQ=",
-    ]),
-  },
-  spending_limit: {
-    udtName: "SpendingLimitAccountParams",
-    spec: new ContractSpec([
-      "AAAAAQAAADZJbnN0YWxsYXRpb24gcGFyYW1ldGVycyBmb3IgdGhlIHNwZW5kaW5nIGxpbWl0IHBvbGljeS4AAAAAAAAAAAAaU3BlbmRpbmdMaW1pdEFjY291bnRQYXJhbXMAAAAAAAIAAAA8VGhlIHBlcmlvZCBpbiBsZWRnZXJzIG92ZXIgd2hpY2ggdGhlIHNwZW5kaW5nIGxpbWl0IGFwcGxpZXMuAAAADnBlcmlvZF9sZWRnZXJzAAAAAAAEAAAATlRoZSBtYXhpbXVtIGFtb3VudCB0aGF0IGNhbiBiZSBzcGVudCB3aXRoaW4gdGhlIHNwZWNpZmllZCBwZXJpb2QgKGluCnN0cm9vcHMpLgAAAAAADnNwZW5kaW5nX2xpbWl0AAAAAAAL",
-    ]),
-  },
-  weighted_threshold: {
-    udtName: "WeightedThresholdAccountParams",
-    spec: new ContractSpec([
-      "AAAAAgAAAEJSZXByZXNlbnRzIGRpZmZlcmVudCB0eXBlcyBvZiBzaWduZXJzIGluIHRoZSBzbWFydCBhY2NvdW50IHN5c3RlbS4AAAAAAAAAAAAGU2lnbmVyAAAAAAACAAAAAQAAAD1BIGRlbGVnYXRlZCBzaWduZXIgdGhhdCB1c2VzIGJ1aWx0LWluIHNpZ25hdHVyZSB2ZXJpZmljYXRpb24uAAAAAAAACURlbGVnYXRlZAAAAAAAAAEAAAATAAAAAQAAAHJBbiBleHRlcm5hbCBzaWduZXIgd2l0aCBjdXN0b20gdmVyaWZpY2F0aW9uIGxvZ2ljLgpDb250YWlucyB0aGUgdmVyaWZpZXIgY29udHJhY3QgYWRkcmVzcyBhbmQgdGhlIHB1YmxpYyBrZXkgZGF0YS4AAAAAAAhFeHRlcm5hbAAAAAIAAAATAAAADg==",
-      "AAAAAQAAADpJbnN0YWxsYXRpb24gcGFyYW1ldGVycyBmb3IgdGhlIHdlaWdodGVkIHRocmVzaG9sZCBwb2xpY3kuAAAAAAAAAAAAHldlaWdodGVkVGhyZXNob2xkQWNjb3VudFBhcmFtcwAAAAAAAgAAAC9NYXBwaW5nIG9mIHNpZ25lcnMgdG8gdGhlaXIgcmVzcGVjdGl2ZSB3ZWlnaHRzLgAAAAAOc2lnbmVyX3dlaWdodHMAAAAAA+wAAAfQAAAABlNpZ25lcgAAAAAABAAAADRUaGUgbWluaW11bSB0b3RhbCB3ZWlnaHQgcmVxdWlyZWQgZm9yIGF1dGhvcml6YXRpb24uAAAACXRocmVzaG9sZAAAAAAAAAQ=",
-    ]),
-  },
-} as const;
+function symbolEntry(key: string, val: xdr.ScVal): xdr.ScMapEntry {
+  return new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol(key), val });
+}
 
+function requireU32(value: unknown, field: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 0xffffffff) {
+    throw new Error(`${field} must be a u32`);
+  }
+  return value;
+}
+
+function requireI128(value: unknown, field: string): bigint {
+  if (typeof value !== "bigint" && typeof value !== "number") {
+    throw new Error(`${field} must be a bigint or number`);
+  }
+  return BigInt(value);
+}
+
+function encodeThresholdParams(params: unknown): xdr.ScVal {
+  const { threshold } = params as SimpleThresholdAccountParams;
+  return xdr.ScVal.scvMap([
+    symbolEntry("threshold", xdr.ScVal.scvU32(requireU32(threshold, "threshold"))),
+  ]);
+}
+
+function encodeSpendingLimitParams(params: unknown): xdr.ScVal {
+  const { period_ledgers, spending_limit } = params as SpendingLimitAccountParams;
+  // Struct field order (period_ledgers < spending_limit) is the canonical map order.
+  return xdr.ScVal.scvMap([
+    symbolEntry("period_ledgers", xdr.ScVal.scvU32(requireU32(period_ledgers, "period_ledgers"))),
+    symbolEntry("spending_limit", buildI128ScVal(requireI128(spending_limit, "spending_limit"))),
+  ]);
+}
+
+function encodeWeightedThresholdParams(params: unknown): xdr.ScVal {
+  const { signer_weights, threshold } = params as WeightedThresholdAccountParams;
+  if (!(signer_weights instanceof Map)) {
+    throw new Error("signer_weights must be a Map<Signer, number>");
+  }
+  const weightEntries: xdr.ScMapEntry[] = [];
+  for (const [signer, weight] of signer_weights) {
+    weightEntries.push(
+      new xdr.ScMapEntry({
+        key: signerToScVal(signer as ContractSigner),
+        val: xdr.ScVal.scvU32(requireU32(weight, "signer weight")),
+      })
+    );
+  }
+  // Signer (vector) keys sort by their canonical XDR encoding.
+  weightEntries.sort((a, b) => a.key().toXDR("hex").localeCompare(b.key().toXDR("hex")));
+  return xdr.ScVal.scvMap([
+    symbolEntry("signer_weights", xdr.ScVal.scvMap(weightEntries)),
+    symbolEntry("threshold", xdr.ScVal.scvU32(requireU32(threshold, "threshold"))),
+  ]);
+}
+
+const POLICY_PARAM_ENCODERS: Record<
+  "threshold" | "spending_limit" | "weighted_threshold",
+  (params: unknown) => xdr.ScVal
+> = {
+  threshold: encodeThresholdParams,
+  spending_limit: encodeSpendingLimitParams,
+  weighted_threshold: encodeWeightedThresholdParams,
+};
+
+/**
+ * Convert policy install params into the ScVal the contract expects.
+ *
+ * The three example policies' param structs are encoded directly (no embedded
+ * base64 contract spec blobs). The output is byte-identical to the generated
+ * spec's encoding — see policies-ops.test.ts.
+ *
+ * @throws {ValidationError} If the params don't match the expected shape
+ */
 export function convertPolicyParams(
   _wallet: SmartAccountClient | undefined,
   policyType: "threshold" | "spending_limit" | "weighted_threshold",
   params: unknown
 ): xdr.ScVal {
-  const policySpec = POLICY_UDT_SPECS[policyType];
-
   try {
-    const udtType = xdr.ScSpecTypeDef.scSpecTypeUdt(
-      new xdr.ScSpecTypeUdt({ name: policySpec.udtName })
-    );
-    const scVal = policySpec.spec.nativeToScVal(params, udtType);
-    if (scVal.switch().name === "scvMap" && scVal.map()) {
-      scVal.map()?.sort((a, b) => {
-        const aKey =
-          a.key().switch().name === "scvSymbol" ? a.key().sym().toString() : a.key().toXDR("hex");
-        const bKey =
-          b.key().switch().name === "scvSymbol" ? b.key().sym().toString() : b.key().toXDR("hex");
-        return aKey.localeCompare(bKey);
-      });
-    }
-    return scVal;
+    return POLICY_PARAM_ENCODERS[policyType](params);
   } catch (error) {
     // Never silently fall back to unconverted params: shipping the wrong ScVal
     // shape on-chain is a correctness hazard. Surface a typed error instead.
     throw new ValidationError(
-      `Failed to convert ${policyType} policy parameters into a ${policySpec.udtName} ScVal. ` +
+      `Failed to convert ${policyType} policy parameters into an ScVal. ` +
         `Check that the params match the expected shape.`,
       SmartAccountErrorCode.INVALID_INPUT,
       {

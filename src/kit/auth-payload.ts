@@ -318,7 +318,7 @@ export function upsertAuthPayloadSigner(
   payload.signers.set(signer, signatureBytes);
 }
 
-function signerToScVal(signer: ContractSigner): xdr.ScVal {
+export function signerToScVal(signer: ContractSigner): xdr.ScVal {
   if (signer.tag === "Delegated") {
     return xdr.ScVal.scvVec([
       xdr.ScVal.scvSymbol("Delegated"),
@@ -333,7 +333,7 @@ function signerToScVal(signer: ContractSigner): xdr.ScVal {
   ]);
 }
 
-function parseSignerScVal(value: xdr.ScVal): ContractSigner {
+export function parseSignerScVal(value: xdr.ScVal): ContractSigner {
   if (value.switch().name !== "scvVec") {
     throw new Error("Signer key is not encoded as a vector");
   }

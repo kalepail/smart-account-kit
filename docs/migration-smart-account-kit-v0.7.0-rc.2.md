@@ -1,8 +1,10 @@
 # Smart Account Kit Migration to `stellar-contracts` v0.7.0-rc.2
 
-## Scope
+> **Historical migration record.** The hashes and addresses below describe the v0.7.0-rc.2 testnet migration and are not the current deployment defaults. For the current Protocol 27 testnet and mainnet artifacts, use [`deployments-protocol-27-2026-07-09.md`](deployments-protocol-27-2026-07-09.md).
 
-This repo now targets the regenerated smart-account contract surface from the latest uploaded testnet WASM set:
+## Historical Scope
+
+At the time of this migration, the repository targeted the regenerated smart-account contract surface from the following uploaded testnet WASM set:
 
 - Smart account WASM hash: `3e51f5b222dec74650f0b33367acb42a41ce497f72639230463070e666abba2c`
 - WebAuthn verifier WASM hash: `d84af9e7c31afece287fee8276ef7d6a64b236d596c043594c003e0f4032d1c7`
@@ -64,8 +66,8 @@ This is a clean-cut migration. The SDK no longer preserves the legacy `Signature
   - direct `getAll(...)` array return
   - ID-backed signer/policy removal
 
-## Current State
+## State at Migration Completion
 
-The migration is complete for the current repo state. The SDK is aligned to the regenerated contract surface, the signing flow uses `AuthPayload`, indexer-backed rule discovery is documented as a requirement, the remaining raw contract methods are intentionally left on `kit.wallet` rather than wrapped, and the root package continues to export the helper utilities that the demo and downstream consumers rely on.
+At migration completion, the SDK was aligned to that regenerated contract surface, the signing flow used `AuthPayload`, and indexer-backed rule discovery supplied active rule IDs. The current SDK additionally has a bounded on-chain fallback for fresh low-numbered rules. The remaining raw contract methods are intentionally left on `kit.wallet` rather than wrapped, and the root package continues to export the helper utilities that the demo and downstream consumers rely on.
 
 Any future cleanup should be treated as normal product work rather than migration debt.

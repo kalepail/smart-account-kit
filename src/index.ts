@@ -2,7 +2,7 @@
  * Smart Account Kit
  *
  * TypeScript SDK for deploying and managing OpenZeppelin Smart Account contracts
- * on Stellar/Soroban with WebAuthn passkey authentication.
+ * on Stellar with WebAuthn passkey authentication.
  *
  * @packageDocumentation
  */

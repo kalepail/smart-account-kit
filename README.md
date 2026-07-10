@@ -1,6 +1,6 @@
 # Smart Account Kit
 
-TypeScript SDK for deploying and managing OpenZeppelin Smart Account contracts on Stellar/Soroban with WebAuthn passkey authentication.
+TypeScript SDK for deploying and managing OpenZeppelin smart account contracts on Stellar with WebAuthn passkey authentication.
 
 ## Features
 
@@ -47,7 +47,7 @@ const { contractId, credentialId } = await kit.createWallet('My App', 'user@exam
 await kit.connectWallet({ prompt: true });
 
 // Sign and submit a transaction
-const result = await kit.signAndSubmit(transaction);
+const submission = await kit.signAndSubmit(transaction);
 ```
 
 ## Configuration
@@ -60,10 +60,18 @@ const result = await kit.signAndSubmit(transaction);
 | `networkPassphrase` | string | Yes | Network passphrase |
 | `accountWasmHash` | string | Yes | Smart account WASM hash |
 | `webauthnVerifierAddress` | string | Yes | WebAuthn verifier contract address |
+| `defaultPolicies` | `PolicyConfig[]` | No | Policies installed on newly created wallets |
 | `timeoutInSeconds` | number | No | Transaction timeout (default: 30) |
+| `signatureExpirationLedgers` | number | No | Signature lifetime from the current ledger (default: 720) |
 | `storage` | StorageAdapter | No | Credential storage adapter |
 | `rpId` | string | No | WebAuthn relying party ID |
 | `rpName` | string | No | WebAuthn relying party name |
+| `webAuthn` | object | No | Custom WebAuthn implementation, primarily for testing |
+| `sessionExpiryMs` | number | No | Stored-session lifetime (default: 7 days) |
+| `externalWallet` | `ExternalWalletAdapter` | No | Wallet adapter for delegated/multi-signer flows |
+| `indexerUrl` | `string \| false` | No | Custom indexer base URL, or `false` to disable indexing |
+| `indexerAuthToken` | string | No | API key or JWT sent as `Authorization: Bearer <token>` |
+| `contextRuleProbe` | object | No | Bounded on-chain fallback for active rule discovery |
 | `relayerUrl` | string | No | Relayer proxy URL for fee sponsoring |
 
 ### Fee Sponsoring
@@ -233,11 +241,11 @@ Manage context rules.
 |--------|-------------|
 | `add(contextType, name, signers, policies)` | Create rule |
 | `get(contextRuleId)` | Get single rule |
-| `list()` | List all active rules via indexer-backed rule discovery |
-| `getAll(contextRuleType)` | Get active rules of a type via indexer-backed rule discovery |
+| `list()` | List active rules using indexer discovery plus a bounded on-chain fallback |
+| `getAll(contextRuleType)` | Get active rules of a type using the same discovery path |
 | `remove(contextRuleId)` | Delete rule |
 | `updateName(contextRuleId, name)` | Update rule name |
-| `updateExpiration(contextRuleId, ledger)` | Update expiration ledger |
+| `updateExpiration(contextRuleId, ledger?)` | Set or clear the expiration ledger |
 
 ```typescript
 // Add a new context rule
@@ -246,12 +254,12 @@ await kit.rules.add(contextType, 'Rule Name', signers, policies);
 // Read a specific rule directly from chain
 const rule = (await kit.rules.get(0)).result;
 
-// Active rule discovery requires indexer access
+// Active rule discovery prefers the indexer and probes low-numbered IDs on-chain
 const rules = await kit.rules.list();
 const allRules = await kit.rules.getAll(contextType);
 ```
 
-`kit.rules.get()` reads a specific rule directly from the contract. `kit.rules.list()` and `kit.rules.getAll()` are indexer-backed by design because the contract exposes `get_context_rule(id)` and `get_context_rules_count()`, but not an iterator over active rule IDs after deletions.
+`kit.rules.get()` reads a specific rule directly from the contract. `kit.rules.list()` and `kit.rules.getAll()` prefer indexer-provided active IDs, then probe IDs `0` through `8` on-chain by default and stop after three consecutive misses. Configure that bounded fallback with `contextRuleProbe`, or disable it with `{ enabled: false }`. Because the contract exposes individual lookups but no iterator over active IDs after deletions, an indexer remains the reliable source for sparse or higher-numbered rules.
 
 ```typescript
 // Update rules
@@ -320,13 +328,13 @@ Multi-signer transaction flows.
 | Method | Description |
 |--------|-------------|
 | `transfer(tokenContract, recipient, amount, selectedSigners)` | Multi-sig transfer |
-| `getAvailableSigners()` | Get all signers from active rules via indexer-backed rule discovery |
+| `getAvailableSigners()` | Get all signers from rules found by the configured discovery path |
 | `needsMultiSigner(signers)` | Check if multi-sig is needed |
 | `buildSelectedSigners(signers, activeCredentialId?)` | Build signer selection |
 | `operation(assembledTx, selectedSigners, options?)` | Execute generic multi-sig operation |
 
 ```typescript
-// Get all available signers (requires indexer access)
+// Get all available signers (indexer preferred, bounded on-chain fallback)
 const signers = await kit.multiSigners.getAvailableSigners();
 
 // Check if multi-sig is needed
@@ -338,13 +346,13 @@ if (kit.multiSigners.needsMultiSigner(signers)) {
   const result = await kit.multiSigners.transfer(
     'CTOKEN...',
     'GRECIPIENT...',
-    '100',
+    100,
     selected
   );
 }
 ```
 
-Multi-signer guidance: use `buildSelectedSigners()` to assemble the signer set, then pass `resolveContextRuleIds` when a transaction can match more than one rule or when you want to pin the auth context explicitly. `getAvailableSigners()` is indexer-backed for the same reason as `kit.rules.list()`.
+Multi-signer guidance: use `buildSelectedSigners()` to assemble the signer set, then pass `resolveContextRuleIds` when a transaction can match more than one rule or when you want to pin the auth context explicitly. `getAvailableSigners()` uses the same indexer-plus-probe discovery path as `kit.rules.list()`.
 
 ---
 
@@ -361,24 +369,22 @@ Manage G-address (delegated) signers.
 | Method | Description |
 |--------|-------------|
 | `addFromSecret(secretKey)` | Add keypair signer (memory only) |
-| `addFromWallet(adapter)` | Connect external wallet |
+| `addFromWallet()` | Connect through the adapter configured on `SmartAccountKit` |
 | `restoreConnections()` | Restore persisted wallet connections |
 | `canSignFor(address)` | Check if can sign for address |
-| `signAuthEntry(address, authEntry)` | Sign auth entry for address |
 | `getAll()` | List all external signers |
 | `remove(address)` | Remove signer |
+| `removeAll()` | Disconnect and remove all external signers |
 
 ```typescript
 // Add a keypair signer
 kit.externalSigners.addFromSecret('SXXX...');
 
 // Connect external wallet
-await kit.externalSigners.addFromWallet(walletAdapter);
+await kit.externalSigners.addFromWallet();
 
-// Check signing capability
-if (kit.externalSigners.canSignFor('GABC...')) {
-  const signedEntry = await kit.externalSigners.signAuthEntry('GABC...', authEntry);
-}
+// Check signing capability; multi-signer operations invoke the signer internally
+const available = kit.externalSigners.canSignFor('GABC...');
 ```
 
 ---
@@ -456,7 +462,7 @@ import {
 } from 'smart-account-kit';
 
 // Create a delegated signer
-const signer = createDelegatedSigner('GABC...', 'ed25519-verifier-address');
+const signer = createDelegatedSigner('GABC...');
 
 // Create a WebAuthn signer
 const passkeySigner = createWebAuthnSigner(verifierAddress, publicKey, credentialId);
@@ -596,19 +602,26 @@ kit.events.off('walletConnected', handler);
 ### Wallet Adapters
 
 ```typescript
-import { StellarWalletsKitAdapter } from 'smart-account-kit';
+import { SmartAccountKit, StellarWalletsKitAdapter } from 'smart-account-kit';
+import { Networks } from '@stellar/stellar-sdk';
 import type { StellarWalletsKitAdapterConfig } from 'smart-account-kit';
 
 // Create adapter for StellarWalletsKit integration
 const adapter = new StellarWalletsKitAdapter({
-  kit: stellarWalletsKit,
+  network: Networks.TESTNET,
   onConnectionChange: (connected) => {
     console.log('Wallet connection changed:', connected);
   },
 });
+await adapter.init();
 
-// Use with external signers
-await kit.externalSigners.addFromWallet(adapter);
+const kit = new SmartAccountKit({
+  /* required config */
+  externalWallet: adapter,
+});
+
+// Connect through the configured adapter
+await kit.externalSigners.addFromWallet();
 ```
 
 ---
@@ -676,6 +689,13 @@ if (result.success) {
 
 The SDK includes an indexer client for reverse lookups from signer credentials to smart account contracts.
 
+The built-in testnet and mainnet defaults use the SDF ecosystem Cloudflare Workers. Mercury exposes the same REST surface and can be selected by setting `indexerUrl`:
+
+| Network | Built-in default | Mercury-compatible endpoint |
+|---------|------------------|-----------------------------|
+| Testnet | `https://smart-account-indexer.sdf-ecosystem.workers.dev` | `https://testnet.mercurydata.app/rest/smart-account-indexer` |
+| Mainnet | `https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev` | `https://mainnet.mercurydata.app/rest/smart-account-indexer` |
+
 ```typescript
 import {
   IndexerClient,
@@ -708,10 +728,10 @@ const kit = new SmartAccountKit({
 });
 
 // Discover contracts by credential ID
-const contracts = await kit.discoverContractsByCredential(credentialId);
+const credentialContracts = await kit.discoverContractsByCredential(credentialId);
 
 // Discover contracts by address
-const contracts = await kit.discoverContractsByAddress('GABC...');
+const addressContracts = await kit.discoverContractsByAddress('GABC...');
 
 // Get contract details
 const details = await kit.getContractDetailsFromIndexer('CABC...');
@@ -723,6 +743,8 @@ if (kit.indexer) {
 }
 ```
 
+`indexerAuthToken` and `authToken` are sent on every indexer request as `Authorization: Bearer <token>`. Browser bundles expose their environment variables to users, so only embed public or tightly scoped tokens there; keep privileged and catch-up/admin credentials server-side.
+
 #### Using IndexerClient Directly
 
 ```typescript
@@ -731,7 +753,7 @@ const indexer = IndexerClient.forNetwork('Test SDF Network ; September 2015');
 const mainnetIndexer = IndexerClient.forNetwork('Public Global Stellar Network ; September 2015');
 
 // Or with a custom URL
-const indexer = new IndexerClient({
+const customIndexer = new IndexerClient({
   baseUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
   timeout: 10000,
   // Optional API key or JWT; sent as Authorization: Bearer <token>
@@ -739,13 +761,13 @@ const indexer = new IndexerClient({
 });
 
 // Lookup by credential ID
-const { contracts } = await indexer.lookupByCredentialId(credentialIdHex);
+const { contracts } = await customIndexer.lookupByCredentialId(credentialIdHex);
 
 // Lookup by address
-const { contracts } = await indexer.lookupByAddress('GABC...');
+const { contracts: addressContracts } = await customIndexer.lookupByAddress('GABC...');
 
 // Get full contract details
-const details = await indexer.getContractDetails('CABC...');
+const details = await customIndexer.getContractDetails('CABC...');
 ```
 
 ---
@@ -760,9 +782,9 @@ import type { AssembledTransaction } from 'smart-account-kit';
 
 ### Prerequisites
 
-- Node.js >= 20
-- pnpm (`npm install -g pnpm`)
-- Stellar CLI ([installation guide](https://developers.stellar.org/docs/tools/stellar-cli))
+- Node.js >= 22
+- pnpm >= 10 (`corepack enable`)
+- Stellar CLI ([installation guide](https://developers.stellar.org/docs/tools/cli/install-cli))
 
 ### Setup
 
@@ -778,13 +800,13 @@ cp demo/.env.example demo/.env
 # Install dependencies
 pnpm install
 
-# Build everything (generates bindings from network, builds packages)
-pnpm run build:all
+# Build the checked-in bindings and SDK
+pnpm build:all
 ```
 
 ### Environment Configuration
 
-The build script reads configuration from `demo/.env` to generate TypeScript bindings by fetching contract metadata from the Stellar network. The demo comes pre-configured with testnet contract addresses.
+`pnpm build:all` builds the checked-in bindings and SDK; it does not regenerate bindings. Run `pnpm build:bindings` explicitly when the smart-account contract interface changes. That command reads `demo/.env` and fetches contract metadata from the configured Stellar network, or accepts `ACCOUNT_WASM=/path/to/optimized-contract.wasm` to generate from a local artifact built with `stellar contract build --optimize=true`.
 
 The optimized Protocol 27 testnet/mainnet artifact hashes, deployed contract
 IDs, and transaction provenance are recorded in
@@ -801,6 +823,8 @@ Key variables in `demo/.env`:
 - `VITE_THRESHOLD_POLICY_ADDRESS` - Deployed threshold policy contract
 - `VITE_SPENDING_LIMIT_POLICY_ADDRESS` - Deployed spending-limit policy contract
 - `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` - Optional deployed weighted-threshold policy contract
+- `VITE_INDEXER_URL` - Optional wire-compatible indexer endpoint override
+- `VITE_INDEXER_AUTH_TOKEN` - Optional public/scoped API key or JWT for the indexer
 - `VITE_RELAYER_URL` - Optional relayer proxy URL for fee-sponsored transactions
 
 ### Getting Contract WASM Hashes
@@ -822,28 +846,17 @@ Current checked-in testnet defaults live in `demo/.env.example`.
 
 | Command | Description |
 |---------|-------------|
-| `pnpm run build` | Build SDK only (requires bindings already generated) |
-| `pnpm run build:all` | Full build: generate bindings from network + build SDK |
-| `pnpm run build:demo` | Build SDK and demo application |
-| `pnpm run build:watch` | Watch mode for SDK development |
-| `pnpm run test` | Run tests |
-| `pnpm run clean` | Remove build artifacts |
+| `pnpm build` | Build the checked-in bindings, then the SDK |
+| `pnpm build:all` | Run the repository build wrapper (same generated-artifact assumptions as `pnpm build`) |
+| `pnpm build:bindings` | Regenerate and build bindings from `demo/.env` or `ACCOUNT_WASM` |
+| `pnpm build:demo` | Build the SDK and demo application |
+| `pnpm build:watch` | Watch mode for SDK development |
+| `pnpm test --run` | Run the test suite once |
+| `pnpm clean` | Remove build artifacts |
 
 ### Publishing
 
-```bash
-# Ensure you're logged in to npm
-npm login
-
-# Bump version (updates package.json)
-pnpm version patch  # or minor, major
-
-# Publish
-pnpm publish
-
-# Or publish with specific tag
-pnpm publish --tag beta
-```
+Publish `smart-account-kit-bindings` before `smart-account-kit`, because the SDK package resolves its workspace dependency to the published bindings version. The exact authenticated dry-run, publish, and verification commands are in [`docs/releasing.md`](docs/releasing.md).
 
 ## Related
 
@@ -853,4 +866,4 @@ pnpm publish --tag beta
 
 ## License
 
-MIT License - see LICENSE file for details.
+Apache License 2.0 - see [`LICENSE`](LICENSE) for details.

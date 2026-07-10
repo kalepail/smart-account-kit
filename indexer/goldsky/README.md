@@ -36,7 +36,7 @@ The SDK and handler depend on these events being present together. The rule view
 
 ### Prerequisites
 
-- [Goldsky CLI](https://docs.goldsky.com/get-started/cli)
+- [Goldsky CLI installation](https://docs.goldsky.com/installation)
 - Goldsky Turbo CLI extension (`goldsky turbo`)
 - Goldsky account with Stellar dataset access
 - PostgreSQL database

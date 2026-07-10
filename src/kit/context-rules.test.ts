@@ -136,10 +136,10 @@ describe("context-rules", () => {
     expect(rules.map((rule) => rule.id)).toEqual([7, 11]);
   });
 
-  it("refuses to list rules without an indexer-backed rule id source", async () => {
+  it("refuses to list rules without an indexer or enabled on-chain probe", async () => {
     const wallet = makeWallet({});
 
-    await expect(listContextRules(wallet)).rejects.toThrow(/requires the indexer/i);
+    await expect(listContextRules(wallet)).rejects.toThrow(/requires an indexer or an enabled on-chain probe/i);
   });
 
   it("probes low rule ids directly when enabled and the indexer has not caught up yet", async () => {

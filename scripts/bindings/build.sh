@@ -16,6 +16,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KIT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 BINDINGS_DIR="$KIT_DIR/packages/smart-account-kit-bindings"
+BINDINGS_README_TEMPLATE="$SCRIPT_DIR/README.template.md"
 DEMO_ENV="$KIT_DIR/demo/.env"
 EXISTING_BINDINGS_VERSION=$(node -p "require('$BINDINGS_DIR/package.json').version" 2>/dev/null || true)
 CURRENT_VERSION="${BINDINGS_VERSION:-$EXISTING_BINDINGS_VERSION}"
@@ -114,6 +115,10 @@ fi
 STELLAR_CMD+=(--output-dir "$BINDINGS_DIR" --overwrite)
 "${STELLAR_CMD[@]}"
 
+# Stellar CLI generates a generic README. Restore the repository-maintained
+# package guide so regeneration cannot reintroduce obsolete CLI/API examples.
+cp "$BINDINGS_README_TEMPLATE" "$BINDINGS_DIR/README.md"
+
 echo -e "${GREEN}Bindings generated${NC}"
 
 # Step 2: Patch package.json for npm
@@ -128,7 +133,7 @@ const fs = require('fs');
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
 const rootPkg = JSON.parse(fs.readFileSync('$KIT_DIR/package.json', 'utf8'));
 pkg.version = '$CURRENT_VERSION';
-pkg.description = 'TypeScript bindings for OpenZeppelin Smart Account contracts on Stellar/Soroban';
+pkg.description = 'TypeScript bindings for OpenZeppelin smart account contracts on Stellar';
 pkg.main = 'dist/index.js';
 pkg.module = 'dist/index.js';
 pkg.types = 'dist/index.d.ts';

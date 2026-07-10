@@ -155,17 +155,17 @@ export interface SmartAccountConfig {
    *
    * @example
    * ```typescript
-   * import { StellarWalletsKit } from '@creit-tech/stellar-wallets-kit';
+   * import { Networks } from '@stellar/stellar-sdk';
+   * import { StellarWalletsKitAdapter } from 'smart-account-kit';
+   *
+   * const externalWallet = new StellarWalletsKitAdapter({
+   *   network: Networks.TESTNET,
+   * });
+   * await externalWallet.init();
    *
    * const kit = new SmartAccountKit({
    *   // ... other config
-   *   externalWallet: {
-   *     connect: () => StellarWalletsKit.authModal(),
-   *     disconnect: () => StellarWalletsKit.disconnect(),
-   *     signAuthEntry: (xdr, opts) => StellarWalletsKit.signAuthEntry(xdr, opts),
-   *     getConnectedWallets: () => myConnectedWallets,
-   *     canSignFor: (addr) => myConnectedWallets.some(w => w.address === addr),
-   *   },
+   *   externalWallet,
    * });
    * ```
    */

@@ -1,6 +1,6 @@
 # Smart Account Kit Demo
 
-A basic Vite + React frontend application for testing the Smart Account Kit SDK with WebAuthn passkey authentication on Stellar/Soroban.
+A basic Vite + React frontend application for testing the Smart Account Kit SDK with WebAuthn passkey authentication on Stellar.
 
 ## Features
 
@@ -31,7 +31,7 @@ The demo does not pin a default smart-account contract ID. Smart accounts are de
 
 ### Uploaded WASM Hashes
 
-These are the latest uploaded testnet artifacts corresponding to the deployed contracts above:
+These are the current checked-in testnet artifacts corresponding to the deployed contracts above:
 
 | Contract | Uploaded WASM hash |
 |----------|--------------------|
@@ -56,7 +56,9 @@ Open `http://localhost:5173` in your browser.
 
 The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. For mainnet, start from `.env.mainnet.example`. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI, and leave `VITE_RELAYER_URL` blank if you do not want fee-sponsored submissions.
 
-The SDK now auto-configures the hosted indexer for both Stellar testnet and mainnet when you use a known network passphrase. This demo still ships with testnet defaults, so a mainnet run also needs mainnet RPC and contract env values.
+The SDK auto-configures its hosted indexer for Stellar testnet and mainnet when you use a known network passphrase. Set `VITE_INDEXER_URL` to use a wire-compatible provider such as Mercury, and set `VITE_INDEXER_AUTH_TOKEN` when that provider expects `Authorization: Bearer <token>`. Because Vite embeds `VITE_*` values in the browser bundle, only use public or tightly scoped tokens; privileged/admin credentials belong behind a server.
+
+This demo ships with testnet defaults, so a mainnet run also needs mainnet RPC and contract env values. Start from `.env.mainnet.example` to keep the network, WASM, verifier, policy, and indexer settings aligned.
 
 ## Agent-Browser Passkey Testing
 

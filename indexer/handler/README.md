@@ -4,7 +4,7 @@ Cloudflare Worker that serves REST API endpoints for querying indexed smart acco
 
 ## Overview
 
-This worker queries a PostgreSQL database populated by the Goldsky indexing pipeline. It enables reverse lookups from credential IDs and addresses to smart account contracts and provides the active-rule views the SDK uses for indexer-backed rule discovery.
+This worker queries a PostgreSQL database populated by the Goldsky indexing pipeline. It enables reverse lookups from credential IDs and addresses to smart account contracts and provides the active-rule views used by the SDK's primary discovery path.
 
 ## API Endpoints
 
@@ -41,8 +41,8 @@ wrangler secret put DATABASE_URL
 wrangler deploy
 
 # Deploy to production (mainnet)
-wrangler deploy --env production
 wrangler secret put DATABASE_URL --env production
+wrangler deploy --env production
 ```
 
 ### Database Setup
@@ -58,7 +58,7 @@ This creates:
 - `processed_policies` - View that parses policy data from raw events
 - `contract_summary` - Aggregated statistics per contract and active context-rule ids
 
-The SDK uses the contract-detail endpoint and summary view to resolve active rule IDs without relying on contract iteration after deletions.
+The SDK uses the contract-detail endpoint and summary view to resolve active rule IDs without relying on contract iteration after deletions. A bounded on-chain probe covers fresh low-numbered rules when the indexer is unavailable, but it is not a replacement for complete indexed state.
 Those views are intentionally the compatibility layer between Goldsky dataset evolution and the SDK's stable indexer API.
 
 ## Local Development

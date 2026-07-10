@@ -105,9 +105,11 @@ function hideStatus() {
 const truncateContractId = truncateAddress;
 
 function getAuthKit(): SmartAccountKit {
+  const indexerAuthToken = import.meta.env.VITE_INDEXER_AUTH_TOKEN || undefined;
   const configKey = [
     rpcUrlInput.value,
     indexerUrlInput.value,
+    indexerAuthToken,
     window.location.hostname,
   ].join("|");
 
@@ -128,6 +130,7 @@ function getAuthKit(): SmartAccountKit {
     rpId: window.location.hostname,
     rpName: "Smart Account Indexer Demo",
     indexerUrl: indexerUrlInput.value,
+    indexerAuthToken,
   });
   authKitConfigKey = configKey;
   return authKit;
@@ -274,13 +277,20 @@ function formatPolicyParamsFromRpc(params: any): string {
 // Indexer Client
 // ============================================================================
 
+function getIndexerHeaders(): HeadersInit | undefined {
+  const token = import.meta.env.VITE_INDEXER_AUTH_TOKEN?.trim();
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
+}
+
 async function lookupContractsByCredentialId(
   credentialId: string
 ): Promise<SmartAccountInfo[]> {
   const indexerUrl = indexerUrlInput.value;
   const normalizedKey = credentialId.toLowerCase().replace(/^0x/, "");
 
-  const response = await fetch(`${indexerUrl}/api/lookup/${normalizedKey}`);
+  const response = await fetch(`${indexerUrl}/api/lookup/${normalizedKey}`, {
+    headers: getIndexerHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(`Indexer lookup failed: ${response.statusText}`);
@@ -334,7 +344,9 @@ async function lookupContractsByAddress(
 ): Promise<SmartAccountInfo[]> {
   const indexerUrl = indexerUrlInput.value;
 
-  const response = await fetch(`${indexerUrl}/api/lookup/address/${signerAddress}`);
+  const response = await fetch(`${indexerUrl}/api/lookup/address/${signerAddress}`, {
+    headers: getIndexerHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(`Indexer lookup failed: ${response.statusText}`);
@@ -357,7 +369,9 @@ async function lookupContractsByAddress(
 async function getContractDetails(contractId: string): Promise<ContractDetails> {
   const indexerUrl = indexerUrlInput.value;
 
-  const response = await fetch(`${indexerUrl}/api/contract/${contractId}`);
+  const response = await fetch(`${indexerUrl}/api/contract/${contractId}`, {
+    headers: getIndexerHeaders(),
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch contract details: ${response.statusText}`);

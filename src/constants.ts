@@ -12,7 +12,7 @@
 export const WEBAUTHN_TIMEOUT_MS = 60000;
 
 // ============================================================================
-// Stellar/Soroban Configuration
+// Stellar smart contract configuration
 // ============================================================================
 
 /** Default base fee for Stellar transactions (in stroops) */

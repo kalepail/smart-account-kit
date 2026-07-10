@@ -26,6 +26,9 @@ const CONFIG = {
   webauthnVerifierAddress: import.meta.env.VITE_WEBAUTHN_VERIFIER_ADDRESS || "CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F",
   nativeTokenContract: import.meta.env.VITE_NATIVE_TOKEN_CONTRACT || "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
   ed25519VerifierAddress: import.meta.env.VITE_ED25519_VERIFIER_ADDRESS || "CAAVTMCBXEIBPR64EAASKFXERVPYFZA2JYP5A3BG6PESWEFUJX5IHKN4",
+  // Contract discovery (optional; known networks have built-in defaults)
+  indexerUrl: import.meta.env.VITE_INDEXER_URL || undefined,
+  indexerAuthToken: import.meta.env.VITE_INDEXER_AUTH_TOKEN || undefined,
   // Relayer fee sponsoring (optional)
   relayerUrl: import.meta.env.VITE_RELAYER_URL || "",
 };
@@ -302,6 +305,8 @@ function App() {
           storage,
           rpName: "Smart Account Kit Demo",
           externalWallet: walletAdapter,
+          indexerUrl: CONFIG.indexerUrl,
+          indexerAuthToken: CONFIG.indexerAuthToken,
           // Enable Relayer fee sponsoring if URL is configured
           relayerUrl: CONFIG.relayerUrl || undefined,
         });
@@ -727,7 +732,7 @@ function App() {
     <div className="container">
       <header>
         <h1>Smart Account Kit Demo</h1>
-        <h2>Test WebAuthn passkey wallets on Stellar/Soroban</h2>
+        <h2>Test WebAuthn passkey wallets on Stellar</h2>
       </header>
 
       {/* Configuration */}

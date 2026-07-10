@@ -270,7 +270,7 @@ export class RelayerClient {
    * The Relayer builds the transaction envelope using channel accounts and pays the fees.
    * Transactions are submitted in parallel using a pool of channel accounts.
    *
-   * @param func - Base64 encoded Soroban host function XDR
+   * @param func - Base64-encoded smart contract host-function XDR
    * @param auth - Array of base64 encoded authorization entry XDRs
    * @param options - Optional submission options
    * @returns The submission result

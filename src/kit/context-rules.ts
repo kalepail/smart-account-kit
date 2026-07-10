@@ -417,7 +417,7 @@ export async function listContextRules(
     }
 
     throw new Error(
-      "Listing active context rules requires the indexer because the contract does not expose an iterator for active rule IDs."
+      "Listing active context rules requires an indexer or an enabled on-chain probe that can discover a rule ID; the contract does not expose an iterator for active rule IDs."
     );
   }
 

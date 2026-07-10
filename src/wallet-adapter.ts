@@ -64,6 +64,8 @@ export interface StellarWalletsKitAdapterConfig {
  * const kit = new SmartAccountKit({
  *   rpcUrl: "https://soroban-testnet.stellar.org",
  *   networkPassphrase: Networks.TESTNET,
+ *   accountWasmHash: "...",
+ *   webauthnVerifierAddress: "C...",
  *   externalWallet: walletAdapter,
  * });
  *

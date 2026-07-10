@@ -1,10 +1,10 @@
 # Smart Account Indexer
 
-Indexes smart account signer events from Stellar to enable reverse lookups from passkey credentials to contract IDs and to support indexer-backed rule discovery for the SDK.
+Reference indexer stack for smart account events on Stellar. It enables reverse lookups from passkey credentials to contract IDs and supplies active rule IDs to the SDK's best-effort discovery flow.
 
 ## Overview
 
-When a user authenticates with a passkey, the indexer enables discovering all smart account contracts they have access to. The SDK also relies on this indexer surface for active context-rule discovery after removals. This is essential because:
+When a user authenticates with a passkey, an indexer can discover all smart account contracts they have access to. It is also the reliable source for active context-rule IDs after removals or when IDs become sparse. The SDK has a bounded low-ID on-chain fallback for fresh wallets and temporary indexer lag, but it cannot reconstruct arbitrary active IDs because:
 
 1. A single passkey can be a signer on multiple smart accounts
 2. Passkeys added as secondary signers don't have a deterministic contract address
@@ -16,6 +16,8 @@ When a user authenticates with a passkey, the indexer enables discovering all sm
 ```
 Stellar Network → Goldsky Pipeline → PostgreSQL → Cloudflare Worker API → SDK
 ```
+
+This directory implements the Goldsky/PostgreSQL/Cloudflare reference stack. The SDK only depends on the REST contract, so it can also point at a wire-compatible provider such as Mercury.
 
 ### Components
 
@@ -85,9 +87,10 @@ goldsky turbo apply ./pipeline-mainnet.yaml
 
 ## API Endpoints
 
-**Testnet URL**: `https://smart-account-indexer.sdf-ecosystem.workers.dev`
-
-**Mainnet URL**: `https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev`
+| Provider | Testnet | Mainnet |
+|----------|---------|---------|
+| Reference Cloudflare Workers (SDK defaults) | `https://smart-account-indexer.sdf-ecosystem.workers.dev` | `https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev` |
+| Mercury-compatible REST API | `https://testnet.mercurydata.app/rest/smart-account-indexer` | `https://mainnet.mercurydata.app/rest/smart-account-indexer` |
 
 ### Health Check
 ```
@@ -111,7 +114,19 @@ Find contracts by G-address (delegated signer) or C-address (verifier).
 GET /api/contract/:contractId
 ```
 Get full contract details including active signers and policies per context rule.
-This is the endpoint the SDK uses to rebuild active rule state for `rules.list()` and `rules.getAll()`.
+This is the primary endpoint the SDK uses to rebuild active rule state for `rules.list()` and `rules.getAll()`.
+
+### Contract Signers
+```
+GET /api/contract/:contractId/signers
+```
+Get the active signers associated with a contract.
+
+### Credential IDs
+```
+GET /api/credentials
+```
+List indexed credential IDs. This is a debugging/administrative endpoint and should not be exposed by a provider unless intended.
 
 ### Stats
 ```
@@ -141,7 +156,7 @@ The indexer client is integrated into the Smart Account Kit SDK and can be used 
 1. Via `kit.indexer` property (auto-configured for known networks)
 2. Via direct `IndexerClient` import for standalone use
 
-The contract-detail API is the important bit for wallet flows: it turns the raw event stream into current active rule state so the SDK can resolve rule IDs without guessing after deletions.
+The contract-detail API turns the raw event stream into current active rule state so the SDK can resolve rule IDs without guessing after deletions. If it is unavailable, the SDK probes a bounded low-ID range on-chain by default; sparse or higher-numbered rules still need an indexer.
 
 For this project, testnet intentionally uses `start_at: earliest` so it replays all events still available in the current testnet history, including events from before the pipeline was first deployed.
 
@@ -154,7 +169,10 @@ const kit = new SmartAccountKit({
   accountWasmHash: '...',
   webauthnVerifierAddress: 'C...',
   storage: new IndexedDBStorage(),
-  // Indexer auto-configured for testnet/mainnet
+  // Optional wire-compatible provider override:
+  indexerUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
+  // Optional API key or JWT, sent as Authorization: Bearer <token>
+  indexerAuthToken: 'public-or-scoped-token',
 });
 
 // Step 1: Authenticate with passkey (prompts user to select)
@@ -191,18 +209,23 @@ pnpm dev
 ### Test API
 
 ```bash
+INDEXER_URL=https://testnet.mercurydata.app/rest/smart-account-indexer
+
 # Health check
-curl https://smart-account-indexer.sdf-ecosystem.workers.dev/
+curl "$INDEXER_URL/"
 
 # Get stats
-curl https://smart-account-indexer.sdf-ecosystem.workers.dev/api/stats
+curl "$INDEXER_URL/api/stats"
 
 # Lookup credential
-curl https://smart-account-indexer.sdf-ecosystem.workers.dev/api/lookup/<credential-id-hex>
+curl "$INDEXER_URL/api/lookup/<credential-id-hex>"
 
-# Mainnet health check
-curl https://smart-account-indexer-mainnet.sdf-ecosystem.workers.dev/
+# Add bearer auth when required by the selected provider
+curl -H "Authorization: Bearer $INDEXER_TOKEN" \
+  "$INDEXER_URL/api/stats"
 ```
+
+Browser applications should only embed public or tightly scoped indexer tokens. Keep catch-up, admin, and other privileged credentials in server-side tooling.
 
 ## Relayer Proxy
 

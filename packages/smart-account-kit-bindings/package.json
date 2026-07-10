@@ -13,7 +13,7 @@
   "devDependencies": {
     "typescript": "^6.0.2"
   },
-  "description": "TypeScript bindings for OpenZeppelin Smart Account contracts on Stellar/Soroban",
+  "description": "TypeScript bindings for OpenZeppelin smart account contracts on Stellar",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",

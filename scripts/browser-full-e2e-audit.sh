@@ -16,7 +16,10 @@ log_box() {
 }
 
 log_line_count() {
-  log_box | wc -l | tr -d ' '
+  # .log-box renders newest-first (demo/src/hooks/useLog.ts prepends entries).
+  # Count via a normalized snapshot so this matches wait_for_new_log()'s own
+  # counting exactly, independent of any trailing newline in the element text.
+  printf '%s\n' "$(log_box)" | wc -l | tr -d ' '
 }
 
 body_text() {
@@ -63,8 +66,18 @@ wait_for_new_log() {
   local attempts="${4:-60}"
 
   for _ in $(seq 1 "$attempts"); do
-    local log
-    log="$(log_box | tail -n "+$((previous_count + 1))")"
+    local all total new_count log
+    # Newest entries are prepended, so lines added since previous_count are the
+    # FIRST (total - previous_count) lines, not the tail. (BSD head on macOS has
+    # no negative-count form, so compute the count explicitly.)
+    all="$(log_box)"
+    total="$(printf '%s\n' "$all" | wc -l | tr -d ' ')"
+    new_count=$(( total - previous_count ))
+    if (( new_count > 0 )); then
+      log="$(printf '%s\n' "$all" | head -n "$new_count")"
+    else
+      log=""
+    fi
     if [[ -n "$failure_pattern" ]] && printf '%s\n' "$log" | rg -q "$failure_pattern"; then
       printf '%s\n' "$log"
       return 2

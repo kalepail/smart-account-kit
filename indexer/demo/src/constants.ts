@@ -6,8 +6,8 @@
 // Network Configuration
 // ============================================================================
 
-/** Default hosted indexer URL for the checked-in demo (testnet). Override via env or UI for mainnet. */
-export const DEFAULT_INDEXER_URL = "https://smart-account-indexer.sdf-ecosystem.workers.dev";
+/** Default hosted indexer URL for the checked-in demo (Mercury testnet). Override via env or UI for mainnet. */
+export const DEFAULT_INDEXER_URL = "https://testnet.mercurydata.app/rest/smart-account-indexer";
 
 /** Default RPC URL for the checked-in demo (testnet). Override via env or UI for mainnet. */
 export const DEFAULT_RPC_URL = "https://soroban-testnet.stellar.org";

@@ -147,7 +147,7 @@ export class ExternalSignerManager {
    *
    * @example
    * ```typescript
-   * const { address } = kit.externalSigners.addFromSecret("SCZANGBA5YHTNYVVV3C7CAZMTQDBJHJG6C34REYB6WBMG7CKKFJHYAEGQ");
+   * const { address } = kit.externalSigners.addFromSecret("S...your-56-character-secret-seed...");
    * console.log(`Added signer: ${address}`);
    * ```
    */

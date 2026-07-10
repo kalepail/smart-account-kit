@@ -7,11 +7,13 @@ A basic Vite + React frontend application for testing the Smart Account Kit SDK 
 - **Wallet Creation**: Create a new smart wallet with a passkey as the primary signer
 - **Wallet Connection**: Connect to an existing wallet using stored or discoverable passkeys
 - **Contract Discovery**: Automatically discover smart accounts via indexer when connecting, with a fallback to the derived contract ID path if no indexed match is found
-- **Context Rule Management**: Create, view, and edit context rules with signers and policies
-- **Multi-Signer Support**: Add passkey and delegated (G-address) signers to context rules
-- **Policy Support**: Configure threshold and spending limit policies, with weighted threshold available when configured
+- **Context Rule Management**: Create, view, and edit context rules with signers and policies (with a live rules-count readout)
+- **Multi-Signer Support**: Add passkey, delegated (G-address), and Ed25519 signers to context rules; batch-add signers when editing a rule
+- **Ed25519 Signers**: Register a local Ed25519 keypair as an `External` signer via the configured verifier and sign multi-sig transactions with it (in-memory keys only)
+- **Policy Support**: Configure threshold, spending limit, and weighted threshold policies; inspect and edit live policy params (thresholds, per-signer weights, spending limits) through the typed policy clients (`kit.policyClients.*`)
 - **External Wallet Integration**: Connect Freighter or other Stellar wallets for delegated signing
 - **Token Transfer**: Build and sign XLM transfer transactions with multi-signer support
+- **Advanced**: Contract WASM upgrade (`kit.upgrade`) behind a collapsed Advanced section
 
 ## Demo Defaults
 
@@ -93,14 +95,23 @@ The helper attaches to the current page target over Chrome DevTools Protocol, ke
 2. Select a passkey from the browser prompt
 3. Your wallet will be connected
 
-### Adding Additional Passkeys
+### Adding Signers to a Rule
 
 1. Connect to a wallet first
-2. Enter a name for the new passkey (optional)
-3. Click "Add Passkey"
-4. Follow the browser prompt to create a new passkey
-5. The transaction is signed and submitted automatically
-6. Wait for confirmation to see the new passkey added
+2. In "Context Rules (On-Chain)", click "+ Add Rule" (or "Edit Rule" on an existing rule)
+3. In the Signers section, pick an add mode:
+   - **New Passkey**: create a fresh passkey signer (follow the browser prompt)
+   - **Connected Wallet** / **Manual G-Address**: add a Delegated (G-address) signer
+   - **Ed25519 Key**: register a local Ed25519 keypair as an `External` signer
+4. Save the rule; multi-signer rules prompt you to choose which signers sign
+5. Wait for confirmation to see the change on-chain
+
+### Managing Policy Params
+
+1. Expand a context rule with a policy attached
+2. Click the policy's "manage" button to read its live params
+3. Edit the threshold, per-signer weight, or spending limit and apply the change
+   (routed through the smart account's `execute()` and signed like any operation)
 
 ### Transferring Tokens
 
@@ -118,15 +129,41 @@ The helper attaches to the current page target over Chrome DevTools Protocol, ke
 ```
 demo/
 ├── src/
-│   ├── App.tsx           # Main application component
+│   ├── App.tsx           # Slim orchestrator: wires hooks to panels
 │   ├── main.tsx          # Entry point with Buffer polyfill
+│   ├── config.ts         # CONFIG + KNOWN_POLICIES + storage-name helper
+│   ├── types.ts          # Shared UI types (LogEntry, LogFn)
+│   ├── constants.ts      # UI constants
 │   ├── styles.css        # Application styles
+│   ├── hooks/
+│   │   ├── useLog.ts             # Activity-log state
+│   │   ├── useKit.ts             # SmartAccountKit init + config + pending creds
+│   │   ├── useExternalWallets.ts # External / Ed25519 signer management
+│   │   ├── useWalletSession.ts   # Connect/create/fund/transfer/deploy lifecycle
+│   │   └── useMultiSignerSubmit.ts # Shared multi-signer sign+submit helper
+│   ├── utils/
+│   │   ├── sdk.ts               # Re-exported SDK display/validation utils
+│   │   ├── expiration.ts        # Ledger <-> days conversion
+│   │   └── tx.ts               # TransactionResult -> simple {success,error}
 │   └── components/
 │       ├── index.ts                # Component exports
+│       ├── ConfigPanel.tsx         # Config card
+│       ├── ExternalWalletsPanel.tsx# External wallet connections
+│       ├── PendingCredentialsPanel.tsx # Pending deployments
+│       ├── WalletPanel.tsx         # Wallet status + create/connect/fund
+│       ├── TransferPanel.tsx       # XLM transfer form
+│       ├── ActivityLog.tsx         # Activity log
+│       ├── ContractPickerModal.tsx # Multi-account picker
+│       ├── AdvancedPanel.tsx       # Contract upgrade (advanced)
 │       ├── ActiveSignerDisplay.tsx # Shows currently active signer
-│       ├── ContextRulesPanel.tsx   # Displays on-chain context rules
+│       ├── ContextRulesPanel.tsx   # On-chain context rules + rules count
 │       ├── ContextRuleBuilder.tsx  # Modal for creating/editing rules
-│       └── SignerPicker.tsx        # Multi-signer selection modal
+│       ├── PolicyInspector.tsx     # Live policy get/set via policy clients
+│       ├── SignerPicker.tsx        # Multi-signer selection modal
+│       └── rule-builder/
+│           ├── types.ts            # Rule-builder form types
+│           ├── policyParams.ts     # Install-param build + policy-client reads
+│           └── PolicyConfigList.tsx# Policy params editor
 ├── index.html            # HTML template
 ├── vite.config.ts        # Vite configuration
 └── package.json          # Dependencies

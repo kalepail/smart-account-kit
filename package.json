@@ -63,6 +63,7 @@
   "devDependencies": {
     "@creit-tech/stellar-wallets-kit": "jsr:2.1.0",
     "@types/node": "^25.5.2",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"
   },

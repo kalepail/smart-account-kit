@@ -7,6 +7,7 @@
  * @packageDocumentation
  */
 
+import { StrKey } from "@stellar/stellar-sdk";
 import type {
   Signer,
   ContextRuleType,
@@ -39,10 +40,10 @@ import { getCredentialIdFromSigner } from "./signer-utils.js";
  * ```
  */
 export function createDelegatedSigner(publicKey: string): Signer {
-  // Validate the address format
-  if (!publicKey.startsWith("G") || publicKey.length !== 56) {
+  // Validate the address format (checksum included)
+  if (!StrKey.isValidEd25519PublicKey(publicKey)) {
     throw new ValidationError(
-      "Invalid Stellar account address. Must start with 'G' and be 56 characters.",
+      "Invalid Stellar account address. Must be a valid G... account address.",
       SmartAccountErrorCode.INVALID_ADDRESS,
       { publicKey }
     );
@@ -82,10 +83,10 @@ export function createExternalSigner(
   verifierAddress: string,
   keyData: Buffer | Uint8Array
 ): Signer {
-  // Validate the address format
-  if (!verifierAddress.startsWith("C") || verifierAddress.length !== 56) {
+  // Validate the address format (checksum included)
+  if (!StrKey.isValidContract(verifierAddress)) {
     throw new ValidationError(
-      "Invalid contract address. Must start with 'C' and be 56 characters.",
+      "Invalid contract address. Must be a valid C... contract address.",
       SmartAccountErrorCode.INVALID_ADDRESS,
       { verifierAddress }
     );
@@ -195,10 +196,10 @@ export function createDefaultContext(): ContextRuleType {
  * ```
  */
 export function createCallContractContext(contractAddress: string): ContextRuleType {
-  // Validate the address format
-  if (!contractAddress.startsWith("C") || contractAddress.length !== 56) {
+  // Validate the address format (checksum included)
+  if (!StrKey.isValidContract(contractAddress)) {
     throw new ValidationError(
-      "Invalid contract address. Must start with 'C' and be 56 characters.",
+      "Invalid contract address. Must be a valid C... contract address.",
       SmartAccountErrorCode.INVALID_ADDRESS,
       { contractAddress }
     );

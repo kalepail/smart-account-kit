@@ -1,6 +1,6 @@
 {
   "name": "smart-account-kit",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "TypeScript SDK for deploying and managing OpenZeppelin smart account contracts on Stellar with WebAuthn passkey authentication",
   "type": "module",
   "main": "dist/index.js",
@@ -75,7 +75,7 @@
   "packageManager": "pnpm@10.33.0",
   "peerDependencies": {
     "@creit-tech/stellar-wallets-kit": ">=2.1.0",
-    "@stellar/stellar-sdk": ">=15.1.0"
+    "@stellar/stellar-sdk": ">=16.0.0"
   },
   "peerDependenciesMeta": {
     "@creit-tech/stellar-wallets-kit": {

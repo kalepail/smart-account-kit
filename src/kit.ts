@@ -17,7 +17,6 @@ import {
   hash,
   xdr,
   Keypair,
-  TransactionBuilder,
   Transaction,
   rpc,
   contract,
@@ -708,16 +707,9 @@ export class SmartAccountKit {
   private async signWithDeployer<T>(
     tx: contract.AssembledTransaction<T>
   ): Promise<void> {
-    await tx.sign({
-      signTransaction: async (txXdr: string) => {
-        const parsedTx = TransactionBuilder.fromXDR(txXdr, this.networkPassphrase);
-        parsedTx.sign(this.deployerKeypair);
-        return {
-          signedTxXdr: parsedTx.toXDR(),
-          signerAddress: this.deployerKeypair.publicKey(),
-        };
-      },
-    });
+    await tx.sign(
+      contract.basicNodeSigner(this.deployerKeypair, this.networkPassphrase)
+    );
   }
 
   /**

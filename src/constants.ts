@@ -15,9 +15,6 @@ export const WEBAUTHN_TIMEOUT_MS = 60000;
 // Stellar smart contract configuration
 // ============================================================================
 
-/** Default base fee for Stellar transactions (in stroops) */
-export const BASE_FEE = "100";
-
 /** Number of stroops per XLM (1 XLM = 10,000,000 stroops) */
 export const STROOPS_PER_XLM = 10_000_000;
 

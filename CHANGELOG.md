@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.2 — 2026-07-11
+
+SDK-usage audit: the kit now leans on `@stellar/stellar-sdk` primitives where
+it previously re-implemented them.
+
+**Compatibility:** the `@stellar/stellar-sdk` peer requirement is now
+`>=16.0.0` (was `>=15.1.0`). The kit targets Protocol 27 smart accounts, which
+pre-16 SDKs cannot express (no V2 address credentials, no P27 auth preimages) —
+the runtime feature-detection shims that papered over older SDKs are removed.
+No other breaking changes.
+
+- **Uses stellar-sdk primitives** instead of local re-implementations: auth
+  preimages call the SDK's `buildAuthorizationEntryPreimage` directly (the
+  manual fallback and Protocol 27 credential-shim casts are deleted), deployer
+  signing uses `contract.basicNodeSigner`, `buildI128ScVal` delegates to
+  `nativeToScVal`, and `BASE_FEE` is re-exported from the SDK (the local copy
+  in `constants.ts` is removed; it remains importable from the package root).
+- **Builder address validation is checksum-verified via `StrKey`.**
+  `createDelegatedSigner`, `createExternalSigner`, and
+  `createCallContractContext` previously accepted any 56-character
+  `G...`/`C...` string, including ones with corrupted checksums. Error message
+  text changed accordingly.
+
 ## 0.4.1 — 2026-07-11
 
 Packaging fix plus a post-release API-surface audit. No breaking changes.

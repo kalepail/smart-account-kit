@@ -93,7 +93,6 @@ export {
   // Useful timing constants
   WEBAUTHN_TIMEOUT_MS,
   // Transaction/funding constants
-  BASE_FEE,
   STROOPS_PER_XLM,
   FRIENDBOT_RESERVE_XLM,
   // Contract limits (mirror the deployed contract)
@@ -243,5 +242,6 @@ export type {
 export { StellarWalletsKitAdapter } from "./wallet-adapter.js";
 export type { StellarWalletsKitAdapterConfig } from "./wallet-adapter.js";
 
-// Re-export stellar-sdk types for convenience
+// Re-exported from stellar-sdk for convenience
+export { BASE_FEE } from "@stellar/stellar-sdk";
 export type { AssembledTransaction } from "@stellar/stellar-sdk/contract";

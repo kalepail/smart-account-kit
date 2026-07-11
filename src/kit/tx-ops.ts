@@ -2,7 +2,9 @@ import { contract, rpc } from "@stellar/stellar-sdk";
 import {
   Account,
   Address,
+  BASE_FEE,
   Keypair,
+  nativeToScVal,
   Operation,
   Transaction,
   TransactionBuilder,
@@ -15,7 +17,6 @@ import type {
 } from "../types.js";
 import type { RelayerClient } from "../relayer.js";
 import type { Client as SmartAccountClient } from "smart-account-kit-bindings";
-import { BASE_FEE } from "../constants.js";
 import {
   SimulationError,
   SmartAccountErrorCode,
@@ -163,21 +164,14 @@ export function hasSourceAccountAuth(transaction: Transaction): boolean {
   return false;
 }
 
-const U64_MASK = BigInt("0xFFFFFFFFFFFFFFFF");
-
 /**
  * Build an `scvI128` ScVal from a bigint stroop amount.
  *
- * Single source of truth for the i128 lo/hi split used by both the raw
- * host-function transfer builder and the spec-fallback target-args builder.
+ * Typed convenience wrapper over the SDK's `nativeToScVal`, used by both the
+ * raw host-function transfer builder and the spec-fallback target-args builder.
  */
 export function buildI128ScVal(amount: bigint): xdr.ScVal {
-  return xdr.ScVal.scvI128(
-    new xdr.Int128Parts({
-      lo: xdr.Uint64.fromString((amount & U64_MASK).toString()),
-      hi: xdr.Int64.fromString((amount >> BigInt(64)).toString()),
-    })
-  );
+  return nativeToScVal(amount, { type: "i128" });
 }
 
 export function buildTokenTransferHostFunction(

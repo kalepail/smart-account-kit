@@ -11,6 +11,7 @@
 import {
   Address,
   Keypair,
+  BASE_FEE,
   Networks,
   Operation,
   Transaction,
@@ -25,7 +26,6 @@ import type {
   TransactionResult,
 } from "../types.js";
 import {
-  BASE_FEE,
   FRIENDBOT_RESERVE_XLM,
   FRIENDBOT_URL,
   LEDGERS_PER_HOUR,

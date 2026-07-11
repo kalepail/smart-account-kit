@@ -1,5 +1,9 @@
-import * as StellarSdk from "@stellar/stellar-sdk";
-import { Address, hash, xdr } from "@stellar/stellar-sdk";
+import {
+  Address,
+  buildAuthorizationEntryPreimage,
+  hash,
+  xdr,
+} from "@stellar/stellar-sdk";
 import type {
   AuthPayload,
   Signer as ContractSigner,
@@ -22,63 +26,11 @@ export function buildSignaturePreimage(
 ): xdr.HashIdPreimage {
   const credentials = getAddressCredentials(entry.credentials());
   const normalizedExpiration = normalizeSignatureExpirationLedger(expiration);
-  const sdkAuth = StellarSdk as unknown as {
-    buildAuthorizationEntryPreimage?: (
-      entry: xdr.SorobanAuthorizationEntry,
-      validUntilLedgerSeq: number,
-      networkPassphrase: string
-    ) => xdr.HashIdPreimage;
-  };
-
-  if (sdkAuth.buildAuthorizationEntryPreimage) {
-    credentials.signatureExpirationLedger(normalizedExpiration);
-    return sdkAuth.buildAuthorizationEntryPreimage(
-      entry,
-      normalizedExpiration,
-      networkPassphrase
-    );
-  }
-
-  const hashIdPreimage = xdr.HashIdPreimage as unknown as {
-    envelopeTypeSorobanAuthorizationWithAddress?: (value: unknown) => xdr.HashIdPreimage;
-  };
-  const withAddressPreimage = (xdr as unknown as {
-    HashIdPreimageSorobanAuthorizationWithAddress?: new (fields: {
-      networkId: Buffer;
-      nonce: xdr.Int64;
-      signatureExpirationLedger: number;
-      invocation: xdr.SorobanAuthorizedInvocation;
-      address: xdr.ScAddress;
-    }) => unknown;
-  }).HashIdPreimageSorobanAuthorizationWithAddress;
-
-  if (usesAddressBoundPayload(entry.credentials())) {
-    if (!hashIdPreimage.envelopeTypeSorobanAuthorizationWithAddress || !withAddressPreimage) {
-      throw new Error(
-        "Address-bound Soroban auth credentials require an SDK with Protocol 27 auth preimage support"
-      );
-    }
-
-    credentials.signatureExpirationLedger(normalizedExpiration);
-    return hashIdPreimage.envelopeTypeSorobanAuthorizationWithAddress(
-      new withAddressPreimage({
-        networkId: hash(Buffer.from(networkPassphrase)),
-        nonce: credentials.nonce(),
-        signatureExpirationLedger: normalizedExpiration,
-        invocation: entry.rootInvocation(),
-        address: credentials.address(),
-      })
-    );
-  }
-
   credentials.signatureExpirationLedger(normalizedExpiration);
-  return xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-    new xdr.HashIdPreimageSorobanAuthorization({
-      networkId: hash(Buffer.from(networkPassphrase)),
-      nonce: credentials.nonce(),
-      signatureExpirationLedger: normalizedExpiration,
-      invocation: entry.rootInvocation(),
-    })
+  return buildAuthorizationEntryPreimage(
+    entry,
+    normalizedExpiration,
+    networkPassphrase
   );
 }
 
@@ -101,32 +53,13 @@ export function normalizeSignatureExpirationLedger(expiration: number): number {
 export function getAddressCredentials(
   credentials: xdr.SorobanCredentials
 ): xdr.SorobanAddressCredentials {
-  const typedCredentials = credentials as unknown as {
-    address: () => xdr.SorobanAddressCredentials;
-    addressV2?: () => xdr.SorobanAddressCredentials;
-    addressWithDelegates?: () => {
-      addressCredentials: () => xdr.SorobanAddressCredentials;
-    };
-  };
-
-  const credentialType = credentials.switch().name as string;
-  switch (credentialType) {
+  switch (credentials.switch().name) {
     case "sorobanCredentialsAddress":
-      return typedCredentials.address();
+      return credentials.address();
     case "sorobanCredentialsAddressV2":
-      if (!typedCredentials.addressV2) {
-        throw new Error(
-          "ADDRESS_V2 credentials require an SDK with Protocol 27 credential support"
-        );
-      }
-      return typedCredentials.addressV2();
+      return credentials.addressV2();
     case "sorobanCredentialsAddressWithDelegates":
-      if (!typedCredentials.addressWithDelegates) {
-        throw new Error(
-          "ADDRESS_WITH_DELEGATES credentials require an SDK with Protocol 27 credential support"
-        );
-      }
-      return typedCredentials.addressWithDelegates().addressCredentials();
+      return credentials.addressWithDelegates().addressCredentials();
   }
 
   throw new Error(`Soroban credentials do not contain address credentials: ${credentials.switch().name}`);
@@ -140,36 +73,16 @@ export function createAddressCredentials(
   credentials: xdr.SorobanAddressCredentials,
   options?: { version?: "legacy" | "address_v2" }
 ): xdr.SorobanCredentials {
-  const credentialFactory = xdr.SorobanCredentials as unknown as {
-    sorobanCredentialsAddressV2?: (
-      credentials: xdr.SorobanAddressCredentials
-    ) => xdr.SorobanCredentials;
-    sorobanCredentialsAddress: (
-      credentials: xdr.SorobanAddressCredentials
-    ) => xdr.SorobanCredentials;
-  };
-
   const version = (options?.version ?? "legacy") as string;
   if (version === "address_v2") {
-    if (!credentialFactory.sorobanCredentialsAddressV2) {
-      throw new Error(
-        "ADDRESS_V2 credentials require an SDK with Protocol 27 credential support"
-      );
-    }
-    return credentialFactory.sorobanCredentialsAddressV2(credentials);
+    return xdr.SorobanCredentials.sorobanCredentialsAddressV2(credentials);
   }
 
   if (version !== "legacy") {
     throw new Error(`Unsupported Soroban address credential version: ${version}`);
   }
 
-  return credentialFactory.sorobanCredentialsAddress(credentials);
-}
-
-function usesAddressBoundPayload(credentials: xdr.SorobanCredentials): boolean {
-  const credentialType = credentials.switch().name as string;
-  return credentialType === "sorobanCredentialsAddressV2" ||
-    credentialType === "sorobanCredentialsAddressWithDelegates";
+  return xdr.SorobanCredentials.sorobanCredentialsAddress(credentials);
 }
 
 export function buildAuthDigest(

@@ -1,6 +1,7 @@
 import {
   Account,
   Address,
+  BASE_FEE,
   Keypair,
   Operation,
   TransactionBuilder,
@@ -23,7 +24,6 @@ import {
 import type { ContractDetailsResponse } from "../indexer.js";
 import { decodeContractError } from "../contract-errors.js";
 import {
-  BASE_FEE,
   DEFAULT_MAX_CONSECUTIVE_PROBE_MISSES,
   DEFAULT_MAX_PROBED_RULE_ID,
   DEFAULT_READ_TIMEOUT_SECONDS,

@@ -24,6 +24,7 @@
 import {
   Account,
   Address,
+  BASE_FEE,
   Keypair,
   Operation,
   TransactionBuilder,
@@ -39,7 +40,6 @@ import { parseSignerScVal, signerToScVal } from "./kit/auth-payload.js";
 import { buildI128ScVal } from "./kit/tx-ops.js";
 import { SimulationError } from "./errors.js";
 import { decodeContractError } from "./contract-errors.js";
-import { BASE_FEE } from "./constants.js";
 
 /** Deterministic, well-known read-only source account for getter simulation. */
 const READ_ONLY_SIM_ACCOUNT = new Account(

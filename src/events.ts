@@ -6,7 +6,7 @@
  * @packageDocumentation
  */
 
-import type { StoredCredential } from "./types";
+import type { StoredCredential } from "./types.js";
 
 // ============================================================================
 // Event Types

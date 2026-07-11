@@ -7,11 +7,11 @@
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/browser";
 import type { Signer as ContractSigner } from "smart-account-kit-bindings";
-import type { SmartAccountEventEmitter } from "../events";
-import type { StorageAdapter, StoredCredential } from "../types";
-import { buildKeyData } from "../utils";
-import { SignerNotFoundError } from "../errors";
-import { validateSigner, validateSigners } from "../validation";
+import type { SmartAccountEventEmitter } from "../events.js";
+import type { StorageAdapter, StoredCredential } from "../types.js";
+import { buildKeyData } from "../utils.js";
+import { SignerNotFoundError } from "../errors.js";
+import { validateSigner, validateSigners } from "../validation.js";
 
 /** Dependencies required by SignerManager */
 export interface SignerManagerDeps {

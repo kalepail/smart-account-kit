@@ -14,8 +14,8 @@ import {
   MAX_NAME_SIZE,
   MAX_POLICIES,
   MAX_SIGNERS,
-} from "./constants";
-import { SmartAccountErrorCode, ValidationError } from "./errors";
+} from "./constants.js";
+import { SmartAccountErrorCode, ValidationError } from "./errors.js";
 
 /** UTF-8 byte length of a string. */
 function utf8ByteLength(value: string): number {

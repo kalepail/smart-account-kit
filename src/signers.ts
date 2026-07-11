@@ -24,9 +24,9 @@
 
 import { Keypair, xdr } from "@stellar/stellar-sdk";
 import type { Signer as ContractSigner } from "smart-account-kit-bindings";
-import { buildAuthDigest, buildSignaturePayload } from "./kit/auth-payload";
-import { SmartAccountErrorCode, ValidationError } from "./errors";
-import { ED25519_PUBLIC_KEY_SIZE, ED25519_SIGNATURE_SIZE } from "./constants";
+import { buildAuthDigest, buildSignaturePayload } from "./kit/auth-payload.js";
+import { SmartAccountErrorCode, ValidationError } from "./errors.js";
+import { ED25519_PUBLIC_KEY_SIZE, ED25519_SIGNATURE_SIZE } from "./constants.js";
 
 /**
  * Compute the Protocol 27 signature payload and auth digest for an auth entry.

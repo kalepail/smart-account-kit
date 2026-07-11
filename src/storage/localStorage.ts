@@ -8,8 +8,8 @@
  * For production use, consider IndexedDB or server-side storage.
  */
 
-import type { StorageAdapter, StoredCredential, StoredSession } from "../types";
-import { LOCALSTORAGE_CREDENTIALS_KEY, LOCALSTORAGE_SESSION_KEY } from "../constants";
+import type { StorageAdapter, StoredCredential, StoredSession } from "../types.js";
+import { LOCALSTORAGE_CREDENTIALS_KEY, LOCALSTORAGE_SESSION_KEY } from "../constants.js";
 
 const STORAGE_KEY = LOCALSTORAGE_CREDENTIALS_KEY;
 const SESSION_KEY = LOCALSTORAGE_SESSION_KEY;

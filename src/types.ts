@@ -13,8 +13,8 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import type { xdr } from "@stellar/stellar-sdk";
-import type { SmartAccountError } from "./errors";
-import type { WalletStorage } from "./external-signers";
+import type { SmartAccountError } from "./errors.js";
+import type { WalletStorage } from "./external-signers.js";
 
 // ============================================================================
 // Credential Storage Types

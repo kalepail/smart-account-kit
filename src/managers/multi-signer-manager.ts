@@ -19,14 +19,14 @@ import type {
   Signer as ContractSigner,
   ContextRuleType,
 } from "smart-account-kit-bindings";
-import type { ContractDetailsResponse } from "../indexer";
-import type { ExternalSignerManager } from "../external-signers";
-import type { SelectedSigner, SubmissionOptions, TransactionResult } from "../types";
-import { AUTH_ENTRY_EXPIRATION_BUFFER } from "../constants";
+import type { ContractDetailsResponse } from "../indexer.js";
+import type { ExternalSignerManager } from "../external-signers.js";
+import type { SelectedSigner, SubmissionOptions, TransactionResult } from "../types.js";
+import { AUTH_ENTRY_EXPIRATION_BUFFER } from "../constants.js";
 import {
   getCredentialIdFromSigner,
   collectUniqueSigners,
-} from "../signer-utils";
+} from "../signer-utils.js";
 import {
   buildAddressSignatureScVal,
   buildSignaturePreimage,
@@ -34,18 +34,19 @@ import {
   getAddressCredentials,
   getAuthEntryAddress,
   normalizeSignatureExpirationLedger,
+  randomAuthEntryNonce,
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
-} from "../kit/auth-payload";
-import { resolveContextRuleIdsForEntry } from "../kit/context-rules";
+} from "../kit/auth-payload.js";
+import { resolveContextRuleIdsForEntry } from "../kit/context-rules.js";
 import {
   buildTokenTransferTargetArgs,
   resimulateAndAssemble,
   signFeePayer,
-} from "../kit/tx-ops";
-import { computeEntryAuthDigest } from "../signers";
-import { validateAddress, validateAmount, xlmToStroops } from "../utils";
+} from "../kit/tx-ops.js";
+import { computeEntryAuthDigest } from "../signers.js";
+import { validateAddress, validateAmount, xlmToStroops } from "../utils.js";
 import {
   SmartAccountErrorCode,
   SignerNotFoundError,
@@ -53,23 +54,8 @@ import {
   ValidationError,
   WalletNotConnectedError,
   wrapError,
-} from "../errors";
-import { failedTransaction } from "../contract-errors";
-
-/**
- * Generate a cryptographically random signed 64-bit nonce for a delegated auth
- * entry. The nonce must be unique among the address's live nonces; a timestamp
- * (`Date.now()`) collides when two delegated entries are built in the same
- * millisecond (multiple smart-account auth entries in one transaction) or across
- * two transactions signed by the same address in the same millisecond. A random
- * i64 makes a collision astronomically unlikely, matching the SDK's own
- * `authorizeEntry` nonce strategy.
- */
-function randomDelegatedNonce(): xdr.Int64 {
-  const bytes = new Uint8Array(8);
-  crypto.getRandomValues(bytes);
-  return xdr.Int64.fromString(Buffer.from(bytes).readBigInt64BE(0).toString());
-}
+} from "../errors.js";
+import { failedTransaction } from "../contract-errors.js";
 
 export interface MultiSignerOptions {
   onLog?: (message: string, type?: "info" | "success" | "error") => void;
@@ -428,7 +414,7 @@ export class MultiSignerManager {
 
           onLog(`Getting delegated auth from ${walletSigner.walletAddress.slice(0, 8)}...`);
 
-          const delegatedNonce = randomDelegatedNonce();
+          const delegatedNonce = randomAuthEntryNonce();
           const delegatedInvocation = new xdr.SorobanAuthorizedInvocation({
             function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(
               new xdr.InvokeContractArgs({

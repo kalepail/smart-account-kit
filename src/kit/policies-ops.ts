@@ -1,14 +1,14 @@
 import { Address, xdr } from "@stellar/stellar-sdk";
 import type { Client as SmartAccountClient, Signer as ContractSigner } from "smart-account-kit-bindings";
-import { SmartAccountErrorCode, ValidationError } from "../errors";
-import type { PolicyConfig } from "../types";
+import { SmartAccountErrorCode, ValidationError, WalletNotConnectedError } from "../errors.js";
+import type { PolicyConfig } from "../types.js";
 import type {
   SimpleThresholdAccountParams,
   SpendingLimitAccountParams,
   WeightedThresholdAccountParams,
-} from "../contract-types";
-import { compareScVal, signerToScVal } from "./auth-payload";
-import { buildI128ScVal } from "./tx-ops";
+} from "../contract-types.js";
+import { compareScVal, signerToScVal } from "./auth-payload.js";
+import { buildI128ScVal } from "./tx-ops.js";
 
 const I128_MAX = (1n << 127n) - 1n;
 const I128_MIN = -(1n << 127n);
@@ -177,7 +177,7 @@ export function buildPoliciesScVal(
   policyTypes: Map<string, "threshold" | "spending_limit" | "weighted_threshold" | "custom">
 ): xdr.ScVal {
   if (!wallet) {
-    throw new Error("Wallet not connected");
+    throw new WalletNotConnectedError();
   }
 
   const entries: xdr.ScMapEntry[] = [];

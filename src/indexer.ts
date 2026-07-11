@@ -11,7 +11,7 @@ import {
   API_PATH_LOOKUP_ADDRESS,
   API_PATH_CONTRACT,
   API_PATH_STATS,
-} from "./constants";
+} from "./constants.js";
 
 // ============================================================================
 // Indexer Response Types

@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.4.1 — 2026-07-11
+
+Packaging fix plus a post-release API-surface audit. No breaking changes.
+
+- **Fixed: the published package was unimportable from Node's native ESM loader.**
+  `tsconfig` used `moduleResolution: "bundler"`, so `tsc` emitted extensionless
+  relative imports (`from "./kit"`) that Node rejects with
+  `ERR_UNSUPPORTED_DIR_IMPORT`. `0.4.0` therefore worked only under a bundler
+  (Vite/webpack/esbuild) and crashed for any plain Node consumer (backends,
+  scripts, tests) — a gap the Vite-based demo e2e never exercised. The build now
+  targets `NodeNext` with explicit `.js` import extensions, and a Node-ESM import
+  smoke test (`scripts/verify-esm.mjs`) runs as part of `pnpm build` so this
+  cannot regress. Also added a `base64url` interop shim (`src/base64url.ts`) for
+  the CommonJS package under NodeNext.
+- **Verified the OpenZeppelin Relayer Channels integration live** on both testnet
+  and mainnet (fee-bump and `func`+`auth` submission modes). In every case the
+  relayer's channel account paid the fee and our accounts paid zero — previously
+  only covered by a mocked unit test.
+- **Added missing entry-point exports** that `0.4.0`'s docs promised but did not
+  ship: type exports `SignOptions`, `SubmitOptions`, `SignAndSubmitOptions`,
+  `ResolveContextRuleIds`, `SpendingLimitData`, `SpendingEntry`; value exports
+  `signerToScVal`, `parseSignerScVal`, `buildI128ScVal`, `signFeePayer`,
+  `resimulateAndAssemble`.
+- **`kit.convertPolicyParams` return type tightened** from `unknown` to
+  `xdr.ScVal` (runtime behavior unchanged), and its stale JSDoc ("returns the
+  original params if conversion fails") corrected — it throws `ValidationError`.
+- **`kit.buildPoliciesScVal` throws `WalletNotConnectedError`** when
+  disconnected instead of a plain `Error` (same message).
+- **`fundWallet`'s temp-account auth nonce is cryptographically random**
+  (shared `randomAuthEntryNonce` helper) instead of `Date.now()`, matching the
+  delegated-auth nonce fix from `0.4.0`.
+- **Docs:** README `TransactionFailure` examples no longer reference the removed
+  `result.code`; migration-guide corrections (bindings byte-identical to
+  `0.3.0`, `@internal` Ed25519 helpers, residual plain-`Error` guard paths,
+  minor logging changes, removed reference-worker REST endpoints without a
+  Mercury equivalent).
+
 ## 0.4.0 — 2026-07-10
 
 Ground-up audit and overhaul against the OpenZeppelin smart account contracts

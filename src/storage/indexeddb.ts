@@ -8,7 +8,7 @@
  * - Better support for binary data (Uint8Array)
  */
 
-import type { StorageAdapter, StoredCredential, StoredSession } from "../types";
+import type { StorageAdapter, StoredCredential, StoredSession } from "../types.js";
 import {
   DB_NAME,
   DB_VERSION,
@@ -18,7 +18,7 @@ import {
   IDB_INDEX_CONTRACT_ID,
   IDB_INDEX_CREATED_AT,
   IDB_INDEX_IS_PRIMARY,
-} from "../constants";
+} from "../constants.js";
 
 export class IndexedDBStorage implements StorageAdapter {
   private dbName: string;

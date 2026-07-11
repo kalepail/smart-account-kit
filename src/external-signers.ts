@@ -12,9 +12,9 @@
  */
 
 import { Keypair, hash, xdr, Address } from "@stellar/stellar-sdk";
-import type { ConnectedWallet, ExternalWalletAdapter } from "./types";
-import { SignerNotFoundError, ValidationError } from "./errors";
-import { Ed25519Signer } from "./signers";
+import type { ConnectedWallet, ExternalWalletAdapter } from "./types.js";
+import { SignerNotFoundError, ValidationError } from "./errors.js";
+import { Ed25519Signer } from "./signers.js";
 
 /** Storage key for persisted wallet connections */
 const WALLET_STORAGE_KEY = "external_wallets";

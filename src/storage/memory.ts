@@ -7,7 +7,7 @@
  * WARNING: Data is lost when the application restarts.
  */
 
-import type { StorageAdapter, StoredCredential, StoredSession } from "../types";
+import type { StorageAdapter, StoredCredential, StoredSession } from "../types.js";
 
 export class MemoryStorage implements StorageAdapter {
   private credentials: Map<string, StoredCredential> = new Map();

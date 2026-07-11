@@ -1,17 +1,17 @@
 import { hash } from "@stellar/stellar-sdk";
 import type { contract, rpc, xdr } from "@stellar/stellar-sdk";
-import type { SubmissionOptions, TransactionResult } from "../types";
-import type { RelayerClient } from "../relayer";
-import type { StorageAdapter } from "../types";
-import { buildKeyData } from "../utils";
+import type { SubmissionOptions, TransactionResult } from "../types.js";
+import type { RelayerClient } from "../relayer.js";
+import type { StorageAdapter } from "../types.js";
+import { buildKeyData } from "../utils.js";
 import type { Signer as ContractSigner } from "smart-account-kit-bindings";
 import { Client as SmartAccountClient } from "smart-account-kit-bindings";
 import type { Keypair } from "@stellar/stellar-sdk";
-import { getSubmissionMethod } from "./tx-ops";
-import { buildConstructorPolicies } from "./policies-ops";
-import { SmartAccountErrorCode, wrapError } from "../errors";
-import { decodeContractError, failedTransaction } from "../contract-errors";
-import type { PolicyConfig } from "../types";
+import { getSubmissionMethod } from "./tx-ops.js";
+import { buildConstructorPolicies } from "./policies-ops.js";
+import { SmartAccountErrorCode, wrapError } from "../errors.js";
+import { decodeContractError, failedTransaction } from "../contract-errors.js";
+import type { PolicyConfig } from "../types.js";
 
 async function sendDeploymentTxViaRpc<T>(
   tx: contract.AssembledTransaction<T>

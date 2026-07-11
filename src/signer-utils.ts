@@ -1,6 +1,6 @@
-import base64url from "base64url";
+import base64url from "./base64url.js";
 import type { Signer } from "smart-account-kit-bindings";
-import { SECP256R1_PUBLIC_KEY_SIZE } from "./constants";
+import { SECP256R1_PUBLIC_KEY_SIZE } from "./constants.js";
 
 export function getCredentialIdFromSigner(signer: Signer): string | null {
   if (signer.tag !== "External") {

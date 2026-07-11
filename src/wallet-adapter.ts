@@ -11,9 +11,9 @@
  * ```
  */
 
-import type { ExternalWalletAdapter, ConnectedWallet } from "./types";
+import type { ExternalWalletAdapter, ConnectedWallet } from "./types.js";
 import type { Networks } from "@stellar/stellar-sdk";
-import { SmartAccountError, SmartAccountErrorCode } from "./errors";
+import { SmartAccountError, SmartAccountErrorCode } from "./errors.js";
 
 /**
  * Best-effort detection of a user-cancelled wallet interaction (dismissed modal,

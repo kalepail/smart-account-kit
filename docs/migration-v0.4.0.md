@@ -2,7 +2,7 @@
 
 This release is an OpenZeppelin-parity overhaul of the SDK. It has **no backwards-compatibility layer** — every breaking change below is a clean cut from `0.3.0`. The public API is realigned around a unified error model, a unified signing pipeline (with end-to-end Ed25519 support), typed policy clients, full contract parity, and client-side validation.
 
-The deployed contract surface is unchanged from `0.3.0` (the bindings were regenerated from the same canonical Protocol 27 testnet WASM hash `1b5f4534…785a` and differ only in JSDoc/description bytes). All the changes below are on the SDK side.
+The deployed contract surface is unchanged from `0.3.0` (the bindings were regenerated from the same canonical Protocol 27 testnet WASM hash `1b5f4534…785a` and verified byte-identical to the `0.3.0` checked-in copy). All the changes below are on the SDK side.
 
 ## Contents
 
@@ -51,7 +51,7 @@ Key differences:
 - `hash` is now **optional on failure** (present only when one was assigned before the failure).
 - New type exports: `TransactionSuccess`, `TransactionFailure`.
 
-**Which methods return this vs. throw.** Every submission method — `transfer`, `signAndSubmit`, `executeAndSubmit`, `fundWallet`, `createWallet`'s deploy step, `multiSigners.*`, and credential deployment — returns a `TransactionResult`. **Everything else now throws typed errors** instead of returning failure objects or plain `Error`s.
+**Which methods return this vs. throw.** Every submission method — `transfer`, `signAndSubmit`, `executeAndSubmit`, `fundWallet`, `createWallet`'s deploy step, `multiSigners.*`, and credential deployment — returns a `TransactionResult`. **Everything else now throws typed errors** instead of returning failure objects or plain `Error`s. (A handful of low-level guard paths still throw plain `Error` — e.g. `credentials.deploy()` with no stored credential, `externalSigners.addFromWallet()` with no adapter configured, and adapter not-initialized guards. Treat any thrown value as a failure; `instanceof SmartAccountError` narrows the typed ones.)
 
 ## Errors
 
@@ -94,9 +94,9 @@ Widened types:
 `ExternalSignerManager`:
 
 - Constructor gained a 4th argument (`ed25519VerifierAddress`).
-- New methods: `addEd25519FromSecret(secret, verifier?)`, `canSignEd25519`, `getEd25519Signer`, `signEd25519Digest`.
+- New methods: `addEd25519FromSecret(secret, verifier?)` is the primary API; `canSignEd25519`, `getEd25519Signer`, and `signEd25519Digest` also exist but are `@internal` helpers used by the kit's multi-signer flow.
 
-Also newly exported for advanced flows: `signerToScVal` / `parseSignerScVal` (auth-payload), and `buildI128ScVal`, `signFeePayer`, `resimulateAndAssemble` (tx-ops).
+Also newly exported for advanced flows: `signerToScVal` / `parseSignerScVal` (auth-payload), and `buildI128ScVal`, `signFeePayer`, `resimulateAndAssemble` (tx-ops). *(Importable from the package entry point as of `0.4.1` — `0.4.0` defined these but did not re-export them.)*
 
 > Ed25519 signing goes through `kit.multiSigners` (build a `SelectedSigner` of type `"ed25519"` via `buildSelectedSigners`). `kit.transfer`'s single-signer convenience path stays passkey-only by design.
 
@@ -126,7 +126,7 @@ kit.policyClients.weighted(address);       // WeightedThresholdPolicyClient
 kit.policyClients.spendingLimit(address);  // SpendingLimitPolicyClient
 ```
 
-New exports: `SimpleThresholdPolicyClient`, `WeightedThresholdPolicyClient`, `SpendingLimitPolicyClient`, and the `PolicyClientDeps` type; plus contract types `SpendingLimitData` / `SpendingEntry`.
+New exports: `SimpleThresholdPolicyClient`, `WeightedThresholdPolicyClient`, `SpendingLimitPolicyClient`, and the `PolicyClientDeps` type; plus contract types `SpendingLimitData` / `SpendingEntry` *(importable as of `0.4.1`)*.
 
 - **Getters** (`getThreshold`, `getSignerWeights`, `getSpendingLimitData`) read on-chain state via simulation.
 - **Setters** (`setThreshold`, `setSignerWeight`, `setSpendingLimit`) return an `AssembledTransaction` routed through the smart account's `execute()`, and take the **full `ContextRule` struct** (not just the id).
@@ -156,9 +156,9 @@ New methods:
 | `kit.signers.idOf(signer)` | `get_signer_id` |
 | `kit.policies.idOf(address)` | `get_policy_id` |
 
-Shared option types are now used across `sign` / `signAndSubmit` / `executeAndSubmit` / `transfer` / `fundWallet`: new exports `SignOptions`, `SubmitOptions`, `SignAndSubmitOptions`, and `ResolveContextRuleIds`.
+Shared option types are now used across `sign` / `signAndSubmit` / `executeAndSubmit` / `transfer` / `fundWallet`: new type exports `SignOptions`, `SubmitOptions`, `SignAndSubmitOptions`, and `ResolveContextRuleIds` *(importable as of `0.4.1`)*.
 
-`convertPolicyParams` signature is `(policyType, params)` and returns an `xdr.ScVal`; `buildPoliciesScVal` is `(policies, policyTypes)`. Both now throw `ValidationError` on bad input rather than silently returning unconverted params.
+`convertPolicyParams` signature is `(policyType, params)` and returns an `xdr.ScVal` (the kit method's declared return type was `unknown` in `0.4.0`; tightened to `xdr.ScVal` in `0.4.1`); `buildPoliciesScVal` is `(policies, policyTypes)`. Both now throw `ValidationError` on bad input rather than silently returning unconverted params.
 
 ## Removed exports
 
@@ -172,7 +172,7 @@ The following were removed in this release (they were dead or never meant to be 
 
 ## Bindings & build pipeline
 
-- **`packages/smart-account-kit-bindings/src/index.ts` was regenerated** from the canonical deployed testnet WASM hash (`1b5f4534…785a`). The diff versus the prior checked-in copy was **documentation-only** (JSDoc + spec description bytes for `get_context_rules_count` / `__check_auth`); function names, args, return types, and ScVal encoding are byte-identical.
+- **`packages/smart-account-kit-bindings/src/index.ts` was regenerated** from the canonical deployed testnet WASM hash (`1b5f4534…785a`) and verified **byte-identical to the `0.3.0` checked-in copy** — the deployed contract surface did not change. (Description-byte drift that crept in during the release branch was regenerated away; function names, args, return types, and ScVal encoding were never affected.)
 - **New `pnpm verify:bindings`** (`scripts/bindings/verify.sh`) regenerates from the canonical WASM hash, diffs against the checked-in bindings, and exits nonzero on drift.
 - `build.sh` no longer silently sources local `demo/.env`. It prefers explicit env/args, falls back to `demo/.env.example`, and prints the source and hash it binds against.
 
@@ -194,9 +194,10 @@ The default indexer provider changed to **[Mercury](https://mercurydata.app)**, 
   | Testnet | `https://testnet.mercurydata.app/rest/smart-account-indexer` |
   | Mainnet | `https://mainnet.mercurydata.app/rest/smart-account-indexer` |
 
-- **Zero-config, no token.** Mercury's read endpoints are public and cover both live and historical activity for every smart-account-kit contract (a global backfill means there is no per-contract catch-up step). If you were relying on the built-in defaults, discovery keeps working with no changes. `indexerAuthToken` is now **optional** — supply one only for gated/admin operations or a provider that requires it.
+- **Zero-config, no token.** Mercury's read endpoints are public and cover both live and historical activity for every smart-account-kit contract (a global backfill means there is no per-contract catch-up step). If you were relying on the built-in defaults, discovery keeps working with no changes. `indexerAuthToken` remains optional in the config type (it already was in `0.3.0`) and is now typically **unnecessary** — supply one only for gated/admin operations or a provider that requires it.
 - **Action required only if you pinned the old default.** The previous defaults pointed at the SDF-ecosystem reference Cloudflare Workers (`https://smart-account-indexer[-mainnet].sdf-ecosystem.workers.dev`). Those are **decommissioned**. If you hard-coded either URL in `indexerUrl`, drop it (to use the Mercury default) or point it at your own wire-compatible provider.
 - **Self-hosted reference stack removed.** The bespoke Goldsky Turbo pipeline (`indexer/goldsky/`) and the reference Cloudflare Worker (`indexer/handler/`, including its optional `INDEXER_AUTH_TOKEN` bearer gate) were removed — too expensive to operate, and Mercury indexes the same events as a managed service. The prior stack lives in git history if you want to self-host. The lookup demo (`indexer/demo/`) stays and now defaults to Mercury.
+- **Two reference-worker REST endpoints have no Mercury equivalent.** The removed worker also served `GET /api/credentials` (paginated credential listing) and `GET /api/contract/:id/signers`; Mercury returns 404 for both. The SDK's `IndexerClient` never used them, so nothing in the kit is affected — but if you called either endpoint directly, you'll need to source that data elsewhere (e.g. `kit.signers.getAll()` on-chain for signers, or self-host the old worker from git history).
 - **Relayer proxy moved to the repo top level.** `indexer/relayer-proxy/` → `relayer-proxy/`, reflecting that fee-sponsored transaction submission is a distinct concern from indexing. Its Worker code, `relayerUrl` wiring, and REST surface are unchanged; only the source path moved.
 
 ---
@@ -222,6 +223,14 @@ A verified code-review pass over the 0.4.0 branch applied the following behavior
 - **`updateName` / `updateExpiration` validate inputs.** `kit.rules.updateName` now runs `validateContextRuleName` and `kit.rules.updateExpiration` runs `validateValidUntil`, matching `add`.
 - **Delegated auth-entry nonces are cryptographically random** (`i64`) instead of `Date.now()`, avoiding nonce collisions between delegated entries built in the same millisecond.
 - **Under-signable Ed25519 signers are surfaced.** `multiSigners.buildSelectedSigners` logs a warning when it drops an Ed25519 External signer with no matching local key (memory-only keys are gone after reload). Re-import via `kit.externalSigners.addEd25519FromSecret()`.
+
+**Other behavior changes (minor, mostly logging):**
+
+- **Event listener errors are logged by default.** `SmartAccountEventEmitter` now routes listener exceptions to `console.error` unless you set your own handler via `setErrorHandler`; `0.3.0` silently swallowed them. Existing apps may see new console output.
+- **Corrupt stored data is logged.** `LocalStorageAdapter` now `console.error`s when stored credentials/session JSON fails to parse, instead of silently returning empty.
+- **`StellarWalletsKitAdapter.init()` throws typed.** Missing configuration now throws `SmartAccountError` (`MISSING_CONFIG`) instead of a plain `Error`.
+- **`createWallet` auto-fund misconfiguration is typed.** A missing `nativeTokenContract` with `autoFund` now surfaces as a `TransactionFailure` carrying a `ValidationError` (previously a string error).
+- **Context-rule decoding rewritten** on top of the generated bindings spec (`funcResToNative`) plus `decodeContractError`. Intent is behavior-preserving, but error messages/types for malformed reads differ from `0.3.0`'s hand-rolled decoder.
 
 ---
 

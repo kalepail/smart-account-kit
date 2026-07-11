@@ -15,10 +15,10 @@ import type {
   SimpleThresholdAccountParams,
   WeightedThresholdAccountParams,
   SpendingLimitAccountParams,
-} from "./contract-types";
-import { buildKeyData } from "./utils";
-import { ValidationError, SmartAccountErrorCode } from "./errors";
-import { getCredentialIdFromSigner } from "./signer-utils";
+} from "./contract-types.js";
+import { buildKeyData } from "./utils.js";
+import { ValidationError, SmartAccountErrorCode } from "./errors.js";
+import { getCredentialIdFromSigner } from "./signer-utils.js";
 
 // ============================================================================
 // Signer Builders
@@ -421,7 +421,7 @@ export function createSpendingLimitParams(
 // ============================================================================
 
 // Re-export ledger constants from centralized location
-export { LEDGERS_PER_HOUR, LEDGERS_PER_DAY, LEDGERS_PER_WEEK } from "./constants";
+export { LEDGERS_PER_HOUR, LEDGERS_PER_DAY, LEDGERS_PER_WEEK } from "./constants.js";
 
 // ============================================================================
 // Compatibility Helper Functions

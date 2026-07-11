@@ -13,8 +13,8 @@
  */
 
 import type { Transaction } from "@stellar/stellar-sdk";
-import { NAME, VERSION } from "./version";
-import { DEFAULT_RELAYER_TIMEOUT_MS } from "./constants";
+import { NAME, VERSION } from "./version.js";
+import { DEFAULT_RELAYER_TIMEOUT_MS } from "./constants.js";
 
 /**
  * Response from Relayer transaction submission

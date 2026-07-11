@@ -8,7 +8,7 @@ import {
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
-import base64url from "base64url";
+import base64url from "../base64url.js";
 import type {
   ContextRule,
   ContextRuleType,
@@ -19,15 +19,15 @@ import {
   collectUniqueSigners,
   getCredentialIdFromSigner,
   signersEqual,
-} from "../signer-utils";
-import type { ContractDetailsResponse } from "../indexer";
-import { decodeContractError } from "../contract-errors";
+} from "../signer-utils.js";
+import type { ContractDetailsResponse } from "../indexer.js";
+import { decodeContractError } from "../contract-errors.js";
 import {
   BASE_FEE,
   DEFAULT_MAX_CONSECUTIVE_PROBE_MISSES,
   DEFAULT_MAX_PROBED_RULE_ID,
   DEFAULT_READ_TIMEOUT_SECONDS,
-} from "../constants";
+} from "../constants.js";
 
 type ContextRuleQueryClient = {
   get_context_rule: (args: { context_rule_id: number }) => Promise<AssembledTransaction<ContextRule>>;

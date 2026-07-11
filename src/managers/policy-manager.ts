@@ -6,7 +6,7 @@
  */
 
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
-import { PolicyNotFoundError } from "../errors";
+import { PolicyNotFoundError } from "../errors.js";
 
 /** Dependencies required by PolicyManager */
 export interface PolicyManagerDeps {

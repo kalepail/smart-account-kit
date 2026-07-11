@@ -8,17 +8,17 @@
 
 import { StrKey, hash, xdr, Address } from "@stellar/stellar-sdk";
 import type { RegistrationResponseJSON } from "@simplewebauthn/browser";
-import base64url from "base64url";
+import base64url from "./base64url.js";
 
 import {
   SECP256R1_PUBLIC_KEY_SIZE,
   UNCOMPRESSED_PUBKEY_PREFIX,
   STROOPS_PER_XLM,
-} from "./constants";
+} from "./constants.js";
 import {
   ValidationError,
   SmartAccountErrorCode,
-} from "./errors";
+} from "./errors.js";
 
 // ============================================================================
 // Validation Helpers

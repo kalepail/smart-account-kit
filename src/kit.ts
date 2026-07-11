@@ -39,8 +39,8 @@ import type {
   SignOptions,
   SubmitOptions,
   SignAndSubmitOptions,
-} from "./types";
-import { MemoryStorage } from "./storage/memory";
+} from "./types.js";
+import { MemoryStorage } from "./storage/memory.js";
 import {
   Client as SmartAccountClient,
 } from "smart-account-kit-bindings";
@@ -54,7 +54,7 @@ import {
   DEFAULT_DEPLOYER_SEED,
   DEFAULT_SESSION_EXPIRY_MS,
   LEDGERS_PER_HOUR,
-} from "./constants";
+} from "./constants.js";
 
 // Error classes
 import {
@@ -62,8 +62,8 @@ import {
   ValidationError,
   WalletNotConnectedError,
   wrapError,
-} from "./errors";
-import { failedTransaction } from "./contract-errors";
+} from "./errors.js";
+import { failedTransaction } from "./contract-errors.js";
 
 // Typed policy clients
 import {
@@ -72,26 +72,26 @@ import {
   SpendingLimitPolicyClient,
   CONTEXT_RULE_SPEC_TYPE,
   type PolicyClientDeps,
-} from "./policy-clients";
+} from "./policy-clients.js";
 
 // Utility functions
-import { deriveContractAddress } from "./utils";
+import { deriveContractAddress } from "./utils.js";
 
 // Event emitter
-import { SmartAccountEventEmitter } from "./events";
+import { SmartAccountEventEmitter } from "./events.js";
 
 // External signer management
-import { ExternalSignerManager, type ExternalSigner } from "./external-signers";
+import { ExternalSignerManager, type ExternalSigner } from "./external-signers.js";
 
 // Indexer client for contract discovery
 import {
   IndexerClient,
   type IndexedContractSummary,
   type ContractDetailsResponse,
-} from "./indexer";
+} from "./indexer.js";
 
 // Relayer client for fee-sponsored transactions via proxy
-import { RelayerClient } from "./relayer";
+import { RelayerClient } from "./relayer.js";
 
 // Manager classes
 import {
@@ -100,38 +100,38 @@ import {
   PolicyManager as PolicyManagerClass,
   CredentialManager as CredentialManagerClass,
   MultiSignerManager as MultiSignerManagerClass,
-} from "./managers";
+} from "./managers/index.js";
 export type {
   SignerManager,
   ContextRuleManager,
   PolicyManager,
   CredentialManager,
   MultiSignerManager,
-} from "./managers";
+} from "./managers/index.js";
 export type {
   MultiSignerOptions,
-} from "./managers/multi-signer-manager";
+} from "./managers/multi-signer-manager.js";
 
 import {
   discoverContractsByCredential,
   discoverContractsByAddress,
   getContractDetailsFromIndexer,
-} from "./kit/indexer-ops";
+} from "./kit/indexer-ops.js";
 import {
   createPasskey,
   authenticatePasskey,
   signAuthEntry,
-} from "./kit/webauthn-ops";
+} from "./kit/webauthn-ops.js";
 import {
   createWallet,
   connectWallet,
   connectWithCredentials,
   disconnect,
-} from "./kit/wallet-ops";
+} from "./kit/wallet-ops.js";
 import {
   buildDeployTransaction,
   submitDeploymentTx,
-} from "./kit/deploy-ops";
+} from "./kit/deploy-ops.js";
 import {
   sign,
   signAndSubmit,
@@ -140,16 +140,16 @@ import {
   signResimulateAndPrepare,
   shouldUseFeeSponsoring,
   sendAndPoll,
-} from "./kit/tx-ops";
-import { fundWallet } from "./kit/fund-ops";
-import { convertPolicyParams, buildPoliciesScVal, buildConstructorPolicies } from "./kit/policies-ops";
+} from "./kit/tx-ops.js";
+import { fundWallet } from "./kit/fund-ops.js";
+import { convertPolicyParams, buildPoliciesScVal, buildConstructorPolicies } from "./kit/policies-ops.js";
 import {
   findWebAuthnSignerForCredential,
   listContextRules,
   resolveContextRuleIdsForEntry,
-} from "./kit/context-rules";
-import { normalizeSignatureExpirationLedger } from "./kit/auth-payload";
-import { validateAddress, validateAmount, xlmToStroops } from "./utils";
+} from "./kit/context-rules.js";
+import { normalizeSignatureExpirationLedger } from "./kit/auth-payload.js";
+import { validateAddress, validateAmount, xlmToStroops } from "./utils.js";
 
 /**
  * Per-operation memo shared across all auth entries of a single sign/submit so
@@ -1464,7 +1464,8 @@ export class SmartAccountKit {
    *
    * @param policyType - The type of policy: "threshold", "spending_limit", or "weighted_threshold"
    * @param params - The policy parameters as a native JavaScript object
-   * @returns The parameters converted to ScVal format, or the original params if conversion fails
+   * @returns The parameters converted to ScVal format
+   * @throws {ValidationError} If the params don't match the expected shape for the policy type
    *
    * @example
    * ```typescript
@@ -1485,7 +1486,7 @@ export class SmartAccountKit {
   public convertPolicyParams(
     policyType: "threshold" | "spending_limit" | "weighted_threshold",
     params: unknown
-  ): unknown {
+  ): xdr.ScVal {
     return convertPolicyParams(policyType, params);
   }
 

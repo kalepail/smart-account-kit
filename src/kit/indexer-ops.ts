@@ -1,9 +1,9 @@
-import base64url from "base64url";
+import base64url from "../base64url.js";
 import type {
   IndexerClient,
   IndexedContractSummary,
   ContractDetailsResponse,
-} from "../indexer";
+} from "../indexer.js";
 
 export async function discoverContractsByCredential(
   indexer: IndexerClient | null,

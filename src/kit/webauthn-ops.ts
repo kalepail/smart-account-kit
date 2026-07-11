@@ -5,19 +5,19 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
 } from "@simplewebauthn/browser";
 import { rpc, xdr } from "@stellar/stellar-sdk";
-import base64url from "base64url";
-import type { StorageAdapter } from "../types";
+import base64url from "../base64url.js";
+import type { StorageAdapter } from "../types.js";
 import type {
   Client as SmartAccountClient,
   Signer as ContractSigner,
 } from "smart-account-kit-bindings";
-import type { WebAuthnSigData } from "../contract-types";
-import { WEBAUTHN_TIMEOUT_MS } from "../constants";
+import type { WebAuthnSigData } from "../contract-types.js";
+import { WEBAUTHN_TIMEOUT_MS } from "../constants.js";
 import {
   compactSignature,
   extractPublicKeyFromAttestation,
   generateChallenge,
-} from "../utils";
+} from "../utils.js";
 import {
   buildWebAuthnSignatureBytes,
   getAddressCredentials,
@@ -25,11 +25,11 @@ import {
   readAuthPayload,
   upsertAuthPayloadSigner,
   writeAuthPayload,
-} from "./auth-payload";
-import { computeEntryAuthDigest } from "../signers";
+} from "./auth-payload.js";
+import { computeEntryAuthDigest } from "../signers.js";
 import {
   findWebAuthnSignerInRules,
-} from "./context-rules";
+} from "./context-rules.js";
 
 type WebAuthnDeps = {
   rpId?: string;

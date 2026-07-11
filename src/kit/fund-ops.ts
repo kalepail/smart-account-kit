@@ -23,32 +23,33 @@ import type {
   SubmissionMethod,
   SubmissionOptions,
   TransactionResult,
-} from "../types";
+} from "../types.js";
 import {
   BASE_FEE,
   FRIENDBOT_RESERVE_XLM,
   FRIENDBOT_URL,
   LEDGERS_PER_HOUR,
-} from "../constants";
+} from "../constants.js";
 import {
   buildAddressSignatureScVal,
   buildSignaturePreimage,
   createAddressCredentials,
   getAddressCredentials,
-} from "./auth-payload";
+  randomAuthEntryNonce,
+} from "./auth-payload.js";
 import {
   buildTokenTransferHostFunction,
   resimulateAndAssemble,
   signFeePayer,
-} from "./tx-ops";
-import { xlmToStroops, stroopsToXlm } from "../utils";
+} from "./tx-ops.js";
+import { xlmToStroops, stroopsToXlm } from "../utils.js";
 import {
   SmartAccountErrorCode,
   SubmissionError,
   WalletNotConnectedError,
   wrapError,
-} from "../errors";
-import { failedTransaction, simulationFailure } from "../contract-errors";
+} from "../errors.js";
+import { failedTransaction, simulationFailure } from "../contract-errors.js";
 
 /**
  * Friendbot answers with HTTP 200 as soon as its create-account transaction is
@@ -170,7 +171,7 @@ export async function fundWallet(
       // so the Relayer can use its own channel accounts
       if (credType === "sorobanCredentialsSourceAccount") {
         // Generate a nonce for the new Address credential
-        const nonce = xdr.Int64.fromString(Date.now().toString());
+        const nonce = randomAuthEntryNonce();
 
         // Create new Address credentials entry to replace source_account
         const addressEntry = new xdr.SorobanAuthorizationEntry({

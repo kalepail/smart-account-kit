@@ -8,7 +8,7 @@
  */
 
 // Main client SDK
-export { SmartAccountKit } from "./kit";
+export { SmartAccountKit } from "./kit.js";
 
 // Sub-manager types
 export type {
@@ -18,14 +18,14 @@ export type {
   CredentialManager,
   MultiSignerManager,
   MultiSignerOptions,
-} from "./kit";
+} from "./kit.js";
 
 // External signer types
 export {
   ExternalSignerManager,
   type ExternalSigner,
   type WalletStorage,
-} from "./external-signers";
+} from "./external-signers.js";
 
 // SDK Types
 export type {
@@ -54,7 +54,13 @@ export type {
 
   // Multi-Signer
   SelectedSigner,
-} from "./types";
+
+  // Shared signing/submission option types
+  SignOptions,
+  SubmitOptions,
+  SignAndSubmitOptions,
+  ResolveContextRuleIds,
+} from "./types.js";
 
 // Contract Types (re-exported from bindings)
 export type {
@@ -71,14 +77,16 @@ export type {
   SimpleThresholdAccountParams,
   WeightedThresholdAccountParams,
   SpendingLimitAccountParams,
-} from "./contract-types";
+  SpendingLimitData,
+  SpendingEntry,
+} from "./contract-types.js";
 
 // Storage adapters
 export {
   MemoryStorage,
   LocalStorageAdapter,
   IndexedDBStorage,
-} from "./storage";
+} from "./storage/index.js";
 
 // Constants (public API - implementation details are internal)
 export {
@@ -95,7 +103,7 @@ export {
   MAX_EXTERNAL_KEY_SIZE,
   ED25519_PUBLIC_KEY_SIZE,
   ED25519_SIGNATURE_SIZE,
-} from "./constants";
+} from "./constants.js";
 
 // Client-side validation of contract limits
 export {
@@ -106,7 +114,7 @@ export {
   validatePolicyCount,
   validateExternalKeySize,
   validateValidUntil,
-} from "./validation";
+} from "./validation.js";
 
 // Error classes
 export {
@@ -123,18 +131,18 @@ export {
   SessionError,
   ContractError,
   wrapError,
-} from "./errors";
+} from "./errors.js";
 
 // Contract error decoding
 export {
   CONTRACT_ERROR_REGISTRY,
   decodeContractError,
   contractErrorFromCode,
-} from "./contract-errors";
+} from "./contract-errors.js";
 export type {
   ContractErrorFamily,
   ContractErrorInfo,
-} from "./contract-errors";
+} from "./contract-errors.js";
 
 // Utility functions
 export {
@@ -143,7 +151,7 @@ export {
   validateAddress,
   validateAmount,
   generateChallenge,
-} from "./utils";
+} from "./utils.js";
 
 // Builder utilities
 export {
@@ -169,40 +177,48 @@ export {
   describeSignerType,
   formatSignerForDisplay,
   formatContextType,
-} from "./builders";
+} from "./builders.js";
 export {
   getCredentialIdFromSigner,
   signersEqual,
   getSignerKey,
   collectUniqueSigners,
-} from "./signer-utils";
+} from "./signer-utils.js";
 
 // Signer abstraction (Ed25519 + shared auth-digest core)
-export { Ed25519Signer, computeEntryAuthDigest } from "./signers";
-export type { AuthDigestSigner } from "./signers";
+export { Ed25519Signer, computeEntryAuthDigest } from "./signers.js";
+export type { AuthDigestSigner } from "./signers.js";
+
+// Advanced flows: auth-payload signer encoding + transaction helpers
+export { signerToScVal, parseSignerScVal } from "./kit/auth-payload.js";
+export {
+  buildI128ScVal,
+  signFeePayer,
+  resimulateAndAssemble,
+} from "./kit/tx-ops.js";
 
 // Typed policy clients
 export {
   SimpleThresholdPolicyClient,
   WeightedThresholdPolicyClient,
   SpendingLimitPolicyClient,
-} from "./policy-clients";
-export type { PolicyClientDeps } from "./policy-clients";
+} from "./policy-clients.js";
+export type { PolicyClientDeps } from "./policy-clients.js";
 
 // Event emitter
-export { SmartAccountEventEmitter } from "./events";
+export { SmartAccountEventEmitter } from "./events.js";
 export type {
   SmartAccountEventMap,
   SmartAccountEvent,
   EventListener,
-} from "./events";
+} from "./events.js";
 
 // Indexer client for reverse lookups
 export {
   IndexerClient,
   IndexerError,
   DEFAULT_INDEXER_URLS,
-} from "./indexer";
+} from "./indexer.js";
 export type {
   IndexerConfig,
   IndexedContractSummary,
@@ -213,19 +229,19 @@ export type {
   AddressLookupResponse,
   ContractDetailsResponse,
   IndexerStatsResponse,
-} from "./indexer";
+} from "./indexer.js";
 
 // Relayer client for fee-sponsored transactions via proxy
-export { RelayerClient, RelayerErrorCodes } from "./relayer";
+export { RelayerClient, RelayerErrorCodes } from "./relayer.js";
 export type {
   RelayerResponse,
   RelayerSendOptions,
   RelayerErrorCode,
-} from "./relayer";
+} from "./relayer.js";
 
 // Wallet Adapters
-export { StellarWalletsKitAdapter } from "./wallet-adapter";
-export type { StellarWalletsKitAdapterConfig } from "./wallet-adapter";
+export { StellarWalletsKitAdapter } from "./wallet-adapter.js";
+export type { StellarWalletsKitAdapterConfig } from "./wallet-adapter.js";
 
 // Re-export stellar-sdk types for convenience
 export type { AssembledTransaction } from "@stellar/stellar-sdk/contract";

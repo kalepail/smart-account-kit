@@ -5,12 +5,12 @@
  * deployment, and synchronization with on-chain state.
  */
 
-import base64url from "base64url";
+import base64url from "../base64url.js";
 import { xdr } from "@stellar/stellar-sdk";
 import type { rpc } from "@stellar/stellar-sdk";
 import type { AuthenticatorTransportFuture } from "@simplewebauthn/browser";
-import type { SmartAccountEventEmitter } from "../events";
-import type { PolicyConfig, StorageAdapter, StoredCredential, SubmissionMethod, SubmissionOptions, TransactionResult } from "../types";
+import type { SmartAccountEventEmitter } from "../events.js";
+import type { PolicyConfig, StorageAdapter, StoredCredential, SubmissionMethod, SubmissionOptions, TransactionResult } from "../types.js";
 
 /** Dependencies required by CredentialManager */
 export interface CredentialManagerDeps {

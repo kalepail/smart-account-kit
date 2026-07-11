@@ -4,8 +4,8 @@ import type {
   AuthPayload,
   Signer as ContractSigner,
 } from "smart-account-kit-bindings";
-import { signersEqual } from "../signer-utils";
-import type { WebAuthnSigData } from "../contract-types";
+import { signersEqual } from "../signer-utils.js";
+import type { WebAuthnSigData } from "../contract-types.js";
 
 export function buildSignaturePayload(
   networkPassphrase: string,
@@ -389,6 +389,21 @@ export function upsertAuthPayloadSigner(
   }
 
   payload.signers.set(signer, signatureBytes);
+}
+
+/**
+ * Generate a cryptographically random signed 64-bit nonce for an address-credential
+ * auth entry. The nonce must be unique among the address's live nonces; a timestamp
+ * (`Date.now()`) collides when two entries are built in the same millisecond
+ * (multiple smart-account auth entries in one transaction) or across two
+ * transactions signed by the same address in the same millisecond. A random
+ * i64 makes a collision astronomically unlikely, matching the SDK's own
+ * `authorizeEntry` nonce strategy.
+ */
+export function randomAuthEntryNonce(): xdr.Int64 {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return xdr.Int64.fromString(Buffer.from(bytes).readBigInt64BE(0).toString());
 }
 
 export function signerToScVal(signer: ContractSigner): xdr.ScVal {

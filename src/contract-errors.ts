@@ -24,8 +24,8 @@ import {
   SimulationError,
   SubmissionError,
   SmartAccountError,
-} from "./errors";
-import type { TransactionFailure } from "./types";
+} from "./errors.js";
+import type { TransactionFailure } from "./types.js";
 
 /**
  * Contract families that expose custom error codes.

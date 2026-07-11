@@ -5,8 +5,8 @@
  * WebAuthn credential data (including the crucial credential IDs).
  */
 
-export { MemoryStorage } from "./memory";
-export { LocalStorageAdapter } from "./localStorage";
-export { IndexedDBStorage } from "./indexeddb";
+export { MemoryStorage } from "./memory.js";
+export { LocalStorageAdapter } from "./localStorage.js";
+export { IndexedDBStorage } from "./indexeddb.js";
 
-export type { StorageAdapter } from "../types";
+export type { StorageAdapter } from "../types.js";

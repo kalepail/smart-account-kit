@@ -1,6 +1,6 @@
 import { Address, Keypair, StrKey, hash, xdr } from "@stellar/stellar-sdk";
 import type { Signer as ContractSigner } from "smart-account-kit-bindings";
-import { buildKeyData } from "../utils";
+import { buildKeyData } from "../utils.js";
 
 export function makeAccount(seed: number): string {
   return Keypair.fromRawEd25519Seed(Buffer.alloc(32, seed)).publicKey();

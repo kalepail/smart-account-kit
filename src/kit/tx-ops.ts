@@ -12,22 +12,22 @@ import type {
   SubmissionMethod,
   SubmissionOptions,
   TransactionResult,
-} from "../types";
-import type { RelayerClient } from "../relayer";
+} from "../types.js";
+import type { RelayerClient } from "../relayer.js";
 import type { Client as SmartAccountClient } from "smart-account-kit-bindings";
-import { BASE_FEE } from "../constants";
+import { BASE_FEE } from "../constants.js";
 import {
   SimulationError,
   SmartAccountErrorCode,
   SubmissionError,
   WalletNotConnectedError,
   wrapError,
-} from "../errors";
+} from "../errors.js";
 import {
   decodeContractError,
   failedTransaction,
   submissionFailure,
-} from "../contract-errors";
+} from "../contract-errors.js";
 
 type ResolveContextRuleIds = (
   entry: xdr.SorobanAuthorizationEntry,

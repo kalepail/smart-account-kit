@@ -74,7 +74,7 @@ const result = await kit.transfer('CTOKEN...', 'GRECIPIENT...', 100);
 if (result.success) {
   console.log('Transaction hash:', result.hash);
 } else {
-  console.error(`Failed [${result.code}]:`, result.error.message);
+  console.error(`Failed [${result.error.code}]:`, result.error.message);
 }
 ```
 
@@ -259,8 +259,8 @@ if (result.success) {
   // TransactionSuccess: { success: true; hash: string; ledger?: number }
   console.log('Hash:', result.hash, 'Ledger:', result.ledger);
 } else {
-  // TransactionFailure: { success: false; error: SmartAccountError; code; hash? }
-  console.error(`[${result.code}] ${result.error.message}`);
+  // TransactionFailure: { success: false; error: SmartAccountError; hash? }
+  console.error(`[${result.error.code}] ${result.error.message}`);
 }
 ```
 

@@ -34,12 +34,12 @@ import {
 } from "@stellar/stellar-sdk";
 import type { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 import type { ContextRule, Signer as ContractSigner } from "smart-account-kit-bindings";
-import type { SpendingLimitData } from "./contract-types";
-import { parseSignerScVal, signerToScVal } from "./kit/auth-payload";
-import { buildI128ScVal } from "./kit/tx-ops";
-import { SimulationError } from "./errors";
-import { decodeContractError } from "./contract-errors";
-import { BASE_FEE } from "./constants";
+import type { SpendingLimitData } from "./contract-types.js";
+import { parseSignerScVal, signerToScVal } from "./kit/auth-payload.js";
+import { buildI128ScVal } from "./kit/tx-ops.js";
+import { SimulationError } from "./errors.js";
+import { decodeContractError } from "./contract-errors.js";
+import { BASE_FEE } from "./constants.js";
 
 /** Deterministic, well-known read-only source account for getter simulation. */
 const READ_ONLY_SIM_ACCOUNT = new Account(

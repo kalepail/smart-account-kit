@@ -1,6 +1,6 @@
 import type { AuthenticationResponseJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON, AuthenticatorTransportFuture } from "@simplewebauthn/browser";
 import { Keypair, xdr } from "@stellar/stellar-sdk";
-import base64url from "base64url";
+import base64url from "../base64url.js";
 import type {
   StorageAdapter,
   StoredCredential,
@@ -9,13 +9,13 @@ import type {
   TransactionResult,
   SubmissionOptions,
   SubmissionMethod,
-} from "../types";
-import type { SmartAccountEventEmitter } from "../events";
+} from "../types.js";
+import type { SmartAccountEventEmitter } from "../events.js";
 import type { contract, rpc } from "@stellar/stellar-sdk";
-import { WEBAUTHN_TIMEOUT_MS, DEFAULT_SESSION_EXPIRY_MS } from "../constants";
-import { deriveContractAddress, generateChallenge } from "../utils";
-import { ValidationError } from "../errors";
-import { failedTransaction } from "../contract-errors";
+import { WEBAUTHN_TIMEOUT_MS, DEFAULT_SESSION_EXPIRY_MS } from "../constants.js";
+import { deriveContractAddress, generateChallenge } from "../utils.js";
+import { ValidationError } from "../errors.js";
+import { failedTransaction } from "../contract-errors.js";
 
 export async function createWallet(
   deps: {

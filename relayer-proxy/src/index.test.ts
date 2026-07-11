@@ -489,37 +489,8 @@ describe("API key lifecycle", () => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /fee-usage and GET /status
+// GET /status
 // ---------------------------------------------------------------------------
-describe("GET /fee-usage", () => {
-  it("reports no key when the IP has none", async () => {
-    const res = await worker.fetch(
-      makeRequest("/fee-usage"),
-      makeEnv({ kv: createKV() }),
-      ctx()
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
-    expect(body.success).toBe(true);
-    expect(body.data.hasKey).toBe(false);
-  });
-
-  it("reports key metadata when the IP has one", async () => {
-    const res = await worker.fetch(
-      makeRequest("/fee-usage"),
-      makeEnv({ kv: seededKV() }),
-      ctx()
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as any;
-    expect(body.data).toMatchObject({
-      hasKey: true,
-      keyCreatedAt: 1000,
-      network: "testnet",
-    });
-  });
-});
-
 describe("GET /status", () => {
   it("returns client IP, network, and key presence", async () => {
     const res = await worker.fetch(

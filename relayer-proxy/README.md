@@ -28,12 +28,6 @@ Body: { "xdr": "base64-encoded-xdr" }
 ```
 Provide **either** `func` + `auth` (Relayer builds and signs with channel accounts — used for Address-credential operations like transfers) **or** `xdr` (Relayer fee-bumps an already-signed transaction — used for source-account auth like deployment). Supplying both, or neither, returns `400`.
 
-**Fee Usage**
-```
-GET /fee-usage
-```
-Report whether the caller's IP has a minted Relayer API key and when it was created. Detailed fee accounting is not exposed by the managed Relayer service.
-
 **Status**
 ```
 GET /status

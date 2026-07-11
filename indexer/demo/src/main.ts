@@ -111,9 +111,6 @@ function hideStatus() {
   statusEl.style.display = "none";
 }
 
-/** Alias for backward compatibility */
-const truncateContractId = truncateAddress;
-
 function getAuthKit(): SmartAccountKit {
   const indexerAuthToken = import.meta.env.VITE_INDEXER_AUTH_TOKEN || undefined;
   const configKey = [
@@ -431,7 +428,7 @@ function renderContracts(contracts: SmartAccountInfo[]) {
            data-index="${index}">
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div>
-            <div class="contract-id">${truncateContractId(contract.contractId)}</div>
+            <div class="contract-id">${truncateAddress(contract.contractId)}</div>
             <div style="margin-top: 0.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
               <span class="activity">${contract.contextRuleCount} context rule${contract.contextRuleCount !== 1 ? 's' : ''}</span>
               <span class="activity">${contract.externalSignerCount + contract.delegatedSignerCount} signer${(contract.externalSignerCount + contract.delegatedSignerCount) !== 1 ? 's' : ''}</span>
@@ -760,7 +757,7 @@ contractLookupBtn.addEventListener("click", async () => {
 
   try {
     hideStatus();
-    showStatus(`Looking up contract ${truncateContractId(contractId)}...`, "info");
+    showStatus(`Looking up contract ${truncateAddress(contractId)}...`, "info");
 
     selectedContract = contractId;
     currentCredentialId = null;
@@ -782,12 +779,12 @@ contractLookupBtn.addEventListener("click", async () => {
 
 // Helper function to connect to a contract and show details
 async function connectToContract(contractId: string) {
-  showStatus(`Loading contract details for ${truncateContractId(contractId)}...`, "info");
+  showStatus(`Loading contract details for ${truncateAddress(contractId)}...`, "info");
 
   try {
     const details = await getContractDetails(contractId);
     await renderContractDetails(details);
-    showStatus(`Viewing details for ${truncateContractId(contractId)}`, "success");
+    showStatus(`Viewing details for ${truncateAddress(contractId)}`, "success");
   } catch (error) {
     console.error("Failed to get contract details:", error);
     showStatus(`Failed to load contract details: ${(error as Error).message}`, "error");

@@ -470,51 +470,6 @@ app.post("/", async (c) => {
 });
 
 /**
- * Get fee usage for the current IP
- * GET /fee-usage
- */
-app.get("/fee-usage", async (c) => {
-  try {
-    const ip = getClientIP(c.req.raw);
-    const kvKey = getKVKey(ip);
-
-    // Check if we have an API key for this IP
-    const cached = await readStoredApiKey(c.env, kvKey);
-
-    if (!cached) {
-      return c.json({
-        success: true,
-        data: {
-          hasKey: false,
-          message: "No API key assigned yet. Submit a transaction to get one.",
-        },
-      });
-    }
-
-    // Fee usage query requires admin access which we don't have for the managed service
-    // Just return key info
-    return c.json({
-      success: true,
-      data: {
-        hasKey: true,
-        keyCreatedAt: cached.storedKey.createdAt,
-        network: c.env.NETWORK,
-        message: "Fee usage details not available for managed service.",
-      },
-    });
-  } catch (error) {
-    console.error("Fee usage endpoint failed:", error);
-    return c.json(
-      {
-        success: false,
-        error: "Could not read fee usage",
-      },
-      500
-    );
-  }
-});
-
-/**
  * Get proxy status and client info
  * GET /status
  */

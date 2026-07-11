@@ -73,8 +73,11 @@ export function ConfigPanel({
           {configValid ? "Config Valid" : "Missing Config"}
         </span>
         {hasRelayer && (
-          <span className="status connected" title="Fee sponsoring via Relayer">
-            Relayer
+          <span
+            className="status connected"
+            title="Transactions are submitted through the OpenZeppelin Relayer — channel accounts pay the fees, your wallet pays none."
+          >
+            Fees Sponsored
           </span>
         )}
       </div>

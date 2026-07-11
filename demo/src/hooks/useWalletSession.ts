@@ -250,6 +250,10 @@ export function useWalletSession({
       try {
         const result = await kit.createWallet("Smart Account Demo", name, {
           autoSubmit: true,
+          // Deploy over direct RPC even when the Relayer is configured: the demo
+          // uses the Relayer for wallet *transactions* (transfers, rule/policy
+          // ops); account deployment keeps its existing RPC path.
+          forceMethod: "rpc",
         });
 
         log(`Passkey created: ${result.credentialId.slice(0, 20)}...`, "success");
@@ -445,6 +449,9 @@ export function useWalletSession({
         if (result.success) {
           log(`Transfer successful! Sent ${amount} XLM to ${recipient.slice(0, 10)}...`, "success");
           log(`Transaction: ${result.hash.slice(0, 20)}...`, "success");
+          if (kit.relayer) {
+            log("Fees sponsored by the Relayer — your wallet paid no network fee", "info");
+          }
           fetchBalance(contractId);
         } else {
           throw new Error(result.error.message || "Transfer failed");
@@ -481,6 +488,9 @@ export function useWalletSession({
         if (result.success) {
           log(`Transfer successful! Sent ${amount} XLM to ${recipient.slice(0, 10)}...`, "success");
           log(`Transaction: ${result.hash.slice(0, 20)}...`, "success");
+          if (kit.relayer) {
+            log("Fees sponsored by the Relayer — your wallet paid no network fee", "info");
+          }
           fetchBalance(contractId);
         } else {
           throw new Error(result.error.message || "Transfer failed");
@@ -508,6 +518,7 @@ export function useWalletSession({
       try {
         const result = await kit.credentials.deploy(credential.credentialId, {
           autoSubmit: true,
+          forceMethod: "rpc", // deployment stays on RPC; see createWallet
         });
 
         if (result.submitResult?.success) {

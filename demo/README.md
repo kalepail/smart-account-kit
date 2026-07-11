@@ -56,7 +56,9 @@ pnpm dev
 
 Open `http://localhost:5173` in your browser.
 
-The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. For mainnet, start from `.env.mainnet.example`. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI, and leave `VITE_RELAYER_URL` blank if you do not want fee-sponsored submissions.
+The demo comes pre-configured with testnet contracts. To customize, copy `.env.example` to `.env` and edit as needed. For mainnet, start from `.env.mainnet.example`. Leave `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` blank if you do not want the weighted-threshold policy in the UI.
+
+Transactions (transfers and rule/policy operations) are **fee-sponsored by default**: `VITE_RELAYER_URL` points at the deployed testnet [relayer-proxy](../relayer-proxy), which submits them through the OpenZeppelin Relayer Channels service so the relayer's channel accounts pay the network fees and your smart wallet pays none. A "Fees Sponsored" badge appears in the config panel when it is active. Set `VITE_RELAYER_URL=""` to disable it and submit directly over RPC instead, or point it at your own proxy. (Wallet *deployment* always uses direct RPC.)
 
 The SDK auto-configures its hosted indexer for Stellar testnet and mainnet when you use a known network passphrase. Set `VITE_INDEXER_URL` to use a wire-compatible provider such as Mercury, and set `VITE_INDEXER_AUTH_TOKEN` when that provider expects `Authorization: Bearer <token>`. Because Vite embeds `VITE_*` values in the browser bundle, only use public or tightly scoped tokens; privileged/admin credentials belong behind a server.
 

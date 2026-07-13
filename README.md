@@ -103,7 +103,7 @@ The current Protocol 27 testnet/mainnet deployed contract IDs and WASM hashes ar
 | `sessionExpiryMs` | `number` | No | Stored-session lifetime (default: 7 days) |
 | `externalWallet` | `ExternalWalletAdapter` | No | Wallet adapter for delegated/multi-signer flows |
 | `indexerUrl` | `string \| false` | No | Custom indexer base URL, or `false` to disable indexing |
-| `indexerAuthToken` | `string` | No | API key or JWT sent as `Authorization: Bearer <token>` |
+| `indexerAuthToken` | `string` | No | Provider token sent as `Authorization: Bearer <token>` (not needed for Mercury's public reads) |
 | `contextRuleProbe` | `object` | No | Bounded on-chain fallback for active-rule discovery |
 | `relayerUrl` | `string` | No | Relayer proxy URL for fee sponsoring |
 
@@ -542,7 +542,8 @@ const current = await threshold.getThreshold(ruleId);
 const { result: rule } = await kit.rules.get(ruleId);
 await kit.signAndSubmit(await threshold.setThreshold(3, rule));
 
-// Weighted threshold
+// Weighted threshold — order matters when reconfiguring: raise weights before
+// raising the threshold; lower the threshold before lowering/zeroing weights.
 const weighted = kit.policyClients.weighted(policyAddress);
 const total = await weighted.getThreshold(ruleId);
 const weights = await weighted.getSignerWeights(rule);      // Map<Signer, number>
@@ -556,6 +557,8 @@ await kit.signAndSubmit(await spending.setSpendingLimit(2_000_000_000n, rule));
 ```
 
 > ⚠️ **Signer-set divergence caveat.** Threshold and weighted-threshold policies are **not** auto-notified when a context rule's signer set changes. After adding or removing signers on a rule, call `setThreshold` / `setSignerWeight` to keep the policy consistent with the rule — otherwise authorization for that rule may break. The spending-limit policy only applies to `CallContract` rules and enforces on `transfer` calls (`amount = args[2]`).
+
+> ⚠️ **Weighted-threshold ordering caveat.** The weighted-threshold contract enforces `threshold <= total signer weight` on **every individual** `set_threshold` / `set_signer_weight` call ([stellar-contracts#761](https://github.com/OpenZeppelin/stellar-contracts/issues/761)). When adding weight and raising the threshold, call `setSignerWeight` first; when removing a signer or reducing weight, call `setThreshold` first to lower the threshold. Calls in the wrong order revert with `InvalidThreshold`.
 
 ---
 
@@ -1026,7 +1029,7 @@ Key variables in `demo/.env`:
 - `VITE_SPENDING_LIMIT_POLICY_ADDRESS` — deployed spending-limit policy contract
 - `VITE_WEIGHTED_THRESHOLD_POLICY_ADDRESS` — deployed weighted-threshold policy contract
 - `VITE_INDEXER_URL` — optional wire-compatible indexer endpoint override
-- `VITE_INDEXER_AUTH_TOKEN` — optional public/scoped API key or JWT for the indexer
+- `VITE_INDEXER_AUTH_TOKEN` — optional provider token for the indexer (not needed for Mercury's public reads)
 - `VITE_RELAYER_URL` — optional relayer proxy URL for fee-sponsored transactions
 
 ### Verifying bindings

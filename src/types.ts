@@ -226,13 +226,13 @@ export interface SmartAccountConfig {
   indexerUrl?: string | false;
 
   /**
-   * Optional API key or JWT sent to the configured indexer as
+   * Optional provider token sent to the configured indexer as
    * `Authorization: Bearer <token>`.
    *
-   * Optional for the default Mercury provider (its read endpoints are public);
-   * supply one only for gated/admin operations or a provider that requires it.
-   * Browser applications should only use tokens that are safe to expose to
-   * end users. Keep privileged/admin tokens in a server-side integration.
+   * Not needed for the default Mercury provider (its read endpoints are
+   * anonymous); supply one only for a provider that requires it. Browser
+   * applications expose this value to end users; never use a privileged
+   * credential (such as a Mercury account JWT) here.
    */
   indexerAuthToken?: string;
 

@@ -139,12 +139,12 @@ export interface IndexerConfig {
   /** Request timeout in milliseconds (default: 10000) */
   timeout?: number;
   /**
-   * Optional API key or JWT sent as an Authorization bearer token.
+   * Optional provider token sent as an Authorization bearer token.
    *
-   * The default provider (Mercury) serves its read endpoints publicly, so this
-   * is optional — it is only needed for gated/admin operations or a private
-   * provider tier. Browser applications should only use tokens that are safe to
-   * expose to end users; keep privileged/admin tokens in a server-side integration.
+   * The default provider (Mercury) serves its read endpoints anonymously, so
+   * this is optional — supply one only for a provider that requires it. Browser
+   * applications expose this value to end users; never use a privileged
+   * credential (such as a Mercury account JWT) here.
    */
   authToken?: string;
 }

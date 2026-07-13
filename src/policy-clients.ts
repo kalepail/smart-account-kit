@@ -166,6 +166,11 @@ export class SimpleThresholdPolicyClient extends PolicyClientBase {
 
 /**
  * Typed client for the weighted threshold policy.
+ *
+ * The contract enforces `threshold <= total signer weight` on every individual
+ * `set_threshold` / `set_signer_weight` call, so reconfiguration is
+ * order-sensitive (see the method docs). Calls made in the wrong order revert
+ * with `InvalidThreshold`.
  */
 export class WeightedThresholdPolicyClient extends PolicyClientBase {
   /** Read the current total-weight threshold for a context rule. */
@@ -188,7 +193,14 @@ export class WeightedThresholdPolicyClient extends PolicyClientBase {
     return decodeSignerWeights(retval);
   }
 
-  /** Set the total-weight threshold. */
+  /**
+   * Set the total-weight threshold.
+   *
+   * The contract requires `threshold <= total signer weight` at the time of
+   * this call, so when raising the threshold above the current total weight,
+   * raise signer weights first ({@link setSignerWeight}); otherwise this
+   * reverts with `InvalidThreshold`.
+   */
   setThreshold(
     threshold: number,
     contextRule: ContextRule
@@ -200,7 +212,15 @@ export class WeightedThresholdPolicyClient extends PolicyClientBase {
     ]);
   }
 
-  /** Set an individual signer's weight. */
+  /**
+   * Set an individual signer's weight.
+   *
+   * The contract requires `threshold <= total signer weight` at the time of
+   * this call, so when lowering or zeroing a weight (e.g. before removing a
+   * signer), lower the threshold first ({@link setThreshold}) if the reduction
+   * would drop the total weight below it; otherwise this reverts with
+   * `InvalidThreshold`.
+   */
   setSignerWeight(
     signer: ContractSigner,
     weight: number,

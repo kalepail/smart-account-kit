@@ -26,7 +26,7 @@ describe("IndexerClient network defaults", () => {
     ).not.toBeNull();
   });
 
-  it("sends a configured API key or JWT as a bearer token", async () => {
+  it("sends a configured provider token as a bearer token", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ status: "ok" }), {
         status: 200,
@@ -37,7 +37,7 @@ describe("IndexerClient network defaults", () => {
 
     const indexer = new IndexerClient({
       baseUrl: "https://indexer.example/",
-      authToken: "test-api-key-or-jwt",
+      authToken: "test-provider-token",
     });
 
     await expect(indexer.isHealthy()).resolves.toBe(true);
@@ -46,7 +46,7 @@ describe("IndexerClient network defaults", () => {
       expect.objectContaining({
         headers: {
           Accept: "application/json",
-          Authorization: "Bearer test-api-key-or-jwt",
+          Authorization: "Bearer test-provider-token",
         },
       })
     );

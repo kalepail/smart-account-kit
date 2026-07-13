@@ -28,7 +28,7 @@ The SDK keeps a bounded low-ID on-chain fallback for fresh wallets and temporary
 
 Mercury's `smart-account-indexer` **read endpoints are public** — no token is required for the lookups the SDK performs. The SDK's default configuration therefore works zero-config against Mercury.
 
-An optional token (a Mercury JWT) can be supplied via `indexerAuthToken` (SDK) / `VITE_INDEXER_AUTH_TOKEN` (demo); it is sent as `Authorization: Bearer <token>` and is only needed for gated/admin operations or a private provider tier. Browser apps should only embed public or tightly scoped tokens.
+An optional provider token can be supplied via `indexerAuthToken` (SDK) / `VITE_INDEXER_AUTH_TOKEN` (demo); it is sent as `Authorization: Bearer <token>`. None is needed for Mercury today — its indexer read routes are anonymous and do not evaluate a token. When Mercury ships its gated tier, the credential will be a scoped publishable key for the indexer surface, not a Mercury account JWT; never embed a Mercury account JWT (or any other privileged credential) in a browser app.
 
 ### Coverage
 
@@ -61,7 +61,7 @@ const kit = new SmartAccountKit({
   storage: new IndexedDBStorage(),
   // indexerUrl defaults to Mercury for known networks; override for a custom provider.
   // indexerUrl: 'https://testnet.mercurydata.app/rest/smart-account-indexer',
-  // indexerAuthToken: 'optional-mercury-jwt', // sent as Authorization: Bearer <token>
+  // indexerAuthToken: 'optional-provider-token', // sent as Authorization: Bearer <token>; not needed for Mercury
 });
 
 // Step 1: Authenticate with passkey (prompts user to select)

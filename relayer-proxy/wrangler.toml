@@ -25,17 +25,6 @@ cpu_ms = 300_000
 NETWORK = "testnet"
 RELAYER_BASE_URL = "https://channels.openzeppelin.com/testnet"
 
-# ============================================================================
-# Production environment (mainnet)
-# ============================================================================
-# Deploy: wrangler deploy --env production
-[env.production]
-name = "smart-account-relayer-proxy-mainnet"
-
-[env.production.vars]
-NETWORK = "mainnet"
-RELAYER_BASE_URL = "https://channels.openzeppelin.com"
-
-[[env.production.kv_namespaces]]
-binding = "API_KEYS"
-id = "4afa99de423a48feb9827ab35b158e5e"
+# Testnet-only by policy: no mainnet relayer proxy. (A previous `[env.production]`
+# / mainnet worker was intentionally removed — smart-account-kit fee-sponsorship
+# runs on testnet only, through OpenZeppelin Channels.)
